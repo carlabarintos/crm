@@ -1,0 +1,201 @@
+<div class="nav-brand">
+    <a href="" class="nav-brand-link">
+        <div class="brand-icon">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 12L6 7L9.5 10L13 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="13" cy="5" r="1.5" fill="white" />
+            </svg>
+        </div>
+        <div class="brand-text">
+            <strong>CRM Sales</strong>
+            <span>Sales Pipeline</span>
+        </div>
+    </a>
+    <div class="live-dot" title="Live"></div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" @onclick="CloseMenu">
+    <nav class="nav flex-column">
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor">
+                        <path d="M7.5 1.5L1 6v8h4v-4h5v4h4V6L7.5 1.5z" />
+                    </svg>
+                </span>
+                Dashboard
+            </NavLink>
+        </div>
+
+        <span class="nav-section-label">Sales Pipeline</span>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="opportunities">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M1 11l3.5-4L8 9.5l3-3.5L14 3" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </span>
+                Opportunities
+            </NavLink>
+        </div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="quotes">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="2" y="2" width="11" height="13" rx="1.5" />
+                        <path d="M5 6h5M5 8.5h5M5 11h3" stroke-linecap="round" />
+                    </svg>
+                </span>
+                Quotes
+            </NavLink>
+        </div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="orders">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M1 1h2l1.5 7.5h7L13 4.5H4" stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="6" cy="13" r="1" /><circle cx="11" cy="13" r="1" />
+                    </svg>
+                </span>
+                Orders
+            </NavLink>
+        </div>
+
+        <span class="nav-section-label">Catalog</span>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="products">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M7.5 1L13 4v7L7.5 14 2 11V4L7.5 1z" stroke-linejoin="round" />
+                        <path d="M7.5 1v13M2 4l5.5 3.5L13 4" stroke-linecap="round" />
+                    </svg>
+                </span>
+                Products
+            </NavLink>
+        </div>
+
+        <span class="nav-section-label">People</span>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="contacts">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M10 9c2 .5 4 2 4 3.5V14H1v-1.5C1 11 3 9.5 5 9" stroke-linecap="round" />
+                        <circle cx="7.5" cy="5" r="3" />
+                    </svg>
+                </span>
+                Contacts
+            </NavLink>
+        </div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="users">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="10" cy="5" r="2.5" /><circle cx="5" cy="7" r="2.5" />
+                        <path d="M1 14c0-2 1.8-3.5 4-3.5s4 1.5 4 3.5" stroke-linecap="round" />
+                        <path d="M11 9.5c2 .4 3.5 1.8 3.5 3.5" stroke-linecap="round" />
+                    </svg>
+                </span>
+                Users
+            </NavLink>
+        </div>
+
+    </nav>
+
+    @if (_userName is not null)
+    {
+        <div class="nav-user">
+            <div class="nav-user-avatar">@GetInitial(_userName)</div>
+            <div class="nav-user-info">
+                <strong>@_userName</strong>
+                <span>@_userEmail</span>
+            </div>
+        </div>
+        <button @onclick="async () => await SignOut()" class="nav-logout">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M5 2H2a1 1 0 00-1 1v8a1 1 0 001 1h3M9 10l3-3-3-3M12 7H5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            Sign out
+        </button>
+    }
+</div>
+
+<style>
+    .nav-logout {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        font-size: 12px;
+        color: rgba(255,255,255,0.5);
+        text-decoration: none;
+        background: none;
+        border: none;
+        cursor: pointer;
+        width: 100%;
+        transition: color 0.15s;
+    }
+    .nav-logout:hover { color: rgba(255,255,255,0.9); }
+</style>
+
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject SignOutSessionStateManager SignOutManager
+@implements IDisposable
+
+@code {
+    private string? _userName;
+    private string? _userEmail;
+
+    protected override void OnInitialized()
+        => AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
+
+    protected override async Task OnInitializedAsync()
+        => await LoadUserAsync(await AuthStateProvider.GetAuthenticationStateAsync());
+
+    private async void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        await LoadUserAsync(await task);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task LoadUserAsync(AuthenticationState auth)
+    {
+        var user = auth.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            _userName = user.FindFirst("preferred_username")?.Value
+                ?? user.FindFirst("name")?.Value
+                ?? user.Identity.Name;
+            _userEmail = user.FindFirst("email")?.Value;
+        }
+        else
+        {
+            _userName = null;
+            _userEmail = null;
+        }
+        return Task.CompletedTask;
+    }
+
+    private void CloseMenu() { }
+
+    private async Task SignOut()
+    {
+        await SignOutManager.SetSignOutState();
+        Navigation.NavigateTo("authentication/logout");
+    }
+
+    public void Dispose()
+        => AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+
+    private static string GetInitial(string? name)
+        => string.IsNullOrEmpty(name) ? "?" : name[0].ToString().ToUpper();
+}

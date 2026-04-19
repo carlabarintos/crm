@@ -1,0 +1,246 @@
+@page "/orders/{Id:guid}"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>@(order?.OrderNumber ?? "Order")</PageTitle>
+
+@if (order is null && error is null)
+{
+    <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+}
+else if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (order is not null)
+{
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/orders">Orders</a></li>
+            <li class="breadcrumb-item active">@order.OrderNumber</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <!-- Order info -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">@order.OrderNumber</h5>
+                    <span class="badge @GetStatusBadge(order.Status) fs-6">@order.Status</span>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-4">Quote</dt>
+                        <dd class="col-sm-8"><a href="/quotes/@order.QuoteId">@order.QuoteId.ToString()[..8]…</a></dd>
+
+                        <dt class="col-sm-4">Total</dt>
+                        <dd class="col-sm-8 fw-bold text-primary fs-5">@order.TotalAmount.ToString("F2") @order.Currency</dd>
+
+                        <dt class="col-sm-4">Shipping Address</dt>
+                        <dd class="col-sm-8">@(order.ShippingAddress ?? "-")</dd>
+
+                        <dt class="col-sm-4">Notes</dt>
+                        <dd class="col-sm-8">@(order.Notes ?? "-")</dd>
+
+                        <dt class="col-sm-4">Created</dt>
+                        <dd class="col-sm-8">@order.CreatedAt.ToString("MMM dd, yyyy HH:mm")</dd>
+
+                        @if (order.ShippedAt.HasValue)
+                        {
+                            <dt class="col-sm-4">Shipped</dt>
+                            <dd class="col-sm-8">@order.ShippedAt.Value.ToString("MMM dd, yyyy HH:mm")</dd>
+                        }
+                        @if (order.DeliveredAt.HasValue)
+                        {
+                            <dt class="col-sm-4">Delivered</dt>
+                            <dd class="col-sm-8">@order.DeliveredAt.Value.ToString("MMM dd, yyyy HH:mm")</dd>
+                        }
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Line items -->
+            <div class="card">
+                <div class="card-header"><h6 class="mb-0">Line Items</h6></div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-end">Qty</th>
+                                <th class="text-end">Unit Price</th>
+                                <th class="text-end">Line Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!order.LineItems.Any())
+                            {
+                                <tr><td colspan="4" class="text-center text-muted py-3">No line items on this order.</td></tr>
+                            }
+                            @foreach (var l in order.LineItems)
+                            {
+                                <tr>
+                                    <td>@l.ProductName</td>
+                                    <td class="text-end">@l.Quantity</td>
+                                    <td class="text-end">@l.UnitPrice.ToString("F2")</td>
+                                    <td class="text-end fw-semibold">@l.LineTotal.ToString("F2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td colspan="3" class="text-end">Total</td>
+                                <td class="text-end text-primary">@order.TotalAmount.ToString("F2") @order.Currency</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions sidebar -->
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header"><h6 class="mb-0">Order Actions</h6></div>
+                <div class="card-body d-grid gap-2">
+                    @if (order.Status == "Pending")
+                    {
+                        <button class="btn btn-primary btn-sm" @onclick="Confirm" disabled="@actionSaving">Confirm Order</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => showCancelForm = !showCancelForm">Cancel Order</button>
+                    }
+                    @if (order.Status == "Confirmed")
+                    {
+                        <button class="btn btn-warning btn-sm" @onclick="Process" disabled="@actionSaving">Start Processing</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => showCancelForm = !showCancelForm">Cancel Order</button>
+                    }
+                    @if (order.Status == "Processing")
+                    {
+                        <button class="btn btn-info btn-sm" @onclick="() => showShipForm = !showShipForm">Ship Order</button>
+                    }
+                    @if (order.Status == "Shipped")
+                    {
+                        <button class="btn btn-success btn-sm" @onclick="Deliver" disabled="@actionSaving">Mark Delivered</button>
+                    }
+
+                    @if (showShipForm)
+                    {
+                        <div class="mt-2">
+                            <input class="form-control form-control-sm mb-1" @bind="trackingInfo" placeholder="Tracking number (optional)" />
+                            <button class="btn btn-sm btn-info w-100" @onclick="Ship" disabled="@actionSaving">Confirm Ship</button>
+                        </div>
+                    }
+                    @if (showCancelForm)
+                    {
+                        <div class="mt-2">
+                            <input class="form-control form-control-sm mb-1" @bind="cancelReason" placeholder="Reason for cancellation" />
+                            <button class="btn btn-sm btn-danger w-100" @onclick="Cancel" disabled="@actionSaving">Confirm Cancel</button>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(actionError)) { <div class="text-danger small">@actionError</div> }
+                    @if (!string.IsNullOrEmpty(actionSuccess)) { <div class="text-success small">@actionSuccess</div> }
+
+                    <a href="/orders" class="btn btn-outline-secondary btn-sm mt-2">Back to List</a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private OrderDetailDto? order;
+    private string? error;
+    private bool actionSaving;
+    private string? actionError;
+    private string? actionSuccess;
+
+    private bool showShipForm;
+    private string? trackingInfo;
+    private bool showCancelForm;
+    private string cancelReason = "";
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        try { order = await Api.GetOrderAsync(Id); }
+        catch { error = "Failed to load order."; }
+    }
+
+    private async Task Confirm()
+    {
+        actionError = null; actionSuccess = null; actionSaving = true;
+        try
+        {
+            var resp = await Api.ConfirmOrderAsync(Id);
+            if (resp.IsSuccessStatusCode) { actionSuccess = "Order confirmed."; await Load(); }
+            else actionError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { actionSaving = false; }
+    }
+
+    private async Task Process()
+    {
+        actionError = null; actionSuccess = null; actionSaving = true;
+        try
+        {
+            var resp = await Api.ProcessOrderAsync(Id);
+            if (resp.IsSuccessStatusCode) { actionSuccess = "Order is now processing."; await Load(); }
+            else actionError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { actionSaving = false; }
+    }
+
+    private async Task Ship()
+    {
+        actionError = null; actionSuccess = null; actionSaving = true;
+        try
+        {
+            var resp = await Api.ShipOrderAsync(Id, trackingInfo);
+            if (resp.IsSuccessStatusCode) { showShipForm = false; actionSuccess = "Order shipped."; await Load(); }
+            else actionError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { actionSaving = false; }
+    }
+
+    private async Task Deliver()
+    {
+        actionError = null; actionSuccess = null; actionSaving = true;
+        try
+        {
+            var resp = await Api.DeliverOrderAsync(Id);
+            if (resp.IsSuccessStatusCode) { actionSuccess = "Order marked as delivered."; await Load(); }
+            else actionError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { actionSaving = false; }
+    }
+
+    private async Task Cancel()
+    {
+        actionError = null; actionSuccess = null;
+        if (string.IsNullOrWhiteSpace(cancelReason)) { actionError = "Cancellation reason is required."; return; }
+        actionSaving = true;
+        try
+        {
+            var resp = await Api.CancelOrderAsync(Id, cancelReason);
+            if (resp.IsSuccessStatusCode) { showCancelForm = false; actionSuccess = "Order cancelled."; await Load(); }
+            else actionError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { actionSaving = false; }
+    }
+
+    private static string GetStatusBadge(string status) => status switch
+    {
+        "Delivered" => "bg-success",
+        "Cancelled" => "bg-danger",
+        "Shipped" => "bg-info text-dark",
+        "Confirmed" => "bg-primary",
+        "Processing" => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+}

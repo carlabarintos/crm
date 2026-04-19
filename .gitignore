@@ -1,0 +1,47 @@
+# Windows reserved device names
+NUL
+
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+*.swp
+*.sln.docstates
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Logs & temp
+*.log
+*.tmp
+TestResults/
+coverage/
+
+## User secrets
+secrets.json
+appsettings.local.json
+appsettings.Development.local.json
+
+## Docker
+.dockerignore
+
+## OS
+.DS_Store
+Thumbs.db

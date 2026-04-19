@@ -1,0 +1,242 @@
+@page "/opportunities"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+
+<PageTitle>Opportunities — CRM Sales</PageTitle>
+
+<!-- Page header -->
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Sales Pipeline</p>
+        <h1>Opportunities</h1>
+    </div>
+    <a href="/opportunities/new" class="btn btn-primary">+ New Opportunity</a>
+</div>
+
+<!-- Filters -->
+<div class="d-flex gap-2 mb-4 stagger-2" style="flex-wrap:wrap">
+    <div style="position:relative;flex:1;min-width:200px;max-width:320px">
+        <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#9CA3AF;pointer-events:none"
+             width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5l3 3" stroke-linecap="round"/>
+        </svg>
+        <input class="form-control" style="padding-left:30px" placeholder="Search opportunities…"
+               @bind="searchTerm" @bind:after="LoadOpportunities" />
+    </div>
+    <select class="form-select" style="width:auto;min-width:150px" @bind="selectedStage" @bind:after="LoadOpportunities">
+        <option value="">All Stages</option>
+        <option value="Prospecting">Prospecting</option>
+        <option value="Qualification">Qualification</option>
+        <option value="NeedsAnalysis">Needs Analysis</option>
+        <option value="Proposal">Proposal</option>
+        <option value="Negotiation">Negotiation</option>
+        <option value="ClosedWon">Closed Won</option>
+        <option value="ClosedLost">Closed Lost</option>
+    </select>
+</div>
+
+@if (opportunities is null)
+{
+    <!-- Skeleton table -->
+    <div class="table-responsive">
+        <table class="table">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Account</th>
+                    <th>Stage</th>
+                    <th>Value</th>
+                    <th>Probability</th>
+                    <th>Close Date</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < 7; i++)
+                {
+                    var delay = i * 60;
+                    <tr>
+                        <td><div class="opp-sk opp-sk-name" style="animation-delay:@(delay)ms"></div></td>
+                        <td><div class="opp-sk" style="width:100px;height:13px;animation-delay:@(delay)ms"></div></td>
+                        <td><div class="opp-sk" style="width:80px;height:20px;border-radius:99px;animation-delay:@(delay)ms"></div></td>
+                        <td><div class="opp-sk" style="width:72px;height:13px;animation-delay:@(delay)ms"></div></td>
+                        <td><div class="opp-sk" style="width:80px;height:8px;border-radius:99px;animation-delay:@(delay)ms"></div></td>
+                        <td><div class="opp-sk" style="width:88px;height:13px;animation-delay:@(delay)ms"></div></td>
+                        <td><div class="opp-sk" style="width:48px;height:26px;border-radius:8px;animation-delay:@(delay)ms"></div></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (!opportunities.Any())
+{
+    <div class="opp-empty stagger-3">
+        <div class="opp-empty-icon">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#9CA3AF" stroke-width="1.5">
+                <path d="M2 21L8 13L13.5 17L19 10L26 4" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="26" cy="4" r="2.5" fill="#9CA3AF" stroke="none"/>
+            </svg>
+        </div>
+        <div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:.35rem">No opportunities found</div>
+        <div style="font-size:13px;color:#9CA3AF;margin-bottom:1.25rem">
+            @(string.IsNullOrEmpty(searchTerm) && string.IsNullOrEmpty(selectedStage)
+                ? "Start by creating your first opportunity."
+                : "Try adjusting your filters.")
+        </div>
+        @if (string.IsNullOrEmpty(searchTerm) && string.IsNullOrEmpty(selectedStage))
+        {
+            <a href="/opportunities/new" class="btn btn-primary btn-sm">+ New Opportunity</a>
+        }
+    </div>
+}
+else
+{
+    <div class="table-responsive stagger-3">
+        <table class="table table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Account</th>
+                    <th>Stage</th>
+                    <th>Value</th>
+                    <th>Probability</th>
+                    <th>Close Date</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var opp in opportunities)
+                {
+                    <tr>
+                        <td>
+                            <a href="/opportunities/@opp.Id" class="opp-name-link">@opp.Name</a>
+                        </td>
+                        <td style="color:#6B7280">@opp.AccountName</td>
+                        <td>
+                            <span class="badge @GetStageBadge(opp.Stage)">@FormatStage(opp.Stage)</span>
+                        </td>
+                        <td style="font-weight:600;color:#111827;font-variant-numeric:tabular-nums">
+                            @FormatValue(opp.EstimatedValue, opp.Currency)
+                        </td>
+                        <td>
+                            <div class="opp-prob">
+                                <div class="progress" style="width:70px;flex-shrink:0">
+                                    <div class="progress-bar @GetProbBarClass(opp.Probability)"
+                                         style="width:@opp.Probability%"></div>
+                                </div>
+                                <span class="opp-prob-label">@opp.Probability%</span>
+                            </div>
+                        </td>
+                        <td style="color:#6B7280;font-size:12.5px">
+                            @(opp.ExpectedCloseDate?.ToString("MMM d, yyyy") ?? "—")
+                        </td>
+                        <td>
+                            <a href="/opportunities/@opp.Id" class="btn btn-sm btn-outline-primary">View</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<style>
+    @@keyframes opp-shimmer {
+        0%   { background-position: -400px 0; }
+        100% { background-position:  400px 0; }
+    }
+    .opp-sk {
+        background: linear-gradient(90deg, #F3F4F6 25%, #EAECF0 50%, #F3F4F6 75%);
+        background-size: 800px 100%;
+        animation: opp-shimmer 1.6s ease-in-out infinite;
+        border-radius: 5px;
+        display: inline-block;
+    }
+    .opp-sk-name { width: 160px; height: 14px; }
+
+    .opp-name-link {
+        font-weight: 600;
+        color: #111827;
+        text-decoration: none;
+    }
+    .opp-name-link:hover { color: #4F46E5; text-decoration: none; }
+
+    .opp-prob {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+    .opp-prob-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #6B7280;
+        min-width: 26px;
+    }
+
+    .opp-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+    }
+    .opp-empty-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 16px;
+        background: #F3F4F6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1.25rem;
+    }
+</style>
+
+@code {
+    private List<OpportunityDto>? opportunities;
+    private string searchTerm = "";
+    private string selectedStage = "";
+
+    protected override async Task OnInitializedAsync() => await LoadOpportunities();
+
+    private async Task LoadOpportunities() =>
+        opportunities = await Api.GetOpportunitiesAsync(
+            string.IsNullOrEmpty(searchTerm) ? null : searchTerm,
+            string.IsNullOrEmpty(selectedStage) ? null : selectedStage);
+
+    private static string GetStageBadge(string stage) => stage switch
+    {
+        "ClosedWon"      => "badge-soft-success",
+        "ClosedLost"     => "badge-soft-danger",
+        "Negotiation"    => "badge-soft-primary",
+        "Proposal"       => "badge-soft-info",
+        "Qualification"  => "badge-soft-warning",
+        "NeedsAnalysis"  => "badge-soft-purple",
+        _                => "badge-soft-neutral",
+    };
+
+    private static string GetProbBarClass(decimal prob) => prob >= 70 ? "bg-success"
+        : prob >= 40 ? "bg-warning" : "";
+
+    private static string FormatStage(string stage) => stage switch
+    {
+        "ClosedWon"     => "Closed Won",
+        "ClosedLost"    => "Closed Lost",
+        "NeedsAnalysis" => "Needs Analysis",
+        _               => stage,
+    };
+
+    private static string FormatValue(decimal value, string currency)
+    {
+        var sym = currency switch
+        {
+            "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => currency + " "
+        };
+        return value >= 1_000_000 ? $"{sym}{value / 1_000_000:N1}M"
+             : value >= 1_000     ? $"{sym}{value / 1_000:N1}K"
+             : $"{sym}{value:N0}";
+    }
+}

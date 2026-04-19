@@ -1,0 +1,89 @@
+@page "/products/{Id:guid}"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>@(product?.Name ?? "Product")</PageTitle>
+
+@if (product is null)
+{
+    <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+}
+else
+{
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/products">Products</a></li>
+            <li class="breadcrumb-item active">@product.Name</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">@product.Name</h5>
+                    @if (!product.IsActive)
+                    {
+                        <span class="badge bg-secondary">Inactive</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-success">Active</span>
+                    }
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-3">SKU</dt>
+                        <dd class="col-sm-9"><code>@product.Sku</code></dd>
+
+                        <dt class="col-sm-3">Description</dt>
+                        <dd class="col-sm-9">@(product.Description ?? "-")</dd>
+
+                        <dt class="col-sm-3">Price</dt>
+                        <dd class="col-sm-9 fs-5 fw-bold text-primary">@product.Price.ToString("F2") @product.Currency</dd>
+
+                        <dt class="col-sm-3">Stock</dt>
+                        <dd class="col-sm-9">
+                            <span class="badge @(product.StockQuantity > 10 ? "bg-success" : product.StockQuantity > 0 ? "bg-warning text-dark" : "bg-danger")">
+                                @product.StockQuantity units
+                            </span>
+                        </dd>
+
+                        <dt class="col-sm-3">Category</dt>
+                        <dd class="col-sm-9">@(product.CategoryName ?? product.CategoryId.ToString())</dd>
+
+                        <dt class="col-sm-3">Created</dt>
+                        <dd class="col-sm-9">@product.CreatedAt.ToString("MMM dd, yyyy")</dd>
+
+                        <dt class="col-sm-3">Updated</dt>
+                        <dd class="col-sm-9">@product.UpdatedAt.ToString("MMM dd, yyyy")</dd>
+                    </dl>
+                </div>
+                <div class="card-footer">
+                    <a href="/products/@product.Id/edit" class="btn btn-outline-primary btn-sm me-2">Edit</a>
+                    <a href="/products" class="btn btn-outline-secondary btn-sm">Back to Products</a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ProductDto? product;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { product = await Api.GetProductAsync(Id); }
+        catch { error = "Failed to load product."; }
+    }
+}

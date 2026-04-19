@@ -1,0 +1,303 @@
+@page "/users"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+
+<PageTitle>Users</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3">Users</h1>
+    <button class="btn btn-primary" @onclick="() => { showCreateForm = !showCreateForm; createError = null; tempPassword = null; }">+ New User</button>
+</div>
+
+@if (showCreateForm)
+{
+    <div class="card mb-4">
+        <div class="card-header"><h6 class="mb-0">Create User</h6></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">First Name <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="newFirstName" placeholder="First name" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="newLastName" placeholder="Last name" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Email <span class="text-danger">*</span></label>
+                    <input class="form-control" type="email" @bind="newEmail" placeholder="user@example.com" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Role</label>
+                    <select class="form-select" @bind="newRole">
+                        <option value="SalesRep">Sales Rep</option>
+                        <option value="SalesManager">Sales Manager</option>
+                        <option value="AccountManager">Account Manager</option>
+                        <option value="Admin">Admin</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" @onclick="CreateUser" disabled="@creating">
+                        @if (creating) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Save</span> }
+                    </button>
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(createError))
+            {
+                <div class="alert alert-danger mt-3 mb-0">@createError</div>
+            }
+        </div>
+    </div>
+}
+
+@if (tempPassword is not null)
+{
+    <div class="alert alert-success alert-dismissible mb-4" role="alert">
+        <strong>User created.</strong> Temporary password: <code class="fs-6">@tempPassword</code>
+        <span class="text-muted ms-2 small">(user must change on first login)</span>
+        <button type="button" class="btn-close" @onclick="() => tempPassword = null"></button>
+    </div>
+}
+
+<div class="mb-3">
+    <input class="form-control w-auto" style="max-width:300px" placeholder="Filter by name or email..." @bind="filter" @bind:after="StateHasChanged" />
+</div>
+
+@if (users is null)
+{
+    <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+}
+else
+{
+    var filtered = users.Where(u =>
+        string.IsNullOrEmpty(filter) ||
+        u.FullName.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+        u.Email.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in filtered)
+                {
+                    @if (editingId == u.Id)
+                    {
+                        <tr class="table-active">
+                            <td colspan="5">
+                                <div class="d-flex gap-2 align-items-center flex-wrap py-1">
+                                    <input class="form-control form-control-sm" style="max-width:140px" @bind="editFirst" placeholder="First name" />
+                                    <input class="form-control form-control-sm" style="max-width:140px" @bind="editLast" placeholder="Last name" />
+                                    <select class="form-select form-select-sm" style="max-width:160px" @bind="editRole">
+                                        <option value="SalesRep">Sales Rep</option>
+                                        <option value="SalesManager">Sales Manager</option>
+                                        <option value="AccountManager">Account Manager</option>
+                                        <option value="Admin">Admin</option>
+                                    </select>
+                                    <button class="btn btn-sm btn-primary" @onclick="() => SaveEdit(u.Id)" disabled="@saving">
+                                        @if (saving) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Save</span> }
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="CancelEdit">Cancel</button>
+                                    @if (!string.IsNullOrEmpty(editError))
+                                    {
+                                        <span class="text-danger small">@editError</span>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        <tr class="@(!u.IsActive ? "text-muted" : "")">
+                            <td>@u.FullName</td>
+                            <td>@u.Email</td>
+                            <td><span class="badge bg-secondary">@u.Role</span></td>
+                            <td>
+                                @if (u.IsActive)
+                                {
+                                    <span class="badge bg-success">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Inactive</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEdit(u)">Edit</button>
+                                    @if (u.IsActive)
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning"
+                                                @onclick="() => Deactivate(u.Id)"
+                                                disabled="@(actionId == u.Id)">
+                                            @if (actionId == u.Id) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Deactivate</span> }
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-success"
+                                                @onclick="() => Activate(u.Id)"
+                                                disabled="@(actionId == u.Id)">
+                                            @if (actionId == u.Id) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Activate</span> }
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                @if (!filtered.Any())
+                {
+                    <tr><td colspan="5" class="text-muted text-center">No users found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<UserDto>? users;
+    private string filter = "";
+
+    // Create form
+    private bool showCreateForm;
+    private string newFirstName = "";
+    private string newLastName = "";
+    private string newEmail = "";
+    private string newRole = "SalesRep";
+    private bool creating;
+    private string? createError;
+    private string? tempPassword;
+
+    // Edit
+    private Guid? editingId;
+    private string editFirst = "";
+    private string editLast = "";
+    private string editRole = "SalesRep";
+    private bool saving;
+    private string? editError;
+
+    // Deactivate / Activate
+    private Guid? actionId;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() => users = await Api.GetUsersAsync();
+
+    private async Task CreateUser()
+    {
+        createError = null; tempPassword = null;
+        if (string.IsNullOrWhiteSpace(newFirstName) || string.IsNullOrWhiteSpace(newLastName) ||
+            string.IsNullOrWhiteSpace(newEmail))
+        {
+            createError = "First name, last name and email are required.";
+            return;
+        }
+
+        creating = true;
+        try
+        {
+            var resp = await Api.CreateUserAsync(new
+            {
+                Email = newEmail,
+                FirstName = newFirstName,
+                LastName = newLastName,
+                Role = newRole
+            });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                var result = await resp.Content.ReadFromJsonAsync<CreateUserResult>();
+                tempPassword = result?.TempPassword;
+                newFirstName = newLastName = newEmail = "";
+                newRole = "SalesRep";
+                showCreateForm = false;
+                await Load();
+            }
+            else
+            {
+                createError = await resp.Content.ReadAsStringAsync();
+            }
+        }
+        finally { creating = false; }
+    }
+
+    private void StartEdit(UserDto u)
+    {
+        editingId = u.Id;
+        editFirst = u.FirstName;
+        editLast = u.LastName;
+        editRole = u.Role;
+        editError = null;
+    }
+
+    private void CancelEdit()
+    {
+        editingId = null;
+        editError = null;
+    }
+
+    private async Task SaveEdit(Guid id)
+    {
+        editError = null;
+        if (string.IsNullOrWhiteSpace(editFirst) || string.IsNullOrWhiteSpace(editLast))
+        {
+            editError = "First and last name are required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var resp = await Api.UpdateUserAsync(id, new
+            {
+                FirstName = editFirst,
+                LastName = editLast,
+                Role = editRole
+            });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                editingId = null;
+                await Load();
+            }
+            else
+            {
+                editError = await resp.Content.ReadAsStringAsync();
+            }
+        }
+        finally { saving = false; }
+    }
+
+    private async Task Deactivate(Guid id)
+    {
+        actionId = id;
+        try
+        {
+            var resp = await Api.DeactivateUserAsync(id);
+            if (resp.IsSuccessStatusCode) await Load();
+        }
+        finally { actionId = null; }
+    }
+
+    private async Task Activate(Guid id)
+    {
+        actionId = id;
+        try
+        {
+            var resp = await Api.ActivateUserAsync(id);
+            if (resp.IsSuccessStatusCode) await Load();
+        }
+        finally { actionId = null; }
+    }
+
+    private record CreateUserResult(Guid Id, string Email, string TempPassword);
+}

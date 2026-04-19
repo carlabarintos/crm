@@ -1,0 +1,99 @@
+@page "/contacts/new"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>New Contact</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/contacts">Contacts</a></li>
+        <li class="breadcrumb-item active">New</li>
+    </ol>
+</nav>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">Create Contact</h5></div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label">First Name <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="firstName" placeholder="First name" />
+                    </div>
+                    <div class="col">
+                        <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="lastName" placeholder="Last name" />
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label">Email</label>
+                        <input class="form-control" type="email" @bind="email" placeholder="email@company.com" />
+                    </div>
+                    <div class="col">
+                        <label class="form-label">Phone</label>
+                        <input class="form-control" @bind="phone" placeholder="+1 555 000 0000" />
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label">Company</label>
+                        <input class="form-control" @bind="company" placeholder="Company name" />
+                    </div>
+                    <div class="col">
+                        <label class="form-label">Job Title</label>
+                        <input class="form-control" @bind="jobTitle" placeholder="e.g. Procurement Manager" />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" @bind="notes" rows="3" placeholder="Optional notes"></textarea>
+                </div>
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-danger">@error</div>
+                }
+            </div>
+            <div class="card-footer d-flex gap-2">
+                <button class="btn btn-primary" @onclick="Save" disabled="@saving">
+                    @if (saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Create Contact
+                </button>
+                <a href="/contacts" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string firstName = "", lastName = "";
+    private string? email, phone, company, jobTitle, notes;
+    private bool saving;
+    private string? error;
+
+    private async Task Save()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
+        { error = "First and last name are required."; return; }
+
+        saving = true;
+        try
+        {
+            var resp = await Api.CreateContactAsync(new
+            {
+                FirstName = firstName, LastName = lastName,
+                Email = email, Phone = phone,
+                Company = company, JobTitle = jobTitle, Notes = notes
+            });
+            if (resp.IsSuccessStatusCode)
+                Nav.NavigateTo("/contacts");
+            else
+                error = await resp.Content.ReadAsStringAsync();
+        }
+        finally { saving = false; }
+    }
+}

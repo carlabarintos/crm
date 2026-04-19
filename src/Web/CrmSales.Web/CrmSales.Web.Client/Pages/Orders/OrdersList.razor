@@ -1,0 +1,149 @@
+@page "/orders"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+
+<PageTitle>Orders — CRM Sales</PageTitle>
+
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Sales Pipeline</p>
+        <h1>Orders</h1>
+    </div>
+    <select class="form-select" style="width:auto;min-width:150px" @bind="statusFilter" @bind:after="LoadOrders">
+        <option value="">All Statuses</option>
+        <option value="Pending">Pending</option>
+        <option value="Confirmed">Confirmed</option>
+        <option value="Processing">Processing</option>
+        <option value="Shipped">Shipped</option>
+        <option value="Delivered">Delivered</option>
+        <option value="Cancelled">Cancelled</option>
+    </select>
+</div>
+
+@if (orders is null)
+{
+    <div class="table-responsive">
+        <table class="table">
+            <thead class="table-light">
+                <tr>
+                    <th>Order #</th><th>Status</th><th>Total</th><th>Currency</th><th>Created</th><th>Shipped</th><th>Delivered</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < 6; i++)
+                {
+                    var d = i * 60;
+                    <tr>
+                        <td><div class="lst-sk" style="width:90px;height:14px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:80px;height:20px;border-radius:99px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:80px;height:13px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:44px;height:13px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:88px;height:13px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:60px;height:13px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:60px;height:13px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:48px;height:26px;border-radius:8px;animation-delay:@(d)ms"></div></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (!orders.Any())
+{
+    <div class="lst-empty stagger-3">
+        <div class="lst-empty-icon">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#9CA3AF" stroke-width="1.5">
+                <path d="M2 2h3l2.5 13h15L25 7H7" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="10" cy="23" r="2"/><circle cx="20" cy="23" r="2"/>
+            </svg>
+        </div>
+        <div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:.35rem">No orders found</div>
+        <div style="font-size:13px;color:#9CA3AF">
+            @(string.IsNullOrEmpty(statusFilter) ? "Orders will appear here once quotes are accepted." : "Try a different status filter.")
+        </div>
+    </div>
+}
+else
+{
+    <div class="table-responsive stagger-3">
+        <table class="table table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Order #</th><th>Status</th><th>Total</th><th>Currency</th><th>Created</th><th>Shipped</th><th>Delivered</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in orders)
+                {
+                    <tr>
+                        <td><a href="/orders/@o.Id" class="lst-num-link">@o.OrderNumber</a></td>
+                        <td><span class="badge @GetStatusBadge(o.Status)">@o.Status</span></td>
+                        <td style="font-weight:600;color:#111827;font-variant-numeric:tabular-nums">@FormatAmount(o.TotalAmount, o.Currency)</td>
+                        <td style="color:#6B7280">@o.Currency</td>
+                        <td style="color:#6B7280;font-size:12.5px">@o.CreatedAt.ToString("MMM d, yyyy")</td>
+                        <td style="color:#6B7280;font-size:12.5px">@(o.ShippedAt?.ToString("MMM d") ?? "—")</td>
+                        <td style="color:#6B7280;font-size:12.5px">@(o.DeliveredAt?.ToString("MMM d") ?? "—")</td>
+                        <td><a href="/orders/@o.Id" class="btn btn-sm btn-outline-primary">View</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<style>
+    @@keyframes lst-shimmer {
+        0%   { background-position: -400px 0; }
+        100% { background-position:  400px 0; }
+    }
+    .lst-sk {
+        background: linear-gradient(90deg, #F3F4F6 25%, #EAECF0 50%, #F3F4F6 75%);
+        background-size: 800px 100%;
+        animation: lst-shimmer 1.6s ease-in-out infinite;
+        border-radius: 5px;
+        display: inline-block;
+    }
+    .lst-num-link { font-weight: 600; color: #111827; text-decoration: none; }
+    .lst-num-link:hover { color: #4F46E5; }
+    .lst-empty {
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; padding: 4rem 2rem; text-align: center;
+    }
+    .lst-empty-icon {
+        width: 60px; height: 60px; border-radius: 16px; background: #F3F4F6;
+        display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;
+    }
+</style>
+
+@code {
+    private List<OrderDto>? orders;
+    private string statusFilter = "";
+
+    protected override async Task OnInitializedAsync() => await LoadOrders();
+
+    private async Task LoadOrders() =>
+        orders = await Api.GetOrdersAsync(string.IsNullOrEmpty(statusFilter) ? null : statusFilter);
+
+    private static string GetStatusBadge(string status) => status switch
+    {
+        "Delivered"  => "badge-soft-success",
+        "Cancelled"  => "badge-soft-danger",
+        "Shipped"    => "badge-soft-info",
+        "Confirmed"  => "badge-soft-primary",
+        "Processing" => "badge-soft-purple",
+        "Pending"    => "badge-soft-warning",
+        _            => "badge-soft-neutral",
+    };
+
+    private static string FormatAmount(decimal value, string currency)
+    {
+        var sym = currency switch
+        {
+            "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => currency + " "
+        };
+        return value >= 1_000_000 ? $"{sym}{value / 1_000_000:N1}M"
+             : value >= 1_000     ? $"{sym}{value / 1_000:N1}K"
+             : $"{sym}{value:N0}";
+    }
+}

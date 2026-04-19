@@ -1,0 +1,51 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Api/">
+    <Project Path="src/Api/CrmSales.Api/CrmSales.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/AppHost/">
+    <Project Path="src/AppHost/CrmSales.AppHost/CrmSales.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Contacts/">
+    <Project Path="src/Modules/Contacts/CrmSales.Contacts.Application/CrmSales.Contacts.Application.csproj" />
+    <Project Path="src/Modules/Contacts/CrmSales.Contacts.Domain/CrmSales.Contacts.Domain.csproj" />
+    <Project Path="src/Modules/Contacts/CrmSales.Contacts.Infrastructure/CrmSales.Contacts.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Opportunities/">
+    <Project Path="src/Modules/Opportunities/CrmSales.Opportunities.Application/CrmSales.Opportunities.Application.csproj" />
+    <Project Path="src/Modules/Opportunities/CrmSales.Opportunities.Domain/CrmSales.Opportunities.Domain.csproj" />
+    <Project Path="src/Modules/Opportunities/CrmSales.Opportunities.Infrastructure/CrmSales.Opportunities.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Orders/">
+    <Project Path="src/Modules/Orders/CrmSales.Orders.Application/CrmSales.Orders.Application.csproj" />
+    <Project Path="src/Modules/Orders/CrmSales.Orders.Domain/CrmSales.Orders.Domain.csproj" />
+    <Project Path="src/Modules/Orders/CrmSales.Orders.Infrastructure/CrmSales.Orders.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Products/">
+    <Project Path="src/Modules/Products/CrmSales.Products.Application/CrmSales.Products.Application.csproj" />
+    <Project Path="src/Modules/Products/CrmSales.Products.Domain/CrmSales.Products.Domain.csproj" />
+    <Project Path="src/Modules/Products/CrmSales.Products.Infrastructure/CrmSales.Products.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Quotes/">
+    <Project Path="src/Modules/Quotes/CrmSales.Quotes.Application/CrmSales.Quotes.Application.csproj" />
+    <Project Path="src/Modules/Quotes/CrmSales.Quotes.Domain/CrmSales.Quotes.Domain.csproj" />
+    <Project Path="src/Modules/Quotes/CrmSales.Quotes.Infrastructure/CrmSales.Quotes.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Users/">
+    <Project Path="src/Modules/Users/CrmSales.Users.Application/CrmSales.Users.Application.csproj" />
+    <Project Path="src/Modules/Users/CrmSales.Users.Domain/CrmSales.Users.Domain.csproj" />
+    <Project Path="src/Modules/Users/CrmSales.Users.Infrastructure/CrmSales.Users.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/ServiceDefaults/">
+    <Project Path="src/ServiceDefaults/CrmSales.ServiceDefaults/CrmSales.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/src/SharedKernel/">
+    <Project Path="src/SharedKernel/CrmSales.SharedKernel/CrmSales.SharedKernel.csproj" />
+  </Folder>
+  <Folder Name="/src/Web/" />
+  <Folder Name="/src/Web/CrmSales.Web/">
+    <Project Path="src/Web/CrmSales.Web/CrmSales.Web.Client/CrmSales.Web.Client.csproj" />
+    <Project Path="src/Web/CrmSales.Web/CrmSales.Web/CrmSales.Web.csproj" />
+  </Folder>
+</Solution>

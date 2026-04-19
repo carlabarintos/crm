@@ -1,0 +1,146 @@
+@page "/quotes"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+
+<PageTitle>Quotes — CRM Sales</PageTitle>
+
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Sales Pipeline</p>
+        <h1>
+            Quotes
+            @if (OpportunityId.HasValue)
+            {
+                <span style="font-size:13px;font-weight:500;color:#9CA3AF;margin-left:.5rem">
+                    · filtered by opportunity <a href="/quotes" style="font-size:12px">clear</a>
+                </span>
+            }
+        </h1>
+    </div>
+    <a href="/quotes/new" class="btn btn-primary">+ New Quote</a>
+</div>
+
+@if (quotes is null)
+{
+    <div class="table-responsive">
+        <table class="table">
+            <thead class="table-light">
+                <tr>
+                    <th>Quote #</th><th>Status</th><th>Total</th><th>Currency</th><th>Expiry</th><th>Created</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < 6; i++)
+                {
+                    var d = i * 60;
+                    <tr>
+                        <td><div class="lst-sk" style="width:90px;height:14px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:72px;height:20px;border-radius:99px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:80px;height:13px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:44px;height:13px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:88px;height:13px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:88px;height:13px;animation-delay:@(d)ms"></div></td>
+                        <td><div class="lst-sk" style="width:48px;height:26px;border-radius:8px;animation-delay:@(d)ms"></div></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (!quotes.Any())
+{
+    <div class="lst-empty stagger-3">
+        <div class="lst-empty-icon">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#9CA3AF" stroke-width="1.5">
+                <rect x="4" y="3" width="20" height="24" rx="3"/>
+                <path d="M9 10h10M9 15h10M9 20h6" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:.35rem">No quotes found</div>
+        <div style="font-size:13px;color:#9CA3AF;margin-bottom:1.25rem">Create your first quote to get started.</div>
+        <a href="/quotes/new" class="btn btn-primary btn-sm">+ New Quote</a>
+    </div>
+}
+else
+{
+    <div class="table-responsive stagger-3">
+        <table class="table table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Quote #</th><th>Status</th><th>Total</th><th>Currency</th><th>Expiry</th><th>Created</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var q in quotes)
+                {
+                    <tr>
+                        <td><a href="/quotes/@q.Id" class="lst-num-link">@q.QuoteNumber</a></td>
+                        <td><span class="badge @GetStatusBadge(q.Status)">@q.Status</span></td>
+                        <td style="font-weight:600;color:#111827;font-variant-numeric:tabular-nums">@FormatAmount(q.TotalAmount, q.Currency)</td>
+                        <td style="color:#6B7280">@q.Currency</td>
+                        <td style="color:#6B7280;font-size:12.5px">@(q.ExpiryDate?.ToString("MMM d, yyyy") ?? "—")</td>
+                        <td style="color:#6B7280;font-size:12.5px">@q.CreatedAt.ToString("MMM d, yyyy")</td>
+                        <td><a href="/quotes/@q.Id" class="btn btn-sm btn-outline-primary">View</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<style>
+    @@keyframes lst-shimmer {
+        0%   { background-position: -400px 0; }
+        100% { background-position:  400px 0; }
+    }
+    .lst-sk {
+        background: linear-gradient(90deg, #F3F4F6 25%, #EAECF0 50%, #F3F4F6 75%);
+        background-size: 800px 100%;
+        animation: lst-shimmer 1.6s ease-in-out infinite;
+        border-radius: 5px;
+        display: inline-block;
+    }
+    .lst-num-link { font-weight: 600; color: #111827; text-decoration: none; }
+    .lst-num-link:hover { color: #4F46E5; }
+    .lst-empty {
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; padding: 4rem 2rem; text-align: center;
+    }
+    .lst-empty-icon {
+        width: 60px; height: 60px; border-radius: 16px; background: #F3F4F6;
+        display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;
+    }
+</style>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "opportunityId")]
+    public Guid? OpportunityId { get; set; }
+
+    private List<QuoteDto>? quotes;
+
+    protected override async Task OnInitializedAsync() =>
+        quotes = await Api.GetQuotesAsync(OpportunityId);
+
+    private static string GetStatusBadge(string status) => status switch
+    {
+        "Accepted" => "badge-soft-success",
+        "Rejected" => "badge-soft-danger",
+        "Sent"     => "badge-soft-info",
+        "Expired"  => "badge-soft-neutral",
+        "Draft"    => "badge-soft-warning",
+        _          => "badge-soft-neutral",
+    };
+
+    private static string FormatAmount(decimal value, string currency)
+    {
+        var sym = currency switch
+        {
+            "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => currency + " "
+        };
+        return value >= 1_000_000 ? $"{sym}{value / 1_000_000:N1}M"
+             : value >= 1_000     ? $"{sym}{value / 1_000:N1}K"
+             : $"{sym}{value:N0}";
+    }
+}

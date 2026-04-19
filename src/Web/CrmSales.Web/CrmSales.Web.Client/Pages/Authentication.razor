@@ -1,0 +1,22 @@
+@page "/authentication/{action}"
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@attribute [AllowAnonymous]
+
+<RemoteAuthenticatorView Action="@Action">
+    <LoggingIn>
+        <AuthSplash Message="Authenticating" Sub="Redirecting to your identity provider…" />
+    </LoggingIn>
+    <CompletingLoggingIn>
+        <AuthSplash Message="Authenticating" Sub="Completing your session, just a moment…" />
+    </CompletingLoggingIn>
+    <LogOut>
+        <AuthSplash Message="Authenticating" Sub="Clearing your session…" Icon="logout" />
+    </LogOut>
+    <CompletingLogOut>
+        <AuthSplash Message="Authenticating" Sub="Finishing up your session…" Icon="logout" />
+    </CompletingLogOut>
+</RemoteAuthenticatorView>
+
+@code {
+    [Parameter] public string? Action { get; set; }
+}

@@ -1,0 +1,113 @@
+@page "/contacts"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Contacts</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-0">Contacts</h4>
+        <p class="text-muted small mb-0">Manage your customer contacts</p>
+    </div>
+    <a href="/contacts/new" class="btn btn-primary btn-sm">+ New Contact</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <input class="form-control form-control-sm" style="max-width:320px"
+               value="@search" @oninput="OnSearch"
+               placeholder="Search by name, email, company..." />
+    </div>
+</div>
+
+@if (contacts is null)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+}
+else if (!contacts.Any())
+{
+    <div class="card">
+        <div class="card-body text-center py-5 text-muted">
+            <div style="font-size:2rem">&#128100;</div>
+            <p class="mt-2">No contacts yet. <a href="/contacts/new">Create your first contact</a>.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Company</th>
+                        <th>Job Title</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in contacts)
+                    {
+                        var contactId = c.Id;
+                        <tr style="cursor:pointer" @onclick="@(() => GoToContact(contactId))">
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="contact-avatar">@c.FirstName[0]@c.LastName[0]</div>
+                                    <span class="fw-medium">@c.FullName</span>
+                                </div>
+                            </td>
+                            <td class="text-muted">@(c.Email ?? "-")</td>
+                            <td class="text-muted">@(c.Phone ?? "-")</td>
+                            <td class="text-muted">@(c.Company ?? "-")</td>
+                            <td class="text-muted">@(c.JobTitle ?? "-")</td>
+                            <td class="text-end">
+                                <a href="/contacts/@c.Id" class="btn btn-sm btn-outline-secondary" @onclick:stopPropagation>View</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<style>
+    .contact-avatar {
+        width: 32px; height: 32px; border-radius: 50%;
+        background: linear-gradient(135deg, #6366F1, #8B5CF6);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
+        text-transform: uppercase;
+    }
+</style>
+
+@code {
+    private List<ContactDto>? contacts;
+    private string search = "";
+    private System.Threading.CancellationTokenSource? _cts;
+
+    private void GoToContact(Guid id) => Nav.NavigateTo("/contacts/" + id);
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        contacts = await Api.GetContactsAsync(string.IsNullOrWhiteSpace(search) ? null : search);
+    }
+
+    private async Task OnSearch(ChangeEventArgs e)
+    {
+        search = e.Value?.ToString() ?? "";
+        _cts?.Cancel();
+        _cts = new System.Threading.CancellationTokenSource();
+        var token = _cts.Token;
+        await Task.Delay(300);
+        if (!token.IsCancellationRequested)
+            await Load();
+    }
+}

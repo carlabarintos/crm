@@ -1,0 +1,350 @@
+@page "/opportunities/new"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject CrmApiClient Api
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>New Opportunity</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/opportunities">Opportunities</a></li>
+        <li class="breadcrumb-item active">New</li>
+    </ol>
+</nav>
+
+<div class="row g-4">
+    <!-- Main form -->
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">Opportunity Details</h5></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Name <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="name" placeholder="Opportunity name" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Account Name <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="accountName" placeholder="Company / Account" />
+                </div>
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label">Estimated Value <span class="text-danger">*</span></label>
+                        <input class="form-control" type="number" step="0.01" @bind="estimatedValue" />
+                    </div>
+                    <div class="col">
+                        <label class="form-label">Currency</label>
+                        <select class="form-select" @bind="currency">
+                            <option>PHP</option>
+                            <option>USD</option>
+                            <option>EUR</option>
+                            <option>GBP</option>
+                            <option>AUD</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Expected Close Date</label>
+                    <input class="form-control" type="date" @bind="expectedCloseDate" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Description</label>
+                    <textarea class="form-control" @bind="description" rows="3" placeholder="Optional notes"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Owner <span class="text-danger">*</span></label>
+                    @if (users is null)
+                    {
+                        <div class="text-muted small">Loading users...</div>
+                    }
+                    else if (!users.Any())
+                    {
+                        <input class="form-control" @bind="ownerIdRaw" placeholder="No users yet — paste a User ID" />
+                    }
+                    else
+                    {
+                        <select class="form-select" @bind="ownerIdRaw">
+                            <option value="">— Select owner —</option>
+                            @foreach (var u in users)
+                            {
+                                <option value="@u.Id">@u.FullName (@u.Role)</option>
+                            }
+                        </select>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-danger">@error</div>
+                }
+            </div>
+            <div class="card-footer d-flex gap-2">
+                <button class="btn btn-primary" @onclick="Save" disabled="@saving">
+                    @if (saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Create Opportunity
+                </button>
+                <a href="/opportunities" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contact panel -->
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Contact</h6>
+                @if (!creatingContact)
+                {
+                    <button class="btn btn-sm btn-outline-primary" @onclick="() => creatingContact = true">+ New Contact</button>
+                }
+            </div>
+            <div class="card-body">
+                @if (!creatingContact)
+                {
+                    <!-- Select existing contact -->
+                    @if (contacts is null)
+                    {
+                        <div class="text-muted small">Loading contacts...</div>
+                    }
+                    else if (!contacts.Any())
+                    {
+                        <p class="text-muted small">No contacts yet. Click "+ New Contact" to create one.</p>
+                        <input class="form-control form-control-sm" @bind="contactName" placeholder="Contact name (required)" />
+                    }
+                    else
+                    {
+                        <div class="mb-2">
+                            <label class="form-label form-label-sm">Select existing contact</label>
+                            <select class="form-select form-select-sm" @bind="selectedContactIdRaw" @bind:after="OnContactSelected">
+                                <option value="">— None / enter manually —</option>
+                                @foreach (var c in contacts)
+                                {
+                                    <option value="@c.Id">@c.FullName @(c.Company != null ? $"({c.Company})" : "")</option>
+                                }
+                            </select>
+                        </div>
+                        @if (string.IsNullOrEmpty(selectedContactIdRaw))
+                        {
+                            <div class="mt-2">
+                                <label class="form-label form-label-sm">Or enter contact name manually</label>
+                                <input class="form-control form-control-sm" @bind="contactName" placeholder="Contact name" />
+                                <input class="form-control form-control-sm mt-1" type="email" @bind="contactEmail" placeholder="Email (optional)" />
+                                <input class="form-control form-control-sm mt-1" @bind="contactPhone" placeholder="Phone (optional)" />
+                            </div>
+                        }
+                        else if (selectedContact is not null)
+                        {
+                            <div class="mt-2 p-2 rounded" style="background:#F3F4F6">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <div class="contact-avatar-sm">@selectedContact.FirstName[0]@selectedContact.LastName[0]</div>
+                                    <strong>@selectedContact.FullName</strong>
+                                </div>
+                                @if (selectedContact.Email != null) { <div class="small text-muted">@selectedContact.Email</div> }
+                                @if (selectedContact.Company != null) { <div class="small text-muted">@selectedContact.Company</div> }
+                            </div>
+                        }
+                    }
+                }
+                else
+                {
+                    <!-- Inline create contact form -->
+                    <div class="row g-2 mb-2">
+                        <div class="col">
+                            <input class="form-control form-control-sm" @bind="newContactFirst" placeholder="First name *" />
+                        </div>
+                        <div class="col">
+                            <input class="form-control form-control-sm" @bind="newContactLast" placeholder="Last name *" />
+                        </div>
+                    </div>
+                    <input class="form-control form-control-sm mb-2" type="email" @bind="newContactEmail" placeholder="Email" />
+                    <input class="form-control form-control-sm mb-2" @bind="newContactPhone" placeholder="Phone" />
+                    <input class="form-control form-control-sm mb-2" @bind="newContactCompany" placeholder="Company" />
+                    <input class="form-control form-control-sm mb-2" @bind="newContactJobTitle" placeholder="Job title" />
+                    @if (!string.IsNullOrEmpty(contactCreateError))
+                    {
+                        <div class="text-danger small mb-1">@contactCreateError</div>
+                    }
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-primary" @onclick="CreateContact" disabled="@creatingContactSaving">
+                            @if (creatingContactSaving) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Save Contact</span> }
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => { creatingContact = false; contactCreateError = null; }">Cancel</button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .contact-avatar-sm {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: linear-gradient(135deg, #6366F1, #8B5CF6);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0;
+        text-transform: uppercase;
+    }
+</style>
+
+@code {
+    // Opportunity fields
+    private string name = "";
+    private string accountName = "";
+    private string contactName = "";
+    private string? contactEmail;
+    private string? contactPhone;
+    private decimal estimatedValue;
+    private string currency = "PHP";
+    private DateTime? expectedCloseDate = DateTime.Today.AddDays(2);
+    private string? description;
+    private string ownerIdRaw = "";
+
+    // Contact selection
+    private string selectedContactIdRaw = "";
+    private ContactDto? selectedContact;
+    private List<ContactDto>? contacts;
+
+    // Inline contact creation
+    private bool creatingContact;
+    private bool creatingContactSaving;
+    private string? contactCreateError;
+    private string newContactFirst = "", newContactLast = "";
+    private string? newContactEmail, newContactPhone, newContactCompany, newContactJobTitle;
+
+    private List<UserDto>? users;
+    private bool saving;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var usersTask = Api.GetUsersAsync();
+        var contactsTask = Api.GetContactsAsync();
+        var authTask = AuthStateProvider.GetAuthenticationStateAsync();
+
+        users = await usersTask;
+        contacts = await contactsTask;
+        var auth = await authTask;
+
+        var currentEmail = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? auth.User.FindFirst("email")?.Value;
+
+        var match = users?.FirstOrDefault(u =>
+            string.Equals(u.Email, currentEmail, StringComparison.OrdinalIgnoreCase));
+
+        if (match is not null)
+            ownerIdRaw = match.Id.ToString();
+        else if (users?.Count == 1)
+            ownerIdRaw = users[0].Id.ToString();
+    }
+
+    private void OnContactSelected()
+    {
+        if (Guid.TryParse(selectedContactIdRaw, out var cid))
+        {
+            selectedContact = contacts?.FirstOrDefault(c => c.Id == cid);
+            if (selectedContact != null)
+            {
+                contactName = selectedContact.FullName;
+                contactEmail = selectedContact.Email;
+                contactPhone = selectedContact.Phone;
+                if (string.IsNullOrWhiteSpace(accountName) && selectedContact.Company != null)
+                    accountName = selectedContact.Company;
+            }
+        }
+        else
+        {
+            selectedContact = null;
+        }
+    }
+
+    private async Task CreateContact()
+    {
+        contactCreateError = null;
+        if (string.IsNullOrWhiteSpace(newContactFirst) || string.IsNullOrWhiteSpace(newContactLast))
+        { contactCreateError = "First and last name are required."; return; }
+
+        creatingContactSaving = true;
+        try
+        {
+            var resp = await Api.CreateContactAsync(new
+            {
+                FirstName = newContactFirst, LastName = newContactLast,
+                Email = newContactEmail, Phone = newContactPhone,
+                Company = newContactCompany, JobTitle = newContactJobTitle,
+                Notes = (string?)null
+            });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                // Reload contacts and auto-select the new one
+                contacts = await Api.GetContactsAsync();
+                var created = contacts?.FirstOrDefault(c =>
+                    c.FirstName == newContactFirst && c.LastName == newContactLast);
+                if (created != null)
+                {
+                    selectedContactIdRaw = created.Id.ToString();
+                    selectedContact = created;
+                    contactName = created.FullName;
+                    contactEmail = created.Email;
+                    contactPhone = created.Phone;
+                    if (string.IsNullOrWhiteSpace(accountName) && created.Company != null)
+                        accountName = created.Company;
+                }
+                creatingContact = false;
+                newContactFirst = ""; newContactLast = "";
+                newContactEmail = null; newContactPhone = null;
+                newContactCompany = null; newContactJobTitle = null;
+            }
+            else
+            {
+                contactCreateError = await resp.Content.ReadAsStringAsync();
+            }
+        }
+        finally { creatingContactSaving = false; }
+    }
+
+    private async Task Save()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(accountName) || estimatedValue <= 0)
+        { error = "Name, Account Name and a positive Estimated Value are required."; return; }
+        if (!Guid.TryParse(ownerIdRaw, out var ownerGuid))
+        { error = "Please select an owner."; return; }
+
+        // If no contact selected and no manual name — require at least a name
+        var resolvedContactName = contactName;
+        if (string.IsNullOrWhiteSpace(resolvedContactName) && selectedContact != null)
+            resolvedContactName = selectedContact.FullName;
+        if (string.IsNullOrWhiteSpace(resolvedContactName))
+        { error = "Please select or enter a contact name."; return; }
+
+        Guid? contactId = Guid.TryParse(selectedContactIdRaw, out var cid) ? cid : null;
+
+        saving = true;
+        try
+        {
+            var resp = await Api.CreateOpportunityAsync(new
+            {
+                Name = name,
+                AccountName = accountName,
+                ContactId = contactId,
+                ContactName = resolvedContactName,
+                ContactEmail = contactEmail,
+                ContactPhone = contactPhone,
+                EstimatedValue = estimatedValue,
+                Currency = currency,
+                ExpectedCloseDate = expectedCloseDate,
+                Description = description,
+                OwnerId = ownerGuid
+            });
+
+            if (resp.IsSuccessStatusCode)
+                Nav.NavigateTo("/opportunities");
+            else
+                error = await resp.Content.ReadAsStringAsync();
+        }
+        finally { saving = false; }
+    }
+}

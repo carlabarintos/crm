@@ -1,0 +1,482 @@
+@page "/"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+
+<PageTitle>Dashboard — CRM Sales</PageTitle>
+
+@if (loading)
+{
+    <!-- Skeleton header -->
+    <div class="page-header mb-4">
+        <div>
+            <div class="sk sk-label mb-2"></div>
+            <div class="sk sk-title mb-2"></div>
+            <div class="sk sk-subtitle"></div>
+        </div>
+        <div class="d-flex gap-2">
+            <div class="sk sk-btn"></div>
+            <div class="sk sk-btn"></div>
+        </div>
+    </div>
+
+    <!-- Skeleton KPI cards -->
+    <div class="row g-3 mb-4">
+        @for (int i = 0; i < 4; i++)
+        {
+            <div class="col-sm-6 col-xl-3">
+                <div class="kpi-card">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="sk sk-icon"></div>
+                        <div class="sk" style="width:52px;height:18px;border-radius:99px"></div>
+                    </div>
+                    <div class="sk sk-value mb-2"></div>
+                    <div class="sk sk-label-sm"></div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Skeleton pipeline + quick actions -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header">
+                    <div class="sk" style="width:120px;height:14px"></div>
+                </div>
+                <div class="card-body d-flex flex-column gap-3">
+                    @for (int i = 0; i < 4; i++)
+                    {
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="sk" style="width:100px;height:14px"></div>
+                            <div class="sk" style="flex:1;height:28px;border-radius:8px"></div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <div class="sk" style="width:90px;height:14px"></div>
+                </div>
+                <div class="card-body d-flex flex-column gap-2">
+                    @for (int i = 0; i < 4; i++)
+                    {
+                        <div class="sk" style="height:48px;border-radius:10px"></div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+
+<!-- Page header -->
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Overview</p>
+        <h1>Sales Dashboard</h1>
+        <p>@DateTime.Now.ToString("dddd, MMMM d, yyyy") &middot; Q@((int)Math.Ceiling(DateTime.Now.Month / 3.0)) in progress</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/opportunities/new" class="btn btn-primary btn-sm">+ New Opportunity</a>
+        <a href="/quotes/new" class="btn btn-outline-secondary btn-sm">+ New Quote</a>
+    </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3 stagger-1">
+        <a href="/opportunities" class="kpi-card kpi-card-link">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="kpi-icon" style="background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
+                    <svg width="17" height="17" viewBox="0 0 17 17" fill="none">
+                        <path d="M2 13L6 8L9.5 11L13 6M13 6h-3m3 0v3" stroke="#6366f1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span class="badge badge-soft-neutral" style="font-size:10px">@openOppCount open</span>
+            </div>
+            <div class="kpi-value">@FormatCurrency(pipelineValue)</div>
+            <div class="kpi-label">Total Pipeline Value</div>
+        </a>
+    </div>
+
+    <div class="col-sm-6 col-xl-3 stagger-2">
+        <a href="/quotes" class="kpi-card kpi-card-link">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="kpi-icon" style="background:linear-gradient(135deg,#ecfdf5,#d1fae5)">
+                    <svg width="17" height="17" viewBox="0 0 17 17" fill="none">
+                        <rect x="2" y="4" width="13" height="10" rx="2" stroke="#10b981" stroke-width="1.8"/>
+                        <path d="M5.5 8.5h6M5.5 11h4" stroke="#10b981" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M5 4V3a3 3 0 0 1 7 0v1" stroke="#10b981" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span class="badge badge-soft-neutral" style="font-size:10px">@totalQuoteCount total</span>
+            </div>
+            <div class="kpi-value">@activeQuoteCount</div>
+            <div class="kpi-label">Active Quotes (Draft + Sent)</div>
+        </a>
+    </div>
+
+    <div class="col-sm-6 col-xl-3 stagger-3">
+        <a href="/orders" class="kpi-card kpi-card-link">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="kpi-icon" style="background:linear-gradient(135deg,#fdf4ff,#fae8ff)">
+                    <svg width="17" height="17" viewBox="0 0 17 17" fill="none">
+                        <path d="M8.5 2L10.5 6.5L15.5 7.2L12 10.5L12.8 15.5L8.5 13.2L4.2 15.5L5 10.5L1.5 7.2L6.5 6.5L8.5 2Z" stroke="#a855f7" stroke-width="1.8" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span class="badge badge-soft-neutral" style="font-size:10px">@totalOrderCount total</span>
+            </div>
+            <div class="kpi-value">@activeOrderCount</div>
+            <div class="kpi-label">Active Orders</div>
+        </a>
+    </div>
+
+    <div class="col-sm-6 col-xl-3 stagger-4">
+        <a href="/products" class="kpi-card kpi-card-link">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="kpi-icon" style="background:linear-gradient(135deg,#fff7ed,#ffedd5)">
+                    <svg width="17" height="17" viewBox="0 0 17 17" fill="none">
+                        <path d="M7.5 1L13 4v7L7.5 14 2 11V4L7.5 1z" stroke="#f97316" stroke-width="1.8" stroke-linejoin="round"/>
+                        <path d="M7.5 1v13M2 4l5.5 3.5L13 4" stroke="#f97316" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span class="badge badge-soft-neutral" style="font-size:10px">catalog</span>
+            </div>
+            <div class="kpi-value">@activeProductCount</div>
+            <div class="kpi-label">Active Products</div>
+        </a>
+    </div>
+</div>
+
+<!-- Pipeline + Quick Actions -->
+<div class="row g-3 mb-4">
+    <!-- Pipeline visualization -->
+    <div class="col-md-8 stagger-5">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <span style="font-size:14px;font-weight:700;color:#111827">Sales Pipeline</span>
+                    <span class="ms-2" style="font-size:12px;color:#9CA3AF">Stage breakdown by value</span>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (openOppCount == 0 && wonCount == 0 && lostCount == 0)
+                {
+                    <div class="text-center text-muted py-4" style="font-size:13px">No opportunities yet. <a href="/opportunities/new">Add one to get started.</a></div>
+                }
+                else
+                {
+                    <div class="pipeline-stages">
+                        @foreach (var (stage, color, label) in PipelineStages)
+                        {
+                            var data = stageCounts.TryGetValue(stage, out var d) ? d : (Count: 0, Value: 0m);
+                            var width = GetBarWidth(stage);
+                            <div class="pipeline-row">
+                                <div class="pipeline-label">
+                                    <div class="pipeline-stage-name">@stage</div>
+                                    <div class="pipeline-stage-count text-muted" style="font-size:10px">@data.Count opp@(data.Count == 1 ? "" : "s")</div>
+                                </div>
+                                <div class="pipeline-bar-track">
+                                    @if (data.Count > 0)
+                                    {
+                                        <div class="pipeline-bar-fill" style="width:@(width.ToString("F0"))%;background:@color">
+                                            <span>@FormatCurrency(data.Value)</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted" style="font-size:11px;padding:.25rem .5rem">—</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="pipeline-footer">
+                        <div>
+                            <div class="pipeline-footer-label">Win Rate</div>
+                            <div class="pipeline-footer-value">@(winRate > 0 ? $"{winRate:N1}%" : "—")</div>
+                        </div>
+                        <div>
+                            <div class="pipeline-footer-label">Avg Days to Close</div>
+                            <div class="pipeline-footer-value">@(avgDaysToClose > 0 ? $"{avgDaysToClose:N0} days" : "—")</div>
+                        </div>
+                        <div>
+                            <div class="pipeline-footer-label">Weighted Forecast</div>
+                            <div class="pipeline-footer-value gradient-text">@(forecast > 0 ? FormatCurrency(forecast) : "—")</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="col-md-4 stagger-6">
+        <div class="card h-100">
+            <div class="card-header">Quick Actions</div>
+            <div class="card-body d-flex flex-column gap-2">
+                <a href="/opportunities/new" class="quick-action-btn">
+                    <div class="qa-icon" style="background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" stroke-width="1.5"><path d="M1 10l3-3.5L7 9l2.5-3L13 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="qa-label">
+                        <strong>New Opportunity</strong>
+                        <span>Add to pipeline</span>
+                    </div>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" class="qa-arrow"><path d="M4.5 3L7.5 6L4.5 9"/></svg>
+                </a>
+                <a href="/quotes/new" class="quick-action-btn">
+                    <div class="qa-icon" style="background:linear-gradient(135deg,#eff6ff,#dbeafe)">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#3b82f6" stroke-width="1.5"><rect x="2" y="2" width="10" height="12" rx="1.5"/><path d="M4.5 5.5h5M4.5 8h5M4.5 10.5h3" stroke-linecap="round"/></svg>
+                    </div>
+                    <div class="qa-label">
+                        <strong>New Quote</strong>
+                        <span>Create proposal</span>
+                    </div>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" class="qa-arrow"><path d="M4.5 3L7.5 6L4.5 9"/></svg>
+                </a>
+                <a href="/contacts/new" class="quick-action-btn">
+                    <div class="qa-icon" style="background:linear-gradient(135deg,#ecfdf5,#d1fae5)">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#10b981" stroke-width="1.5"><path d="M9 8.5c2 .5 4 2 4 3V13H1v-1c0-1.5 2-3 4-3" stroke-linecap="round"/><circle cx="7" cy="4.5" r="2.5"/></svg>
+                    </div>
+                    <div class="qa-label">
+                        <strong>New Contact</strong>
+                        <span>Add person</span>
+                    </div>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" class="qa-arrow"><path d="M4.5 3L7.5 6L4.5 9"/></svg>
+                </a>
+                <a href="/products/new" class="quick-action-btn">
+                    <div class="qa-icon" style="background:linear-gradient(135deg,#fff7ed,#ffedd5)">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#f97316" stroke-width="1.5"><path d="M7 1L12 3.5v7L7 13 2 10.5v-7L7 1z" stroke-linejoin="round"/><path d="M7 1v12M2 3.5l5 3.5 5-3.5" stroke-linecap="round"/></svg>
+                    </div>
+                    <div class="qa-label">
+                        <strong>New Product</strong>
+                        <span>Add to catalog</span>
+                    </div>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" class="qa-arrow"><path d="M4.5 3L7.5 6L4.5 9"/></svg>
+                </a>
+            </div>
+
+            <!-- Sales journey -->
+            <div class="card-footer">
+                <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9CA3AF;margin-bottom:.6rem">Sales Journey</p>
+                <div class="d-flex align-items-center gap-1 flex-wrap">
+                    <span class="badge badge-soft-primary">Opportunity</span>
+                    <span style="color:#D1D5DB;font-size:11px">→</span>
+                    <span class="badge badge-soft-info">Quote</span>
+                    <span style="color:#D1D5DB;font-size:11px">→</span>
+                    <span class="badge badge-soft-success">Accepted</span>
+                    <span style="color:#D1D5DB;font-size:11px">→</span>
+                    <span class="badge badge-soft-warning">Order</span>
+                    <span style="color:#D1D5DB;font-size:11px">→</span>
+                    <span class="badge badge-soft-success">Delivered</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+} @* end loading else *@
+
+<style>
+    /* ── Skeleton shimmer ───────────────────────── */
+    @@keyframes sk-shimmer {
+        0%   { background-position: -400px 0; }
+        100% { background-position:  400px 0; }
+    }
+    .sk {
+        background: linear-gradient(90deg, #F3F4F6 25%, #EAECF0 50%, #F3F4F6 75%);
+        background-size: 800px 100%;
+        animation: sk-shimmer 1.6s ease-in-out infinite;
+        border-radius: 6px;
+    }
+    .sk-label    { width: 64px;  height: 11px; }
+    .sk-title    { width: 200px; height: 22px; border-radius: 8px; }
+    .sk-subtitle { width: 260px; height: 13px; }
+    .sk-btn      { width: 120px; height: 30px; border-radius: 8px; }
+    .sk-icon     { width: 36px;  height: 36px; border-radius: 10px; }
+    .sk-value    { width: 110px; height: 32px; border-radius: 8px; }
+    .sk-label-sm { width: 140px; height: 12px; }
+    /* ─────────────────────────────────────────── */
+
+    .kpi-card-link {
+        display: block;
+        text-decoration: none !important;
+        color: inherit;
+        cursor: pointer;
+        transition: box-shadow .15s, transform .15s, border-color .15s;
+    }
+    .kpi-card-link:hover {
+        box-shadow: 0 4px 16px rgba(99,102,241,.12);
+        transform: translateY(-2px);
+        border-color: #c7d2fe;
+        color: inherit;
+    }
+    .pipeline-stages { display: flex; flex-direction: column; gap: .75rem; }
+    .pipeline-row { display: flex; align-items: center; gap: .875rem; }
+    .pipeline-label { width: 110px; flex-shrink: 0; }
+    .pipeline-stage-name { font-size: 12.5px; font-weight: 600; color: #374151; }
+    .pipeline-bar-track { flex: 1; height: 28px; background: #F3F4F6; border-radius: 8px; overflow: hidden; display: flex; align-items: center; }
+    .pipeline-bar-fill {
+        height: 100%;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255,255,255,.9);
+        white-space: nowrap;
+        transition: width .8s cubic-bezier(.16,1,.3,1);
+        min-width: 60px;
+    }
+    .pipeline-footer {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid #F3F4F6;
+    }
+    .pipeline-footer-label { font-size: 11px; color: #9CA3AF; margin-bottom: .2rem; }
+    .pipeline-footer-value { font-size: 15px; font-weight: 700; color: #111827; }
+    .quick-action-btn {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding: .6rem .75rem;
+        border-radius: 10px;
+        border: 1px solid #E5E7EB;
+        text-decoration: none !important;
+        background: #fff;
+        transition: border-color .15s, box-shadow .15s, background .15s;
+        color: inherit;
+    }
+    .quick-action-btn:hover {
+        border-color: #C7D2FE;
+        box-shadow: 0 2px 8px rgba(99,102,241,.1);
+        background: #FAFAFE;
+        color: inherit;
+        text-decoration: none;
+    }
+    .qa-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .qa-label { flex: 1; min-width: 0; }
+    .qa-label strong { display: block; font-size: 13px; font-weight: 600; color: #111827; }
+    .qa-label span { display: block; font-size: 11px; color: #9CA3AF; }
+    .qa-arrow { color: #D1D5DB; flex-shrink: 0; transition: color .15s, transform .15s; }
+    .quick-action-btn:hover .qa-arrow { color: #6366f1; transform: translateX(2px); }
+</style>
+
+@code {
+    private static readonly (string Stage, string Color, string Label)[] PipelineStages =
+    [
+        ("Prospecting",   "linear-gradient(90deg,#6366f1,#818cf8)", "Top of Funnel"),
+        ("Qualification", "linear-gradient(90deg,#8b5cf6,#a78bfa)", "Qualifying"),
+        ("Proposal",      "linear-gradient(90deg,#06b6d4,#22d3ee)", "Proposal"),
+        ("ClosedWon",     "linear-gradient(90deg,#10b981,#34d399)",  "Won"),
+    ];
+
+    private bool loading = true;
+
+    private List<OpportunityDto> opps = [];
+    private List<QuoteDto> quotes = [];
+    private List<OrderDto> orders = [];
+    private List<ProductDto> products = [];
+
+    private decimal pipelineValue;
+    private string pipelineCurrency = "PHP";
+    private int openOppCount;
+    private int wonCount;
+    private int lostCount;
+    private decimal forecast;
+    private decimal winRate;
+    private double avgDaysToClose;
+    private int activeQuoteCount;
+    private int totalQuoteCount;
+    private int activeOrderCount;
+    private int totalOrderCount;
+    private int activeProductCount;
+    private Dictionary<string, (int Count, decimal Value)> stageCounts = new();
+    private decimal maxStageValue = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var oppTask   = Api.GetOpportunitiesAsync();
+        var quoteTask = Api.GetQuotesAsync();
+        var orderTask = Api.GetOrdersAsync();
+        var prodTask  = Api.GetProductsAsync(isActive: true);
+
+        opps     = await oppTask   ?? [];
+        quotes   = await quoteTask ?? [];
+        orders   = await orderTask ?? [];
+        products = await prodTask  ?? [];
+
+        Compute();
+        loading = false;
+    }
+
+    private void Compute()
+    {
+        stageCounts = opps
+            .GroupBy(o => o.Stage)
+            .ToDictionary(g => g.Key, g => (g.Count(), g.Sum(o => o.EstimatedValue)));
+
+        var openOpps = opps.Where(o => o.Stage is not ("ClosedWon" or "ClosedLost")).ToList();
+        openOppCount  = openOpps.Count;
+        pipelineValue = openOpps.Sum(o => o.EstimatedValue);
+        forecast      = openOpps.Sum(o => o.EstimatedValue * o.Probability / 100m);
+
+        var barStages = PipelineStages.Select(p => p.Stage);
+        maxStageValue = barStages
+            .Select(s => stageCounts.TryGetValue(s, out var v) ? v.Value : 0m)
+            .DefaultIfEmpty(1m)
+            .Max();
+        if (maxStageValue <= 0) maxStageValue = 1;
+
+        wonCount  = stageCounts.TryGetValue("ClosedWon",  out var wv) ? wv.Count : 0;
+        lostCount = stageCounts.TryGetValue("ClosedLost", out var lv) ? lv.Count : 0;
+        winRate   = (wonCount + lostCount) > 0
+            ? Math.Round((decimal)wonCount / (wonCount + lostCount) * 100, 1)
+            : 0;
+
+        var wonOpps = opps.Where(o => o.Stage == "ClosedWon").ToList();
+        avgDaysToClose = wonOpps.Count > 0
+            ? Math.Round(wonOpps.Average(o => (o.UpdatedAt - o.CreatedAt).TotalDays), 0)
+            : 0;
+
+        pipelineCurrency = openOpps
+            .GroupBy(o => o.Currency)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .FirstOrDefault() ?? "PHP";
+
+        totalQuoteCount  = quotes.Count;
+        activeQuoteCount = quotes.Count(q => q.Status is "Draft" or "Sent");
+        totalOrderCount  = orders.Count;
+        activeOrderCount = orders.Count(o => o.Status is "Confirmed" or "Processing" or "Shipped");
+        activeProductCount = products.Count;
+    }
+
+    private double GetBarWidth(string stage)
+    {
+        if (!stageCounts.TryGetValue(stage, out var data) || data.Count == 0) return 0;
+        var pct = (double)(data.Value / maxStageValue * 85);
+        return Math.Max(pct, 10);
+    }
+
+    private string FormatCurrency(decimal value)
+    {
+        var symbol = pipelineCurrency switch
+        {
+            "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", "AUD" => "A$",
+            _ => pipelineCurrency + " "
+        };
+        return value >= 1_000_000 ? $"{symbol}{value / 1_000_000:N1}M"
+             : value >= 1_000     ? $"{symbol}{value / 1_000:N1}K"
+             : $"{symbol}{value:N0}";
+    }
+}

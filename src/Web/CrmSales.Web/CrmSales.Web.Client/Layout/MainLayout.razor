@@ -1,0 +1,50 @@
+@inherits LayoutComponentBase
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+    <div class="main-panel">
+        <header class="topbar">
+            <div class="topbar-left">
+                <div class="topbar-search-wrap">
+                    <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="6" cy="6" r="4.5" />
+                        <path d="M10 10L13 13" stroke-linecap="round" />
+                    </svg>
+                    <input type="text" placeholder="Search deals, contacts…" class="topbar-search" />
+                    <kbd class="search-kbd">⌘K</kbd>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <button class="topbar-icon-btn" title="Notifications">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M8 2a4 4 0 0 1 4 4c0 4 1.5 5 1.5 5H2.5S4 10 4 6a4 4 0 0 1 4-4z" stroke-linecap="round" />
+                        <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke-linecap="round" />
+                    </svg>
+                    <span class="notif-dot"></span>
+                </button>
+                <button class="topbar-icon-btn" title="Help">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="8" cy="8" r="6.5" />
+                        <path d="M6 6.5a2 2 0 1 1 2.5 1.9c-.5.15-.5.6-.5 1.1" stroke-linecap="round" />
+                        <circle cx="8" cy="12" r=".75" fill="currentColor" stroke="none" />
+                    </svg>
+                </button>
+                <div class="topbar-divider"></div>
+                <a href="/opportunities/new" class="btn-new-deal">+ New Deal</a>
+            </div>
+        </header>
+        <main>
+            <article class="content">
+                @Body
+            </article>
+        </main>
+    </div>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">&#10006;</span>
+</div>

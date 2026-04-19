@@ -1,0 +1,22 @@
+@using Microsoft.AspNetCore.Components.Routing
+@using CrmSales.Web.Client.Layout
+@using CrmSales.Web.Client.Components
+
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+            <NotAuthorized>
+                <RedirectToLogin />
+            </NotAuthorized>
+            <Authorizing>
+                <AuthSplash Message="Authenticating" Sub="Verifying your session…" />
+            </Authorizing>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(MainLayout)">
+            <h3>Page not found.</h3>
+        </LayoutView>
+    </NotFound>
+</Router>

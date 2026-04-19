@@ -1,0 +1,364 @@
+@page "/quotes/{Id:guid}"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>@(quote?.QuoteNumber ?? "Quote")</PageTitle>
+
+@if (quote is null && error is null)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+}
+else if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (quote is not null)
+{
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/quotes">Quotes</a></li>
+            <li class="breadcrumb-item active">@quote.QuoteNumber</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <!-- Left: quote info + line items -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">@quote.QuoteNumber</h5>
+                    <span class="badge @GetStatusBadge(quote.Status) fs-6">@quote.Status</span>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Opportunity</dt>
+                        <dd class="col-sm-8"><a href="/opportunities/@quote.OpportunityId">View Opportunity</a></dd>
+                        <dt class="col-sm-4">Currency</dt>
+                        <dd class="col-sm-8">@quote.Currency</dd>
+                        <dt class="col-sm-4">Expiry Date</dt>
+                        <dd class="col-sm-8">@(quote.ExpiryDate?.ToString("MMM dd, yyyy") ?? "-")</dd>
+                        <dt class="col-sm-4">Notes</dt>
+                        <dd class="col-sm-8">@(quote.Notes ?? "-")</dd>
+                        <dt class="col-sm-4">Created</dt>
+                        <dd class="col-sm-8">@quote.CreatedAt.ToString("MMM dd, yyyy")</dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Line Items -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Products / Line Items</h6>
+                    @if (quote.Status == "Draft")
+                    {
+                        <button class="btn btn-sm btn-outline-primary" @onclick="ToggleAddItem">
+                            @(showLineItemForm ? "Cancel" : "+ Add Product")
+                        </button>
+                    }
+                </div>
+
+                @if (showLineItemForm && quote.Status == "Draft")
+                {
+                    <div class="card-body border-bottom">
+                        @if (products is null)
+                        {
+                            <div class="text-muted small">Loading products...</div>
+                        }
+                        else
+                        {
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-6">
+                                    <label class="form-label form-label-sm">Product</label>
+                                    <select class="form-select form-select-sm" @bind="liProductIdRaw" @bind:after="OnProductSelected">
+                                        <option value="">— Select product —</option>
+                                        @foreach (var p in products.Where(p => p.IsActive))
+                                        {
+                                            <option value="@p.Id">@p.Name — @p.Currency @p.Price.ToString("F2")</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label form-label-sm">Qty</label>
+                                    <input class="form-control form-control-sm" type="number" min="1" @bind="liQuantity" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label form-label-sm">Unit Price</label>
+                                    <input class="form-control form-control-sm" type="number" step="0.01" @bind="liUnitPrice" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label form-label-sm">Discount %</label>
+                                    <input class="form-control form-control-sm" type="number" step="0.01" min="0" max="100" @bind="liDiscount" />
+                                </div>
+                            </div>
+                            @if (liUnitPrice > 0 && liQuantity > 0)
+                            {
+                                var lineTotal = liUnitPrice * liQuantity * (1 - liDiscount / 100);
+                                <div class="text-muted small mb-2">Line total: @quote.Currency @lineTotal.ToString("F2")</div>
+                            }
+                            @if (!string.IsNullOrEmpty(liError)) { <div class="text-danger small mb-1">@liError</div> }
+                            <button class="btn btn-sm btn-primary" @onclick="AddLineItem" disabled="@(liSaving || string.IsNullOrEmpty(liProductIdRaw))">
+                                @if (liSaving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                Add to Quote
+                            </button>
+                        }
+                    </div>
+                }
+
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-end">Qty</th>
+                                <th class="text-end">Unit Price</th>
+                                <th class="text-end">Discount</th>
+                                <th class="text-end">Line Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!quote.LineItems.Any())
+                            {
+                                <tr><td colspan="5" class="text-center text-muted py-3">No products added yet.</td></tr>
+                            }
+                            @foreach (var l in quote.LineItems)
+                            {
+                                <tr>
+                                    <td>@l.ProductName</td>
+                                    <td class="text-end">@l.Quantity</td>
+                                    <td class="text-end">@l.UnitPrice.ToString("F2")</td>
+                                    <td class="text-end">@(l.DiscountPercent > 0 ? $"{l.DiscountPercent}%" : "-")</td>
+                                    <td class="text-end fw-semibold">@l.LineTotal.ToString("F2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        @if (quote.LineItems.Any())
+                        {
+                            <tfoot class="table-light">
+                                <tr>
+                                    <td colspan="4" class="text-end text-muted">Subtotal</td>
+                                    <td class="text-end">@quote.SubTotal.ToString("F2")</td>
+                                </tr>
+                                @if (quote.DiscountTotal > 0)
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-end text-muted">Discount</td>
+                                        <td class="text-end text-muted">-@quote.DiscountTotal.ToString("F2")</td>
+                                    </tr>
+                                }
+                                <tr class="fw-bold">
+                                    <td colspan="4" class="text-end">Total</td>
+                                    <td class="text-end text-primary">@quote.TotalAmount.ToString("F2") @quote.Currency</td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Actions -->
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header"><h6 class="mb-0">Actions</h6></div>
+                <div class="card-body d-grid gap-2">
+                    @if (quote.Status == "Draft")
+                    {
+                        <button class="btn btn-info btn-sm" @onclick="Send" disabled="@actionSaving">
+                            Send to Customer
+                        </button>
+                    }
+                    @if (quote.Status == "Sent")
+                    {
+                        <button class="btn btn-success btn-sm" @onclick="Accept" disabled="@actionSaving">
+                            ✓ Accept Quote &amp; Create Order
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => showRejectForm = !showRejectForm">
+                            Reject Quote
+                        </button>
+                    }
+                    @if (quote.Status == "Accepted")
+                    {
+                        <div class="alert alert-success py-2 mb-0 small">
+                            Quote accepted. <a href="/orders">View Orders</a>
+                        </div>
+                    }
+
+                    @if (showRejectForm)
+                    {
+                        <div>
+                            <input class="form-control form-control-sm mb-1" @bind="rejectReason" placeholder="Reason (optional)" />
+                            <button class="btn btn-sm btn-danger w-100" @onclick="Reject" disabled="@actionSaving">Confirm Reject</button>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(actionError)) { <div class="text-danger small">@actionError</div> }
+                    @if (!string.IsNullOrEmpty(actionSuccess)) { <div class="text-success small">@actionSuccess</div> }
+
+                    <a href="/quotes" class="btn btn-outline-secondary btn-sm">Back to Quotes</a>
+                </div>
+            </div>
+
+            <!-- Totals summary card -->
+            @if (quote.LineItems.Any())
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted small">Items</span>
+                            <span class="small">@quote.LineItems.Count</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted small">Subtotal</span>
+                            <span class="small">@quote.SubTotal.ToString("F2") @quote.Currency</span>
+                        </div>
+                        <div class="d-flex justify-content-between fw-bold">
+                            <span>Total</span>
+                            <span class="text-primary">@quote.TotalAmount.ToString("F2") @quote.Currency</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private QuoteDetailDto? quote;
+    private List<ProductDto>? products;
+    private string? error;
+
+    // Line item form
+    private bool showLineItemForm;
+    private string liProductIdRaw = "";
+    private string liProductName = "";
+    private int liQuantity = 1;
+    private decimal liUnitPrice;
+    private decimal liDiscount;
+    private bool liSaving;
+    private string? liError;
+
+    // Actions
+    private bool actionSaving;
+    private string? actionError;
+    private string? actionSuccess;
+    private bool showRejectForm;
+    private string? rejectReason;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            quote = await Api.GetQuoteAsync(Id);
+            if (quote?.Status == "Draft" && products is null)
+                products = await Api.GetProductsAsync(isActive: true);
+        }
+        catch { error = "Failed to load quote."; }
+    }
+
+    private async Task ToggleAddItem()
+    {
+        showLineItemForm = !showLineItemForm;
+        if (showLineItemForm && products is null)
+            products = await Api.GetProductsAsync(isActive: true);
+    }
+
+    private void OnProductSelected()
+    {
+        if (Guid.TryParse(liProductIdRaw, out var pid))
+        {
+            var product = products?.FirstOrDefault(p => p.Id == pid);
+            if (product != null)
+            {
+                liProductName = product.Name;
+                liUnitPrice = product.Price;
+            }
+        }
+        else
+        {
+            liProductName = "";
+            liUnitPrice = 0;
+        }
+    }
+
+    private async Task AddLineItem()
+    {
+        liError = null;
+        if (!Guid.TryParse(liProductIdRaw, out var prodId)) { liError = "Please select a product."; return; }
+        if (liQuantity <= 0) { liError = "Quantity must be > 0."; return; }
+        if (liUnitPrice <= 0) { liError = "Unit price must be > 0."; return; }
+
+        liSaving = true;
+        try
+        {
+            var resp = await Api.AddLineItemAsync(Id, new
+            {
+                ProductId = prodId, ProductName = liProductName,
+                Quantity = liQuantity, UnitPrice = liUnitPrice, DiscountPercent = liDiscount
+            });
+            if (resp.IsSuccessStatusCode)
+            {
+                showLineItemForm = false;
+                liProductIdRaw = ""; liProductName = "";
+                liQuantity = 1; liUnitPrice = 0; liDiscount = 0;
+                await Load();
+            }
+            else liError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { liSaving = false; }
+    }
+
+    private async Task Send()
+    {
+        actionError = null; actionSuccess = null; actionSaving = true;
+        try
+        {
+            var resp = await Api.SendQuoteAsync(Id);
+            if (resp.IsSuccessStatusCode) { actionSuccess = "Quote sent to customer."; await Load(); }
+            else actionError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { actionSaving = false; }
+    }
+
+    private async Task Accept()
+    {
+        actionError = null; actionSuccess = null; actionSaving = true;
+        try
+        {
+            var resp = await Api.AcceptQuoteAsync(Id);
+            if (resp.IsSuccessStatusCode)
+            {
+                actionSuccess = "Quote accepted. Order created automatically.";
+                await Load();
+            }
+            else actionError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { actionSaving = false; }
+    }
+
+    private async Task Reject()
+    {
+        actionError = null; actionSuccess = null; actionSaving = true;
+        try
+        {
+            var resp = await Api.RejectQuoteAsync(Id, rejectReason);
+            if (resp.IsSuccessStatusCode) { showRejectForm = false; actionSuccess = "Quote rejected."; await Load(); }
+            else actionError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { actionSaving = false; }
+    }
+
+    private static string GetStatusBadge(string status) => status switch
+    {
+        "Accepted" => "bg-success",
+        "Rejected" => "bg-danger",
+        "Sent" => "bg-info text-dark",
+        "Expired" => "bg-secondary",
+        _ => "bg-warning text-dark"
+    };
+}
