@@ -1,0 +1,138 @@
+@page "/companies"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize(Roles = "SuperAdmin")]
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Companies</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3">Companies</h1>
+    <button class="btn btn-primary" @onclick="() => { showCreateForm = !showCreateForm; createError = null; }">+ New Company</button>
+</div>
+
+@if (showCreateForm)
+{
+    <div class="card mb-4">
+        <div class="card-header"><h6 class="mb-0">Create Company</h6></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label">Company Name <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="newName" placeholder="Acme Corp" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Slug <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="newSlug" placeholder="acme" />
+                    <div class="form-text">Lowercase letters, numbers, hyphens. Used as schema name.</div>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" @onclick="CreateCompany" disabled="@creating">
+                        @if (creating) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Create</span> }
+                    </button>
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(createError))
+            {
+                <div class="alert alert-danger mt-3 mb-0">@createError</div>
+            }
+        </div>
+    </div>
+}
+
+@if (companies is null)
+{
+    <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Slug</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in companies)
+                {
+                    <tr>
+                        <td><strong>@c.Name</strong></td>
+                        <td><code>@c.Slug</code></td>
+                        <td>
+                            @if (c.IsActive)
+                            {
+                                <span class="badge bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Inactive</span>
+                            }
+                        </td>
+                        <td class="text-muted small">@c.CreatedAt.ToString("MMM d, yyyy")</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="@(() => Navigation.NavigateTo($"/companies/{c.Id}/setup"))">
+                                Add Admin
+                            </button>
+                        </td>
+                    </tr>
+                }
+                @if (!companies.Any())
+                {
+                    <tr><td colspan="5" class="text-muted text-center">No companies yet.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<CompanyDto>? companies;
+    private bool showCreateForm;
+    private string newName = "";
+    private string newSlug = "";
+    private bool creating;
+    private string? createError;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() => companies = await Api.GetCompaniesAsync();
+
+    private async Task CreateCompany()
+    {
+        createError = null;
+        if (string.IsNullOrWhiteSpace(newName) || string.IsNullOrWhiteSpace(newSlug))
+        {
+            createError = "Company name and slug are required.";
+            return;
+        }
+
+        creating = true;
+        try
+        {
+            var resp = await Api.CreateCompanyAsync(new { Name = newName, Slug = newSlug });
+            if (resp.IsSuccessStatusCode)
+            {
+                var result = await resp.Content.ReadFromJsonAsync<CreateCompanyResult>();
+                newName = newSlug = "";
+                showCreateForm = false;
+                await Load();
+                if (result is not null)
+                    Navigation.NavigateTo($"/companies/{result.Id}/setup");
+            }
+            else
+            {
+                createError = await resp.Content.ReadAsStringAsync();
+            }
+        }
+        finally { creating = false; }
+    }
+
+    private record CreateCompanyResult(Guid Id, string Name, string Slug);
+}

@@ -14,8 +14,43 @@
     <a href="/opportunities/new" class="btn btn-primary">+ New Opportunity</a>
 </div>
 
+<!-- Summary cards -->
+@if (opportunities is not null)
+{
+    <div class="row g-3 mb-4 stagger-2">
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Open Pipeline</div>
+                <div class="stat-card-value text-primary">@FormatValue(PipelineValue, PrimaryCurrency)</div>
+                <div class="stat-card-sub">@OpenOpps.Count() open</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Weighted Value</div>
+                <div class="stat-card-value" style="color:#7C3AED">@FormatValue(WeightedValue, PrimaryCurrency)</div>
+                <div class="stat-card-sub">by probability</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Win Rate</div>
+                <div class="stat-card-value text-success">@WinRate</div>
+                <div class="stat-card-sub">@WonCount won · @LostCount lost</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Total</div>
+                <div class="stat-card-value" style="color:#111827">@opportunities.Count</div>
+                <div class="stat-card-sub">all opportunities</div>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Filters -->
-<div class="d-flex gap-2 mb-4 stagger-2" style="flex-wrap:wrap">
+<div class="d-flex gap-2 mb-4 stagger-3" style="flex-wrap:wrap">
     <div style="position:relative;flex:1;min-width:200px;max-width:320px">
         <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#9CA3AF;pointer-events:none"
              width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -72,7 +107,7 @@
 }
 else if (!opportunities.Any())
 {
-    <div class="opp-empty stagger-3">
+    <div class="opp-empty stagger-4">
         <div class="opp-empty-icon">
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#9CA3AF" stroke-width="1.5">
                 <path d="M2 21L8 13L13.5 17L19 10L26 4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -93,7 +128,7 @@ else if (!opportunities.Any())
 }
 else
 {
-    <div class="table-responsive stagger-3">
+    <div class="table-responsive stagger-4">
         <table class="table table-hover">
             <thead class="table-light">
                 <tr>
@@ -143,6 +178,32 @@ else
 }
 
 <style>
+    .stat-card {
+        background: #fff;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+    }
+    .stat-card-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #9CA3AF;
+        margin-bottom: .3rem;
+    }
+    .stat-card-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+        margin-bottom: .2rem;
+    }
+    .stat-card-sub {
+        font-size: 11.5px;
+        color: #9CA3AF;
+    }
+
     @@keyframes opp-shimmer {
         0%   { background-position: -400px 0; }
         100% { background-position:  400px 0; }
@@ -199,6 +260,16 @@ else
     private List<OpportunityDto>? opportunities;
     private string searchTerm = "";
     private string selectedStage = "";
+
+    private IEnumerable<OpportunityDto> OpenOpps =>
+        (opportunities ?? []).Where(o => o.Stage is not ("ClosedWon" or "ClosedLost"));
+    private decimal PipelineValue => OpenOpps.Sum(o => o.EstimatedValue);
+    private decimal WeightedValue => OpenOpps.Sum(o => o.EstimatedValue * o.Probability / 100m);
+    private int WonCount => (opportunities ?? []).Count(o => o.Stage == "ClosedWon");
+    private int LostCount => (opportunities ?? []).Count(o => o.Stage == "ClosedLost");
+    private string WinRate => (WonCount + LostCount) == 0 ? "—"
+        : $"{(decimal)WonCount / (WonCount + LostCount) * 100:N0}%";
+    private string PrimaryCurrency => opportunities?.FirstOrDefault()?.Currency ?? "USD";
 
     protected override async Task OnInitializedAsync() => await LoadOpportunities();
 

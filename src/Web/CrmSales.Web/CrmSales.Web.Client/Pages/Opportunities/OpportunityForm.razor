@@ -55,7 +55,11 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Owner <span class="text-danger">*</span></label>
-                    @if (users is null)
+                    @if (isSalesRep)
+                    {
+                        <input class="form-control" value="@(users?.FirstOrDefault(u => u.Id.ToString() == ownerIdRaw)?.FullName ?? "You")" disabled />
+                    }
+                    else if (users is null)
                     {
                         <div class="text-muted small">Loading users...</div>
                     }
@@ -214,29 +218,39 @@
     private string? newContactEmail, newContactPhone, newContactCompany, newContactJobTitle;
 
     private List<UserDto>? users;
+    private bool isSalesRep;
     private bool saving;
     private string? error;
 
     protected override async Task OnInitializedAsync()
     {
-        var usersTask = Api.GetUsersAsync();
         var contactsTask = Api.GetContactsAsync();
-        var authTask = AuthStateProvider.GetAuthenticationStateAsync();
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
 
-        users = await usersTask;
-        contacts = await contactsTask;
-        var auth = await authTask;
+        isSalesRep = auth.User.IsInRole("SalesRep");
 
         var currentEmail = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
             ?? auth.User.FindFirst("email")?.Value;
 
-        var match = users?.FirstOrDefault(u =>
-            string.Equals(u.Email, currentEmail, StringComparison.OrdinalIgnoreCase));
+        if (isSalesRep)
+        {
+            ownerIdRaw = auth.User.FindFirst("sub")?.Value
+                ?? auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+        }
+        else
+        {
+            users = await Api.GetUsersAsync();
+            var match = users?.FirstOrDefault(u =>
+                string.Equals(u.Email, currentEmail, StringComparison.OrdinalIgnoreCase));
 
-        if (match is not null)
-            ownerIdRaw = match.Id.ToString();
-        else if (users?.Count == 1)
-            ownerIdRaw = users[0].Id.ToString();
+            if (match is not null)
+                ownerIdRaw = match.Id.ToString();
+            else if (users?.Count == 1)
+                ownerIdRaw = users[0].Id.ToString();
+        }
+
+        contacts = await contactsTask;
     }
 
     private void OnContactSelected()

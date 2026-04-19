@@ -1,6 +1,7 @@
 using CrmSales.Products.Domain.Repositories;
 using CrmSales.Products.Infrastructure.Persistence;
 using CrmSales.Products.Infrastructure.Repositories;
+using CrmSales.SharedKernel.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,9 +13,12 @@ public static class DependencyInjection
         this IServiceCollection services,
         string connectionString)
     {
-        services.AddDbContext<ProductsDbContext>(opts =>
-            opts.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", ProductsDbContext.SchemaName)));
+        services.AddScoped<TenantSchemaInterceptor>();
+        services.AddDbContext<ProductsDbContext>((sp, opts) =>
+        {
+            opts.UseNpgsql(connectionString)
+                .AddInterceptors(sp.GetRequiredService<TenantSchemaInterceptor>());
+        });
 
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IProductCategoryRepository, ProductCategoryRepository>();

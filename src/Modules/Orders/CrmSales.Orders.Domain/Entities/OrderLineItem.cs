@@ -23,4 +23,11 @@ public sealed class OrderLineItem : Entity<Guid>
             Quantity = quantity,
             UnitPrice = unitPrice
         };
+
+    internal void Update(int quantity, decimal unitPrice)
+    {
+        if (quantity <= 0) throw new ArgumentException("Quantity must be positive.", nameof(quantity));
+        Quantity = quantity;
+        UnitPrice = unitPrice;
+    }
 }

@@ -1,27 +1,23 @@
 using CrmSales.Api.Endpoints;
+using CrmSales.Api.Master;
 using CrmSales.Api.Middleware;
+using CrmSales.Api.MultiTenancy;
 using CrmSales.Api.Services;
 using CrmSales.Contacts.Application;
 using CrmSales.Contacts.Infrastructure;
-using CrmSales.Contacts.Infrastructure.Persistence;
 using CrmSales.Opportunities.Application;
 using CrmSales.Opportunities.Infrastructure;
-using CrmSales.Opportunities.Infrastructure.Persistence;
 using CrmSales.Orders.Application;
 using CrmSales.Orders.Infrastructure;
-using CrmSales.Orders.Infrastructure.Persistence;
 using CrmSales.Products.Application;
-using CrmSales.Products.Domain.Entities;
-using CrmSales.Products.Domain.Repositories;
 using CrmSales.Products.Infrastructure;
-using CrmSales.Products.Infrastructure.Persistence;
 using CrmSales.Quotes.Application;
 using CrmSales.Quotes.Infrastructure;
-using CrmSales.Quotes.Infrastructure.Persistence;
 using CrmSales.SharedKernel.Messaging;
+using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Users.Application;
 using CrmSales.Users.Infrastructure;
-using CrmSales.Users.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -43,6 +39,8 @@ builder.AddServiceDefaults();
 var connectionString = builder.Configuration.GetConnectionString("crm-db")
     ?? throw new InvalidOperationException("Connection string 'crm-db' not found.");
 
+
+builder.Services.AddHttpContextAccessor();
 
 // ── Keycloak Admin client ─────────────────────────────────────────────────
 builder.Services.AddHttpClient<KeycloakAdminClient>();
@@ -89,6 +87,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesTransformer>();
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddScoped<TenantProvisioner>();
+builder.Services.AddDbContext<MasterDbContext>(opts =>
+    opts.UseNpgsql(connectionString));
 
 // ── Module service registrations ───────────────────────────────────────────
 builder.Services
@@ -159,99 +162,36 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// ── Ensure all module schemas/tables exist ────────────────────────────────
-// EnsureCreated uses a DB-wide HasTables check which stops after the first
-// module creates its schema. Use per-schema checks instead.
+// ── Ensure master schema + Companies table ────────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
-    var sp = scope.ServiceProvider;
-    await EnsureModuleTablesAsync(sp.GetRequiredService<ProductsDbContext>(), "products");
-    await EnsureModuleTablesAsync(sp.GetRequiredService<UsersDbContext>(), "users");
-    await EnsureModuleTablesAsync(sp.GetRequiredService<ContactsDbContext>(), "contacts");
-    await EnsureModuleTablesAsync(sp.GetRequiredService<OpportunitiesDbContext>(), "opportunities");
-    await EnsureModuleTablesAsync(sp.GetRequiredService<QuotesDbContext>(), "quotes");
-    await EnsureModuleTablesAsync(sp.GetRequiredService<OrdersDbContext>(), "orders");
-
-    // Add ContactId column to Opportunities if it was created before this column existed
-    var oppCtx = sp.GetRequiredService<OpportunitiesDbContext>();
-    var oppConn = oppCtx.Database.GetDbConnection();
-    await oppConn.OpenAsync();
-    await using var alterCmd = oppConn.CreateCommand();
-    alterCmd.CommandText = "ALTER TABLE IF EXISTS opportunities.\"Opportunities\" ADD COLUMN IF NOT EXISTS \"ContactId\" uuid NULL";
-    await alterCmd.ExecuteNonQueryAsync();
-    await oppConn.CloseAsync();
-
-    // Seed a default category so products can be created without a separate category step
-    var categoryRepo = sp.GetRequiredService<IProductCategoryRepository>();
-    var existing = await categoryRepo.GetAllAsync();
-    if (!existing.Any())
-        await categoryRepo.AddAsync(ProductCategory.Create("General", "Default product category"));
-}
-
-static async Task EnsureModuleTablesAsync(DbContext ctx, string schemaName)
-{
-    // Check whether the module's primary table exists. If not, create tables.
-    // Also probe the schema with a real query to detect catalog corruption; if
-    // that probe fails we drop and recreate the schema to recover cleanly.
-    var conn = ctx.Database.GetDbConnection();
-    await conn.OpenAsync();
-
-    int count;
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var masterConn = masterCtx.Database.GetDbConnection();
+    await masterConn.OpenAsync();
     try
     {
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*)::int FROM information_schema.tables WHERE table_schema = @s AND table_type = 'BASE TABLE'";
-        var p = cmd.CreateParameter();
-        p.ParameterName = "s";
-        p.Value = schemaName;
-        cmd.Parameters.Add(p);
-        count = (int)(await cmd.ExecuteScalarAsync())!;
+        await using var schemaCmd = masterConn.CreateCommand();
+        schemaCmd.CommandText = "CREATE SCHEMA IF NOT EXISTS \"master\"";
+        await schemaCmd.ExecuteNonQueryAsync();
+
+        await using var checkCmd = masterConn.CreateCommand();
+        checkCmd.CommandText = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'master' AND table_name = 'Companies')";
+        var companiesExists = (bool)(await checkCmd.ExecuteScalarAsync())!;
+
+        if (!companiesExists)
+        {
+            app.Logger.LogInformation("master.Companies not found — creating tables.");
+            await masterConn.CloseAsync();
+            await masterCtx.GetService<IRelationalDatabaseCreator>().CreateTablesAsync();
+        }
     }
     finally
     {
-        await conn.CloseAsync();
+        if (masterConn.State == System.Data.ConnectionState.Open)
+            await masterConn.CloseAsync();
     }
-
-    if (count > 0)
-    {
-        // Probe with an actual table read to detect stale OID / catalog corruption.
-        // If this throws, fall through and recreate the schema.
-        bool healthy = false;
-        try
-        {
-            await conn.OpenAsync();
-            await using var probe = conn.CreateCommand();
-            probe.CommandText = $"SELECT 1 FROM information_schema.columns WHERE table_schema = '{schemaName}' LIMIT 1";
-            await probe.ExecuteScalarAsync();
-            healthy = true;
-        }
-        catch
-        {
-            // catalog corruption detected — recreate below
-        }
-        finally
-        {
-            await conn.CloseAsync();
-        }
-
-        if (healthy) return;
-
-        // Drop the corrupted schema and recreate from scratch.
-        await conn.OpenAsync();
-        try
-        {
-            await using var drop = conn.CreateCommand();
-            drop.CommandText = $"DROP SCHEMA IF EXISTS \"{schemaName}\" CASCADE; CREATE SCHEMA IF NOT EXISTS \"{schemaName}\"";
-            await drop.ExecuteNonQueryAsync();
-        }
-        finally
-        {
-            await conn.CloseAsync();
-        }
-    }
-
-    await ctx.GetService<IRelationalDatabaseCreator>().CreateTablesAsync();
 }
+
 
 // ── Ensure Keycloak realm & OIDC client exist (blocks startup until ready) ───
 {
@@ -262,6 +202,7 @@ static async Task EnsureModuleTablesAsync(DbContext ctx, string schemaName)
         try
         {
             await keycloak.EnsureRealmExistsAsync();
+            await keycloak.EnsureSuperAdminAsync();
             app.Logger.LogInformation("Keycloak realm/client setup completed.");
             break;
         }
@@ -285,9 +226,11 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();
+app.UseMiddleware<TenantMiddleware>();
 app.UseAuthorization();
 
 // ── Map endpoint groups ────────────────────────────────────────────────────
+app.MapCompanyEndpoints();
 app.MapProductEndpoints();
 app.MapCategoryEndpoints();
 app.MapUserEndpoints();

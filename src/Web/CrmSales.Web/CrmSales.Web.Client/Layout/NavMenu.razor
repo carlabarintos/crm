@@ -19,6 +19,22 @@
 <div class="nav-scrollable" @onclick="CloseMenu">
     <nav class="nav flex-column">
 
+        <AuthorizeView Roles="SuperAdmin">
+        <div class="nav-item">
+            <NavLink class="nav-link" href="companies">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="1" y="4" width="13" height="10" rx="1.5"/>
+                        <path d="M5 4V3a2 2 0 014 0v1" stroke-linecap="round"/>
+                        <path d="M7.5 8v2" stroke-linecap="round"/>
+                    </svg>
+                </span>
+                Companies
+            </NavLink>
+        </div>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="Admin,SalesManager,SalesRep,AccountManager">
         <div class="nav-item">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
                 <span class="nav-icon">
@@ -67,6 +83,7 @@
             </NavLink>
         </div>
 
+        <AuthorizeView Roles="Admin" Context="adminCtx1">
         <span class="nav-section-label">Catalog</span>
 
         <div class="nav-item">
@@ -80,6 +97,7 @@
                 Products
             </NavLink>
         </div>
+        </AuthorizeView>
 
         <span class="nav-section-label">People</span>
 
@@ -95,6 +113,7 @@
             </NavLink>
         </div>
 
+        <AuthorizeView Roles="Admin" Context="adminCtx2">
         <div class="nav-item">
             <NavLink class="nav-link" href="users">
                 <span class="nav-icon">
@@ -107,6 +126,9 @@
                 Users
             </NavLink>
         </div>
+        </AuthorizeView>
+
+        </AuthorizeView>
 
     </nav>
 

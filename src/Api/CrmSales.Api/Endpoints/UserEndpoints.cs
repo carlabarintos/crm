@@ -11,7 +11,7 @@ public static class UserEndpoints
     {
         var group = app.MapGroup("/api/users")
             .WithTags("Users")
-            .RequireAuthorization();
+            .RequireAuthorization(p => p.RequireRole("Admin"));
 
         group.MapGet("/", async (IUserRepository repo, CancellationToken ct) =>
         {
@@ -38,6 +38,7 @@ public static class UserEndpoints
             CreateUserRequest req,
             IUserRepository repo,
             KeycloakAdminClient keycloak,
+            HttpContext httpContext,
             CancellationToken ct) =>
         {
             if (await repo.EmailExistsAsync(req.Email, null, ct))
@@ -67,6 +68,13 @@ public static class UserEndpoints
 
             var user = User.Create(keycloakId, req.Email, req.FirstName, req.LastName, req.Role);
             await repo.AddAsync(user, ct);
+
+            try { await keycloak.AssignRoleAsync(keycloakId, req.Role.ToString()); } catch { }
+
+            var companyId = httpContext.User.FindFirst("company_id")?.Value;
+            if (!string.IsNullOrEmpty(companyId))
+                try { await keycloak.AssignCompanyAsync(keycloakId, companyId); } catch { }
+
             return Results.Created($"/api/users/{user.Id}", new
             {
                 user.Id, user.Email, TempPassword = tempPassword
@@ -87,14 +95,9 @@ public static class UserEndpoints
             if (req.Role.HasValue) user.ChangeRole(req.Role.Value);
             await repo.UpdateAsync(user, ct);
 
-            try
-            {
-                await keycloak.UpdateUserAsync(user.KeycloakId, req.FirstName, req.LastName);
-            }
-            catch
-            {
-                // Local update succeeded; Keycloak sync failure is non-fatal
-            }
+            try { await keycloak.UpdateUserAsync(user.KeycloakId, req.FirstName, req.LastName); } catch { }
+            if (req.Role.HasValue)
+                try { await keycloak.AssignRoleAsync(user.KeycloakId, req.Role.Value.ToString()); } catch { }
 
             return Results.NoContent();
         });

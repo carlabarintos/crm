@@ -79,12 +79,13 @@ public static class QuoteEndpoints
             quote.Send();
             await repo.UpdateAsync(quote, ct);
             return Results.Ok(new { quote.Id, Status = quote.Status.ToString() });
-        });
+        }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager", "SalesRep"));
 
         // Accept a quote — persists the change, auto-closes the linked opportunity (ClosedWon),
         // then publishes QuoteAcceptedMessage to RabbitMQ so Orders can auto-create an Order.
         group.MapPost("/{id:guid}/accept", async (
             Guid id,
+            HttpContext http,
             IQuoteRepository repo,
             IOpportunityRepository oppRepo,
             IMessageBus bus,
@@ -104,6 +105,8 @@ public static class QuoteEndpoints
                 await oppRepo.UpdateAsync(opp, ct);
             }
 
+            var tenantId = http.User.FindFirst("company_id")?.Value ?? "master";
+
             // Publish async integration event → Wolverine routes to RabbitMQ → Orders creates Order
             await bus.PublishAsync(new QuoteAcceptedMessage(
                 quote.Id,
@@ -114,10 +117,11 @@ public static class QuoteEndpoints
                 quote.OwnerId,
                 quote.LineItems
                     .Select(l => new QuoteLineItemMessage(l.ProductId, l.ProductName, l.Quantity, l.UnitPrice))
-                    .ToList()));
+                    .ToList(),
+                TenantId: tenantId));
 
             return Results.Ok(new { quote.Id, Status = quote.Status.ToString() });
-        });
+        }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager", "SalesRep"));
 
         // Reject a quote — persists the change and auto-closes the linked opportunity as Lost.
         group.MapPost("/{id:guid}/reject", async (
@@ -141,7 +145,7 @@ public static class QuoteEndpoints
             }
 
             return Results.Ok(new { quote.Id, Status = quote.Status.ToString() });
-        });
+        }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager"));
 
         return app;
     }

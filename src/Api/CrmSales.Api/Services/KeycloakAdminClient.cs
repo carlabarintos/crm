@@ -73,6 +73,12 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
         // ── Ensure crm-web-app-client (public PKCE WASM client) ────────────
         await EnsureWasmClientAsync(token, scopeId);
 
+        // ── Ensure CRM realm roles exist ───────────────────────────────────
+        await EnsureRolesExistAsync(token);
+
+        // ── Ensure company_id claim mapper ─────────────────────────────────
+        await EnsureCompanyClaimMapperAsync(token);
+
         // ── Wait until OIDC discovery endpoint is responsive ───────────────
         var discoveryUrl = $"{_adminUrl}/realms/{_realm}/.well-known/openid-configuration";
         for (var i = 0; i < 20; i++)
@@ -239,8 +245,228 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
         await httpClient.SendAsync(req); // 204 on success, 409 if already assigned — both are fine
     }
 
+    private static readonly string[] CrmRoles = ["SuperAdmin", "Admin", "SalesManager", "SalesRep", "AccountManager"];
+
+    private async Task EnsureRolesExistAsync(string token)
+    {
+        var listReq = new HttpRequestMessage(HttpMethod.Get, $"{_adminUrl}/admin/realms/{_realm}/roles");
+        listReq.Headers.Authorization = Bearer(token);
+        var listResp = await httpClient.SendAsync(listReq);
+        listResp.EnsureSuccessStatusCode();
+        var existing = await listResp.Content.ReadFromJsonAsync<JsonElement>();
+        var existingNames = existing.EnumerateArray()
+            .Select(r => r.GetProperty("name").GetString())
+            .ToHashSet();
+
+        foreach (var roleName in CrmRoles)
+        {
+            if (existingNames.Contains(roleName)) continue;
+            var createReq = new HttpRequestMessage(HttpMethod.Post, $"{_adminUrl}/admin/realms/{_realm}/roles");
+            createReq.Headers.Authorization = Bearer(token);
+            createReq.Content = JsonContent.Create(new { name = roleName });
+            await httpClient.SendAsync(createReq);
+        }
+    }
+
+    private async Task EnsureCompanyClaimMapperAsync(string token)
+    {
+        // Add company_id user-attribute mapper to the crm-web-api-scope so it appears in JWTs
+        var listReq = new HttpRequestMessage(HttpMethod.Get,
+            $"{_adminUrl}/admin/realms/{_realm}/client-scopes");
+        listReq.Headers.Authorization = Bearer(token);
+        var listResp = await httpClient.SendAsync(listReq);
+        listResp.EnsureSuccessStatusCode();
+        var scopes = await listResp.Content.ReadFromJsonAsync<JsonElement>();
+
+        string? scopeId = null;
+        foreach (var s in scopes.EnumerateArray())
+        {
+            if (s.GetProperty("name").GetString() == "crm-web-api-scope")
+            {
+                scopeId = s.GetProperty("id").GetString();
+                break;
+            }
+        }
+        if (scopeId is null) return;
+
+        var mapperConfig = new
+        {
+            name = "company_id",
+            protocol = "openid-connect",
+            protocolMapper = "oidc-usermodel-attribute-mapper",
+            config = new Dictionary<string, string>
+            {
+                ["user.attribute"] = "company_id",
+                ["claim.name"] = "company_id",
+                ["jsonType.label"] = "String",
+                ["id.token.claim"] = "true",
+                ["access.token.claim"] = "true",
+                ["userinfo.token.claim"] = "true",
+                ["multivalued"] = "false",
+                ["aggregate.attrs"] = "false"
+            }
+        };
+
+        // Check if mapper already exists — if so, update it to ensure correct config
+        var mappersReq = new HttpRequestMessage(HttpMethod.Get,
+            $"{_adminUrl}/admin/realms/{_realm}/client-scopes/{scopeId}/protocol-mappers/models");
+        mappersReq.Headers.Authorization = Bearer(token);
+        var mappersResp = await httpClient.SendAsync(mappersReq);
+        if (mappersResp.IsSuccessStatusCode)
+        {
+            var mappers = await mappersResp.Content.ReadFromJsonAsync<JsonElement>();
+            foreach (var m in mappers.EnumerateArray())
+            {
+                if (m.GetProperty("name").GetString() == "company_id")
+                {
+                    var mapperId = m.GetProperty("id").GetString();
+                    var updateReq = new HttpRequestMessage(HttpMethod.Put,
+                        $"{_adminUrl}/admin/realms/{_realm}/client-scopes/{scopeId}/protocol-mappers/models/{mapperId}");
+                    updateReq.Headers.Authorization = Bearer(token);
+                    updateReq.Content = JsonContent.Create(new
+                    {
+                        id = mapperId,
+                        mapperConfig.name,
+                        mapperConfig.protocol,
+                        mapperConfig.protocolMapper,
+                        mapperConfig.config
+                    });
+                    await httpClient.SendAsync(updateReq);
+                    return;
+                }
+            }
+        }
+
+        var createReq = new HttpRequestMessage(HttpMethod.Post,
+            $"{_adminUrl}/admin/realms/{_realm}/client-scopes/{scopeId}/protocol-mappers/models");
+        createReq.Headers.Authorization = Bearer(token);
+        createReq.Content = JsonContent.Create(mapperConfig);
+        await httpClient.SendAsync(createReq);
+    }
+
+    /// <summary>Sets the company_id attribute on a Keycloak user.</summary>
+    public async Task AssignCompanyAsync(string keycloakId, string companySlug)
+    {
+        var token = await GetAdminTokenAsync();
+
+        // GET the full current user representation first
+        var getReq = new HttpRequestMessage(HttpMethod.Get,
+            $"{_adminUrl}/admin/realms/{_realm}/users/{keycloakId}");
+        getReq.Headers.Authorization = Bearer(token);
+        var getResp = await httpClient.SendAsync(getReq);
+        getResp.EnsureSuccessStatusCode();
+        var user = await getResp.Content.ReadFromJsonAsync<JsonElement>();
+
+        // Merge existing attributes with the new company_id
+        var attrs = new Dictionary<string, List<string>>();
+        if (user.TryGetProperty("attributes", out var existing))
+        {
+            foreach (var prop in existing.EnumerateObject())
+                attrs[prop.Name] = prop.Value.EnumerateArray()
+                    .Select(v => v.GetString()!)
+                    .ToList();
+        }
+        attrs["company_id"] = [companySlug];
+
+        // PUT back the full representation with updated attributes
+        var putReq = new HttpRequestMessage(HttpMethod.Put,
+            $"{_adminUrl}/admin/realms/{_realm}/users/{keycloakId}");
+        putReq.Headers.Authorization = Bearer(token);
+        putReq.Content = JsonContent.Create(new
+        {
+            username    = user.TryGetProperty("username",  out var u) ? u.GetString() : null,
+            email       = user.TryGetProperty("email",     out var e) ? e.GetString() : null,
+            firstName   = user.TryGetProperty("firstName", out var fn) ? fn.GetString() : null,
+            lastName    = user.TryGetProperty("lastName",  out var ln) ? ln.GetString() : null,
+            enabled     = user.TryGetProperty("enabled",   out var en) && en.GetBoolean(),
+            attributes  = attrs
+        });
+        (await httpClient.SendAsync(putReq)).EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Creates the SuperAdmin user if it doesn't already exist.</summary>
+    public async Task EnsureSuperAdminAsync()
+    {
+        var email = config["SuperAdmin:Email"] ?? "superadmin@crm.local";
+        var password = config["SuperAdmin:Password"] ?? "SuperAdmin@123";
+        var token = await GetAdminTokenAsync();
+
+        // Check if user already exists
+        var searchReq = new HttpRequestMessage(HttpMethod.Get,
+            $"{_adminUrl}/admin/realms/{_realm}/users?email={Uri.EscapeDataString(email)}&exact=true");
+        searchReq.Headers.Authorization = Bearer(token);
+        var searchResp = await httpClient.SendAsync(searchReq);
+        searchResp.EnsureSuccessStatusCode();
+        var found = await searchResp.Content.ReadFromJsonAsync<JsonElement>();
+        if (found.GetArrayLength() > 0) return;
+
+        // Create SuperAdmin user
+        var createReq = new HttpRequestMessage(HttpMethod.Post, $"{_adminUrl}/admin/realms/{_realm}/users");
+        createReq.Headers.Authorization = Bearer(token);
+        createReq.Content = JsonContent.Create(new
+        {
+            username = email,
+            email,
+            firstName = "Super",
+            lastName = "Admin",
+            enabled = true,
+            attributes = new Dictionary<string, string[]> { ["company_id"] = ["master"] }
+        });
+        var createResp = await httpClient.SendAsync(createReq);
+        createResp.EnsureSuccessStatusCode();
+
+        var keycloakId = createResp.Headers.Location!.ToString().Split('/').Last();
+        await SetTemporaryPasswordAsync(keycloakId, password);
+        await AssignRoleAsync(keycloakId, "SuperAdmin");
+    }
+
+    /// <summary>Assigns a CRM realm role to a user, replacing any existing CRM role.</summary>
+    public async Task AssignRoleAsync(string keycloakId, string roleName)
+    {
+        var token = await GetAdminTokenAsync();
+
+        // Remove any existing CRM roles from the user
+        var getReq = new HttpRequestMessage(HttpMethod.Get,
+            $"{_adminUrl}/admin/realms/{_realm}/users/{keycloakId}/role-mappings/realm");
+        getReq.Headers.Authorization = Bearer(token);
+        var getResp = await httpClient.SendAsync(getReq);
+        if (getResp.IsSuccessStatusCode)
+        {
+            var current = await getResp.Content.ReadFromJsonAsync<JsonElement>();
+            var toRemove = current.EnumerateArray()
+                .Where(r => CrmRoles.Contains(r.GetProperty("name").GetString()))
+                .Select(r => new { id = r.GetProperty("id").GetString(), name = r.GetProperty("name").GetString() })
+                .ToList();
+
+            if (toRemove.Count > 0)
+            {
+                var delReq = new HttpRequestMessage(HttpMethod.Delete,
+                    $"{_adminUrl}/admin/realms/{_realm}/users/{keycloakId}/role-mappings/realm");
+                delReq.Headers.Authorization = Bearer(token);
+                delReq.Content = JsonContent.Create(toRemove);
+                await httpClient.SendAsync(delReq);
+            }
+        }
+
+        // Fetch the target role representation
+        var roleReq = new HttpRequestMessage(HttpMethod.Get, $"{_adminUrl}/admin/realms/{_realm}/roles/{roleName}");
+        roleReq.Headers.Authorization = Bearer(token);
+        var roleResp = await httpClient.SendAsync(roleReq);
+        roleResp.EnsureSuccessStatusCode();
+        var roleData = await roleResp.Content.ReadFromJsonAsync<JsonElement>();
+        var roleId = roleData.GetProperty("id").GetString();
+
+        // Assign the role
+        var assignReq = new HttpRequestMessage(HttpMethod.Post,
+            $"{_adminUrl}/admin/realms/{_realm}/users/{keycloakId}/role-mappings/realm");
+        assignReq.Headers.Authorization = Bearer(token);
+        assignReq.Content = JsonContent.Create(new[] { new { id = roleId, name = roleName } });
+        (await httpClient.SendAsync(assignReq)).EnsureSuccessStatusCode();
+    }
+
     /// <summary>Creates a user in Keycloak and returns the Keycloak user ID.</summary>
-    public async Task<string> CreateUserAsync(string email, string firstName, string lastName)
+    public async Task<string> CreateUserAsync(string email, string firstName, string lastName,
+        Dictionary<string, string[]>? attributes = null)
     {
         await EnsureRealmExistsAsync();
 
@@ -250,7 +476,8 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
             email,
             firstName,
             lastName,
-            enabled = true
+            enabled = true,
+            attributes
         });
 
         var response = await httpClient.SendAsync(req);

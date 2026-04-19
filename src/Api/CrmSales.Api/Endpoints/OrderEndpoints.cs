@@ -1,5 +1,6 @@
 using CrmSales.Orders.Domain.Entities;
 using CrmSales.Orders.Domain.Repositories;
+using CrmSales.Products.Domain.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CrmSales.Api.Endpoints;
@@ -78,12 +79,27 @@ public static class OrderEndpoints
             return Results.Ok(new { order.Id, Status = order.Status.ToString(), order.ShippedAt });
         });
 
-        group.MapPost("/{id:guid}/deliver", async (Guid id, IOrderRepository repo, CancellationToken ct) =>
+        group.MapPost("/{id:guid}/deliver", async (
+            Guid id,
+            IOrderRepository repo,
+            IProductRepository productRepo,
+            CancellationToken ct) =>
         {
             var order = await repo.GetByIdAsync(id, ct);
             if (order is null) return Results.NotFound();
             order.Deliver();
             await repo.UpdateAsync(order, ct);
+
+            foreach (var item in order.LineItems)
+            {
+                var product = await productRepo.GetByIdAsync(item.ProductId, ct);
+                if (product is not null)
+                {
+                    product.AdjustStock(-item.Quantity);
+                    await productRepo.UpdateAsync(product, ct);
+                }
+            }
+
             return Results.Ok(new { order.Id, Status = order.Status.ToString(), order.DeliveredAt });
         });
 
@@ -99,9 +115,48 @@ public static class OrderEndpoints
             return Results.Ok(new { order.Id, Status = order.Status.ToString() });
         });
 
+        group.MapPost("/{id:guid}/line-items", async (
+            Guid id,
+            [FromBody] AddOrderLineItemRequest req,
+            IOrderRepository repo, CancellationToken ct) =>
+        {
+            var order = await repo.GetByIdAsync(id, ct);
+            if (order is null) return Results.NotFound();
+            order.AddLineItem(req.ProductId, req.ProductName, req.Quantity, req.UnitPrice);
+            await repo.UpdateAsync(order, ct);
+            return Results.Ok(new { order.Id, order.TotalAmount });
+        });
+
+        group.MapPut("/{id:guid}/line-items/{lineItemId:guid}", async (
+            Guid id,
+            Guid lineItemId,
+            [FromBody] UpdateOrderLineItemRequest req,
+            IOrderRepository repo, CancellationToken ct) =>
+        {
+            var order = await repo.GetByIdAsync(id, ct);
+            if (order is null) return Results.NotFound();
+            order.UpdateLineItem(lineItemId, req.Quantity, req.UnitPrice);
+            await repo.UpdateAsync(order, ct);
+            return Results.Ok(new { order.Id, order.TotalAmount });
+        });
+
+        group.MapDelete("/{id:guid}/line-items/{lineItemId:guid}", async (
+            Guid id,
+            Guid lineItemId,
+            IOrderRepository repo, CancellationToken ct) =>
+        {
+            var order = await repo.GetByIdAsync(id, ct);
+            if (order is null) return Results.NotFound();
+            order.RemoveLineItem(lineItemId);
+            await repo.UpdateAsync(order, ct);
+            return Results.Ok(new { order.Id, order.TotalAmount });
+        });
+
         return app;
     }
 }
 
 record ShipOrderRequest(string? TrackingInfo);
 record CancelOrderRequest(string Reason);
+record AddOrderLineItemRequest(Guid ProductId, string ProductName, int Quantity, decimal UnitPrice);
+record UpdateOrderLineItemRequest(int Quantity, decimal UnitPrice);

@@ -1,5 +1,6 @@
 @page "/users"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize(Roles = "Admin")]
 @using CrmSales.Web.Client.Services
 @inject CrmApiClient Api
 

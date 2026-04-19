@@ -1,0 +1,125 @@
+@page "/companies/{CompanyId:guid}/setup"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize(Roles = "SuperAdmin")]
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Company Setup</PageTitle>
+
+<div class="mb-4">
+    <a href="/companies" class="text-decoration-none text-muted small">
+        &larr; Back to Companies
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Create Company Admin</h5>
+                <p class="text-muted small mb-0 mt-1">
+                    This Admin will manage users and settings for their company.
+                </p>
+            </div>
+            <div class="card-body">
+
+                @if (success is not null)
+                {
+                    <div class="alert alert-success">
+                        <strong>Admin user created.</strong>
+                        <div class="mt-2">
+                            Temporary password: <code class="fs-6">@success.TempPassword</code>
+                        </div>
+                        <div class="text-muted small mt-1">The user must change their password on first login.</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary" @onclick="Reset">Add Another Admin</button>
+                        <a class="btn btn-primary" href="/companies">Done</a>
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label class="form-label">First Name <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="firstName" placeholder="Jane" />
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="lastName" placeholder="Smith" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Email <span class="text-danger">*</span></label>
+                            <input class="form-control" type="email" @bind="email" placeholder="admin@company.com" />
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(error))
+                    {
+                        <div class="alert alert-danger mt-3 mb-0">@error</div>
+                    }
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button class="btn btn-primary" @onclick="CreateAdmin" disabled="@saving">
+                            @if (saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                            Create Admin
+                        </button>
+                        <a class="btn btn-outline-secondary" href="/companies">Skip</a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid CompanyId { get; set; }
+
+    private string firstName = "";
+    private string lastName = "";
+    private string email = "";
+    private bool saving;
+    private string? error;
+    private AdminCreatedResult? success;
+
+    private async Task CreateAdmin()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || string.IsNullOrWhiteSpace(email))
+        {
+            error = "First name, last name and email are required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var resp = await Api.CreateCompanyAdminAsync(CompanyId, new
+            {
+                FirstName = firstName,
+                LastName = lastName,
+                Email = email
+            });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                success = await resp.Content.ReadFromJsonAsync<AdminCreatedResult>();
+            }
+            else
+            {
+                error = await resp.Content.ReadAsStringAsync();
+            }
+        }
+        finally { saving = false; }
+    }
+
+    private void Reset()
+    {
+        firstName = lastName = email = "";
+        error = null;
+        success = null;
+    }
+
+    private record AdminCreatedResult(string KeycloakId, string Email, string TempPassword);
+}

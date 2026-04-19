@@ -1,5 +1,4 @@
 using CrmSales.Web.Components;
-using Microsoft.AspNetCore.StaticFiles;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,11 +26,6 @@ else
 }
 
 app.UseHttpsRedirection();
-
-// Ensure .wasm files are served with the correct MIME type
-var contentTypeProvider = new FileExtensionContentTypeProvider();
-contentTypeProvider.Mappings[".wasm"] = "application/wasm";
-app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = contentTypeProvider });
 
 app.UseAntiforgery();
 

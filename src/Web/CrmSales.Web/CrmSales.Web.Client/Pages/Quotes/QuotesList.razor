@@ -21,6 +21,54 @@
     <a href="/quotes/new" class="btn btn-primary">+ New Quote</a>
 </div>
 
+<!-- Summary cards -->
+@if (quotes is not null)
+{
+    <div class="row g-3 mb-4 stagger-2">
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Total Quotes</div>
+                <div class="stat-card-value" style="color:#111827">@quotes.Count</div>
+                <div class="stat-card-sub">all time</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Accepted Value</div>
+                <div class="stat-card-value text-success">@FormatAmount(AcceptedValue, QuoteCurrency)</div>
+                <div class="stat-card-sub">@quotes.Count(q => q.Status == "Accepted") accepted</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Sent (Pending)</div>
+                <div class="stat-card-value" style="color:#0EA5E9">@FormatAmount(SentValue, QuoteCurrency)</div>
+                <div class="stat-card-sub">@quotes.Count(q => q.Status == "Sent") awaiting response</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Drafts</div>
+                <div class="stat-card-value" style="color:#D97706">@DraftCount</div>
+                <div class="stat-card-sub">not yet sent</div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="mb-3 d-flex gap-2 align-items-center stagger-3">
+    <input class="form-control" style="max-width:280px" placeholder="Search quotes…"
+           @bind="searchTerm" @bind:event="oninput" />
+    <select class="form-select" style="max-width:160px" @bind="statusFilter">
+        <option value="">All statuses</option>
+        <option>Draft</option>
+        <option>Sent</option>
+        <option>Accepted</option>
+        <option>Rejected</option>
+        <option>Expired</option>
+    </select>
+</div>
+
 @if (quotes is null)
 {
     <div class="table-responsive">
@@ -48,9 +96,9 @@
         </table>
     </div>
 }
-else if (!quotes.Any())
+else if (!FilteredQuotes.Any())
 {
-    <div class="lst-empty stagger-3">
+    <div class="lst-empty stagger-4">
         <div class="lst-empty-icon">
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#9CA3AF" stroke-width="1.5">
                 <rect x="4" y="3" width="20" height="24" rx="3"/>
@@ -64,7 +112,7 @@ else if (!quotes.Any())
 }
 else
 {
-    <div class="table-responsive stagger-3">
+    <div class="table-responsive stagger-4">
         <table class="table table-hover">
             <thead class="table-light">
                 <tr>
@@ -72,7 +120,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var q in quotes)
+                @foreach (var q in FilteredQuotes)
                 {
                     <tr>
                         <td><a href="/quotes/@q.Id" class="lst-num-link">@q.QuoteNumber</a></td>
@@ -90,6 +138,29 @@ else
 }
 
 <style>
+    .stat-card {
+        background: #fff;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+    }
+    .stat-card-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #9CA3AF;
+        margin-bottom: .3rem;
+    }
+    .stat-card-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+        margin-bottom: .2rem;
+    }
+    .stat-card-sub { font-size: 11.5px; color: #9CA3AF; }
+
     @@keyframes lst-shimmer {
         0%   { background-position: -400px 0; }
         100% { background-position:  400px 0; }
@@ -119,6 +190,19 @@ else
     public Guid? OpportunityId { get; set; }
 
     private List<QuoteDto>? quotes;
+    private string searchTerm = "";
+    private string statusFilter = "";
+
+    private decimal AcceptedValue => (quotes ?? []).Where(q => q.Status == "Accepted").Sum(q => q.TotalAmount);
+    private decimal SentValue => (quotes ?? []).Where(q => q.Status == "Sent").Sum(q => q.TotalAmount);
+    private int DraftCount => (quotes ?? []).Count(q => q.Status == "Draft");
+    private string QuoteCurrency => quotes?.FirstOrDefault()?.Currency ?? "USD";
+
+    private IEnumerable<QuoteDto> FilteredQuotes => (quotes ?? []).Where(q =>
+        (string.IsNullOrWhiteSpace(statusFilter) || q.Status == statusFilter) &&
+        (string.IsNullOrWhiteSpace(searchTerm) ||
+            q.QuoteNumber.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+            q.Status.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)));
 
     protected override async Task OnInitializedAsync() =>
         quotes = await Api.GetQuotesAsync(OpportunityId);

@@ -8,7 +8,10 @@ using CrmSales.SharedKernel;
 using Microsoft.AspNetCore.Mvc;
 using Wolverine;
 
+
 namespace CrmSales.Api.Endpoints;
+
+record CreateCategoryRequest(string Name, string? Description);
 
 public static class ProductEndpoints
 {
@@ -44,7 +47,7 @@ public static class ProductEndpoints
             return result.IsSuccess
                 ? Results.CreatedAtRoute("GetProductById", new { id = result.Value }, result.Value)
                 : Results.Problem(result.Error.Description, statusCode: StatusCodes.Status400BadRequest);
-        });
+        }).RequireAuthorization(p => p.RequireRole("Admin"));
 
         group.MapPut("/{id:guid}", async (
             Guid id,
@@ -55,7 +58,7 @@ public static class ProductEndpoints
             if (id != cmd.Id) return Results.BadRequest("ID mismatch.");
             var result = await bus.InvokeAsync<Result>(cmd, ct);
             return result.IsSuccess ? Results.NoContent() : Results.Problem(result.Error.Description);
-        });
+        }).RequireAuthorization(p => p.RequireRole("Admin"));
 
         return app;
     }
@@ -69,6 +72,15 @@ public static class ProductEndpoints
             var cats = await repo.GetAllAsync(ct);
             return Results.Ok(cats.Select(c => new { c.Id, c.Name, c.Description, c.IsActive }));
         });
+
+        group.MapPost("/", async (CreateCategoryRequest req, IProductCategoryRepository repo, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Name))
+                return Results.Problem("Category name is required.", statusCode: StatusCodes.Status400BadRequest);
+            var category = ProductCategory.Create(req.Name, req.Description);
+            await repo.AddAsync(category, ct);
+            return Results.Created($"/api/categories/{category.Id}", new { category.Id, category.Name });
+        }).RequireAuthorization(p => p.RequireRole("Admin"));
 
         return app;
     }

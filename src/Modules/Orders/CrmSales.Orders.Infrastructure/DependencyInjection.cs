@@ -1,3 +1,4 @@
+using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Orders.Domain.Repositories;
 using CrmSales.Orders.Infrastructure.Persistence;
 using CrmSales.Orders.Infrastructure.Repositories;
@@ -11,9 +12,12 @@ public static class DependencyInjection
     public static IServiceCollection AddOrdersInfrastructure(
         this IServiceCollection services, string connectionString)
     {
-        services.AddDbContext<OrdersDbContext>(opts =>
-            opts.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", OrdersDbContext.SchemaName)));
+        services.AddScoped<TenantSchemaInterceptor>();
+        services.AddDbContext<OrdersDbContext>((sp, opts) =>
+        {
+            opts.UseNpgsql(connectionString)
+                .AddInterceptors(sp.GetRequiredService<TenantSchemaInterceptor>());
+        });
 
         services.AddScoped<IOrderRepository, OrderRepository>();
         return services;

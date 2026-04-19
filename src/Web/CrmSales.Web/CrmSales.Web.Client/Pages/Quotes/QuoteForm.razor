@@ -40,7 +40,11 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Owner <span class="text-danger">*</span></label>
-                    @if (users is null)
+                    @if (isSalesRep)
+                    {
+                        <input class="form-control" value="@(users?.FirstOrDefault(u => u.Id.ToString() == ownerIdRaw)?.FullName ?? "You")" disabled />
+                    }
+                    else if (users is null)
                     {
                         <div class="text-muted small">Loading users...</div>
                     }
@@ -171,7 +175,11 @@
                     </div>
                     <div class="mb-2">
                         <label class="form-label form-label-sm">Owner <span class="text-danger">*</span></label>
-                        @if (users is null || !users.Any())
+                        @if (isSalesRep)
+                        {
+                            <input class="form-control form-control-sm" value="@(users?.FirstOrDefault(u => u.Id.ToString() == newOppOwnerIdRaw)?.FullName ?? "You")" disabled />
+                        }
+                        else if (users is null || !users.Any())
                         {
                             <input class="form-control form-control-sm" @bind="newOppOwnerIdRaw" placeholder="Paste a User ID" />
                         }
@@ -216,9 +224,22 @@
                             <option value="">— Select product —</option>
                             @foreach (var p in products ?? [])
                             {
-                                <option value="@p.Id">@p.Name</option>
+                                <option value="@p.Id">
+                                    @p.Name — @(p.StockQuantity > 0 ? $"{p.StockQuantity} in stock" : "Out of stock")
+                                </option>
                             }
                         </select>
+                        @if (selectedProduct is not null)
+                        {
+                            <div class="mt-1 small @StockClass(selectedProduct.StockQuantity)">
+                                @if (selectedProduct.StockQuantity == 0)
+                                { <span>⚠ Out of stock</span> }
+                                else if (selectedProduct.StockQuantity <= LowStockThreshold)
+                                { <span>⚠ Low stock: @selectedProduct.StockQuantity units available</span> }
+                                else
+                                { <span>✓ @selectedProduct.StockQuantity units available</span> }
+                            </div>
+                        }
                     </div>
                     <div class="col-md-2">
                         <label class="form-label form-label-sm">Qty</label>
@@ -236,6 +257,10 @@
                         <button class="btn btn-sm btn-outline-primary w-100" @onclick="AddLineItemDraft" title="Add">+</button>
                     </div>
                 </div>
+                @if (!string.IsNullOrEmpty(lineItemWarning))
+                {
+                    <div class="text-warning small mb-1">⚠ @lineItemWarning</div>
+                }
                 @if (!string.IsNullOrEmpty(lineItemError))
                 {
                     <div class="text-danger small mb-2">@lineItemError</div>
@@ -307,6 +332,7 @@
     private List<OpportunityDto>? opportunities;
     private List<UserDto>? users;
     private List<ProductDto>? products;
+    private bool isSalesRep;
     private bool saving;
     private string? error;
 
@@ -334,10 +360,14 @@
     protected override async Task OnInitializedAsync()
     {
         var oppTask = Api.GetOpportunitiesAsync();
-        var usrTask = Api.GetUsersAsync();
         var prodTask = Api.GetProductsAsync(isActive: true);
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        isSalesRep = auth.User.IsInRole("SalesRep");
+        var currentEmail = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? auth.User.FindFirst("email")?.Value;
+
         opportunities = await oppTask;
-        users = await usrTask;
         products = await prodTask;
 
         if (OpportunityId.HasValue)
@@ -351,35 +381,51 @@
             selectedOpportunity = opportunities[0];
         }
 
-        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-        var currentEmail = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
-            ?? auth.User.FindFirst("email")?.Value;
-
-        var match = users?.FirstOrDefault(u =>
-            string.Equals(u.Email, currentEmail, StringComparison.OrdinalIgnoreCase));
-
-        if (match is not null)
+        if (isSalesRep)
         {
-            ownerIdRaw = match.Id.ToString();
-            newOppOwnerIdRaw = match.Id.ToString();
-        }
-        else if (users?.Count == 1)
-        {
-            ownerIdRaw = users[0].Id.ToString();
-            newOppOwnerIdRaw = users[0].Id.ToString();
-        }
-    }
-
-    private void OnProductSelected()
-    {
-        if (Guid.TryParse(newItemProductId, out var pid))
-        {
-            var product = products?.FirstOrDefault(p => p.Id == pid);
-            if (product is not null)
-                newItemUnitPrice = product.Price;
+            ownerIdRaw = auth.User.FindFirst("sub")?.Value
+                ?? auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+            newOppOwnerIdRaw = ownerIdRaw;
         }
         else
         {
+            users = await Api.GetUsersAsync();
+            var match = users?.FirstOrDefault(u =>
+                string.Equals(u.Email, currentEmail, StringComparison.OrdinalIgnoreCase));
+
+            if (match is not null)
+            {
+                ownerIdRaw = match.Id.ToString();
+                newOppOwnerIdRaw = match.Id.ToString();
+            }
+            else if (users?.Count == 1)
+            {
+                ownerIdRaw = users[0].Id.ToString();
+                newOppOwnerIdRaw = users[0].Id.ToString();
+            }
+        }
+    }
+
+    private const int LowStockThreshold = 10;
+    private ProductDto? selectedProduct;
+    private string? lineItemWarning;
+
+    private static string StockClass(int stock) =>
+        stock == 0 ? "text-danger" : stock <= LowStockThreshold ? "text-warning" : "text-success";
+
+    private void OnProductSelected()
+    {
+        lineItemWarning = null;
+        if (Guid.TryParse(newItemProductId, out var pid))
+        {
+            selectedProduct = products?.FirstOrDefault(p => p.Id == pid);
+            if (selectedProduct is not null)
+                newItemUnitPrice = selectedProduct.Price;
+        }
+        else
+        {
+            selectedProduct = null;
             newItemUnitPrice = 0;
         }
     }
@@ -387,12 +433,18 @@
     private void AddLineItemDraft()
     {
         lineItemError = null;
+        lineItemWarning = null;
         if (!Guid.TryParse(newItemProductId, out var pid)) { lineItemError = "Please select a product."; return; }
         if (newItemQty <= 0) { lineItemError = "Quantity must be at least 1."; return; }
         if (newItemUnitPrice < 0) { lineItemError = "Unit price cannot be negative."; return; }
 
         var product = products?.FirstOrDefault(p => p.Id == pid);
         if (product is null) { lineItemError = "Product not found."; return; }
+
+        if (product.StockQuantity == 0)
+            lineItemWarning = $"{product.Name} is currently out of stock.";
+        else if (newItemQty > product.StockQuantity)
+            lineItemWarning = $"Only {product.StockQuantity} units of {product.Name} available — quoting {newItemQty}.";
 
         var existing = lineItems.FirstOrDefault(l => l.ProductId == pid);
         if (existing is not null)
@@ -405,6 +457,7 @@
             lineItems.Add(new LineItemDraft(pid, product.Name, newItemQty, newItemUnitPrice, newItemDiscount));
         }
 
+        selectedProduct = null;
         newItemProductId = "";
         newItemQty = 1;
         newItemUnitPrice = 0;

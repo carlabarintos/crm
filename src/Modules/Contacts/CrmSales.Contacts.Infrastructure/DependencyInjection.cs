@@ -1,3 +1,4 @@
+using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Contacts.Domain.Repositories;
 using CrmSales.Contacts.Infrastructure.Persistence;
 using CrmSales.Contacts.Infrastructure.Repositories;
@@ -12,9 +13,12 @@ public static class DependencyInjection
         this IServiceCollection services,
         string connectionString)
     {
-        services.AddDbContext<ContactsDbContext>(opts =>
-            opts.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", ContactsDbContext.SchemaName)));
+        services.AddScoped<TenantSchemaInterceptor>();
+        services.AddDbContext<ContactsDbContext>((sp, opts) =>
+        {
+            opts.UseNpgsql(connectionString)
+                .AddInterceptors(sp.GetRequiredService<TenantSchemaInterceptor>());
+        });
 
         services.AddScoped<IContactRepository, ContactRepository>();
         return services;

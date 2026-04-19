@@ -1,3 +1,4 @@
+using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Opportunities.Domain.Repositories;
 using CrmSales.Opportunities.Infrastructure.Persistence;
 using CrmSales.Opportunities.Infrastructure.Repositories;
@@ -11,9 +12,12 @@ public static class DependencyInjection
     public static IServiceCollection AddOpportunitiesInfrastructure(
         this IServiceCollection services, string connectionString)
     {
-        services.AddDbContext<OpportunitiesDbContext>(opts =>
-            opts.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", OpportunitiesDbContext.SchemaName)));
+        services.AddScoped<TenantSchemaInterceptor>();
+        services.AddDbContext<OpportunitiesDbContext>((sp, opts) =>
+        {
+            opts.UseNpgsql(connectionString)
+                .AddInterceptors(sp.GetRequiredService<TenantSchemaInterceptor>());
+        });
 
         services.AddScoped<IOpportunityRepository, OpportunityRepository>();
         return services;

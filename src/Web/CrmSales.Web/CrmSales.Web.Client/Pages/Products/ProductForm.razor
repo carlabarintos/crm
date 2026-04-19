@@ -49,19 +49,56 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Category <span class="text-danger">*</span></label>
-                    <select class="form-select" @bind="categoryId">
-                        @if (categories is null)
-                        {
-                            <option value="">Loading…</option>
-                        }
-                        else
-                        {
-                            @foreach (var cat in categories)
+                    <div class="d-flex gap-2">
+                        <select class="form-select" @bind="categoryId">
+                            @if (categories is null)
                             {
-                                <option value="@cat.Id">@cat.Name</option>
+                                <option value="@Guid.Empty">Loading…</option>
                             }
-                        }
-                    </select>
+                            else
+                            {
+                                <option value="@Guid.Empty">— Select category —</option>
+                                @foreach (var cat in categories)
+                                {
+                                    <option value="@cat.Id">@cat.Name</option>
+                                }
+                            }
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                                @onclick="() => showNewCategory = !showNewCategory">
+                            + New
+                        </button>
+                    </div>
+                    @if (showNewCategory)
+                    {
+                        <div class="card mt-2">
+                            <div class="card-body p-2">
+                                <div class="mb-2">
+                                    <input class="form-control form-control-sm" @bind="newCategoryName"
+                                           placeholder="Category name *" />
+                                </div>
+                                <div class="mb-2">
+                                    <input class="form-control form-control-sm" @bind="newCategoryDescription"
+                                           placeholder="Description (optional)" />
+                                </div>
+                                @if (!string.IsNullOrEmpty(newCategoryError))
+                                {
+                                    <div class="text-danger small mb-1">@newCategoryError</div>
+                                }
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-primary btn-sm"
+                                            @onclick="AddCategory" disabled="@newCategorySaving">
+                                        @if (newCategorySaving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                        Save Category
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                                            @onclick="() => showNewCategory = false">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Stock Quantity</label>
@@ -98,6 +135,12 @@
     private bool saving;
     private string? error;
 
+    private bool showNewCategory;
+    private string newCategoryName = "";
+    private string? newCategoryDescription;
+    private bool newCategorySaving;
+    private string? newCategoryError;
+
     protected override async Task OnInitializedAsync()
     {
         categories = await Api.GetCategoriesAsync();
@@ -120,12 +163,43 @@
         }
     }
 
+    private async Task AddCategory()
+    {
+        newCategoryError = null;
+        if (string.IsNullOrWhiteSpace(newCategoryName))
+        { newCategoryError = "Category name is required."; return; }
+
+        newCategorySaving = true;
+        try
+        {
+            var resp = await Api.CreateCategoryAsync(new { Name = newCategoryName, Description = newCategoryDescription });
+            if (resp.IsSuccessStatusCode)
+            {
+                categories = await Api.GetCategoriesAsync();
+                var created = categories?.FirstOrDefault(c =>
+                    string.Equals(c.Name, newCategoryName.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (created is not null) categoryId = created.Id;
+                newCategoryName = "";
+                newCategoryDescription = null;
+                showNewCategory = false;
+            }
+            else
+                newCategoryError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { newCategorySaving = false; }
+    }
+
     private async Task Save()
     {
         error = null;
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(sku) || price <= 0)
         {
             error = "Name, SKU and a positive Price are required.";
+            return;
+        }
+        if (categoryId == Guid.Empty)
+        {
+            error = "Please select a category.";
             return;
         }
 

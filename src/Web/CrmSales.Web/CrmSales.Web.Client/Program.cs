@@ -1,3 +1,4 @@
+using CrmSales.Web.Client.Auth;
 using CrmSales.Web.Client.Services;
 using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
@@ -19,7 +20,7 @@ builder.Services.AddOidcAuthentication(options =>
     options.ProviderOptions.ResponseType = "code";
     options.ProviderOptions.DefaultScopes.Add("crm-web-api-scope");
     options.AuthenticationPaths.LogOutSucceededPath = "authentication/login";
-});
+}).AddAccountClaimsPrincipalFactory<KeycloakAccountFactory>();
 
 // HttpClient for API — AuthorizationMessageHandler attaches Bearer token automatically
 builder.Services.AddHttpClient<CrmApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))

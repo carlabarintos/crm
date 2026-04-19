@@ -1,3 +1,4 @@
+using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Quotes.Domain.Repositories;
 using CrmSales.Quotes.Infrastructure.Persistence;
 using CrmSales.Quotes.Infrastructure.Repositories;
@@ -11,9 +12,12 @@ public static class DependencyInjection
     public static IServiceCollection AddQuotesInfrastructure(
         this IServiceCollection services, string connectionString)
     {
-        services.AddDbContext<QuotesDbContext>(opts =>
-            opts.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", QuotesDbContext.SchemaName)));
+        services.AddScoped<TenantSchemaInterceptor>();
+        services.AddDbContext<QuotesDbContext>((sp, opts) =>
+        {
+            opts.UseNpgsql(connectionString)
+                .AddInterceptors(sp.GetRequiredService<TenantSchemaInterceptor>());
+        });
 
         services.AddScoped<IQuoteRepository, QuoteRepository>();
         return services;

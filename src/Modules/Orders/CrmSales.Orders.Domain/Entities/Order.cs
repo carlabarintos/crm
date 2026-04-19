@@ -91,6 +91,42 @@ public sealed class Order : AggregateRoot<Guid>
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void AddLineItem(Guid productId, string productName, int quantity, decimal unitPrice)
+    {
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException("Line items can only be added to pending orders.");
+        _lineItems.Add(OrderLineItem.Create(Id, productId, productName, quantity, unitPrice));
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void UpdateLineItem(Guid lineItemId, int quantity, decimal unitPrice)
+    {
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException("Line items can only be updated on pending orders.");
+        var item = _lineItems.FirstOrDefault(l => l.Id == lineItemId)
+            ?? throw new InvalidOperationException("Line item not found.");
+        item.Update(quantity, unitPrice);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void RemoveLineItem(Guid lineItemId)
+    {
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException("Line items can only be removed from pending orders.");
+        var item = _lineItems.FirstOrDefault(l => l.Id == lineItemId)
+            ?? throw new InvalidOperationException("Line item not found.");
+        _lineItems.Remove(item);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Complete()
+    {
+        if (Status == OrderStatus.Pending) Confirm();
+        if (Status == OrderStatus.Confirmed) StartProcessing();
+        if (Status == OrderStatus.Processing) Ship();
+        if (Status == OrderStatus.Shipped) Deliver();
+    }
+
     public void Cancel(string reason)
     {
         if (!CanBeCancelled)

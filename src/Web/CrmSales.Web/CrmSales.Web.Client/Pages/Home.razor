@@ -1,7 +1,10 @@
 @page "/"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
 @using CrmSales.Web.Client.Services
+@using Microsoft.AspNetCore.Components.Authorization
 @inject CrmApiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>Dashboard — CRM Sales</PageTitle>
 
@@ -380,6 +383,8 @@ else
         ("ClosedWon",     "linear-gradient(90deg,#10b981,#34d399)",  "Won"),
     ];
 
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
     private bool loading = true;
 
     private List<OpportunityDto> opps = [];
@@ -405,6 +410,20 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        var auth = await AuthStateTask;
+        var user = auth.User;
+
+        Console.WriteLine($"[Home] Authenticated: {user.Identity?.IsAuthenticated}");
+        Console.WriteLine($"[Home] Claims: {string.Join(", ", user.Claims.Select(c => $"{c.Type}={c.Value}"))}");
+        Console.WriteLine($"[Home] IsInRole(SuperAdmin): {user.IsInRole("SuperAdmin")}");
+
+        if (user.IsInRole("SuperAdmin"))
+        {
+            Console.WriteLine("[Home] SuperAdmin detected — redirecting to /companies");
+            Navigation.NavigateTo("/companies", replace: true);
+            return;
+        }
+
         var oppTask   = Api.GetOpportunitiesAsync();
         var quoteTask = Api.GetQuotesAsync();
         var orderTask = Api.GetOrdersAsync();

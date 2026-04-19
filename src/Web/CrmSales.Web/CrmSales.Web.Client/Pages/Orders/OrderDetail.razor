@@ -73,31 +73,102 @@ else if (order is not null)
                                 <th class="text-end">Qty</th>
                                 <th class="text-end">Unit Price</th>
                                 <th class="text-end">Line Total</th>
+                                @if (order.Status == "Pending") { <th></th> }
                             </tr>
                         </thead>
                         <tbody>
                             @if (!order.LineItems.Any())
                             {
-                                <tr><td colspan="4" class="text-center text-muted py-3">No line items on this order.</td></tr>
+                                <tr><td colspan="5" class="text-center text-muted py-3">No line items on this order.</td></tr>
                             }
                             @foreach (var l in order.LineItems)
                             {
-                                <tr>
-                                    <td>@l.ProductName</td>
-                                    <td class="text-end">@l.Quantity</td>
-                                    <td class="text-end">@l.UnitPrice.ToString("F2")</td>
-                                    <td class="text-end fw-semibold">@l.LineTotal.ToString("F2")</td>
-                                </tr>
+                                @if (editingLineItemId == l.Id)
+                                {
+                                    <tr class="table-warning">
+                                        <td>@l.ProductName</td>
+                                        <td class="text-end" style="width:90px">
+                                            <input class="form-control form-control-sm text-end" type="number" min="1" @bind="editQty" />
+                                        </td>
+                                        <td class="text-end" style="width:110px">
+                                            <input class="form-control form-control-sm text-end" type="number" step="0.01" @bind="editUnitPrice" />
+                                        </td>
+                                        <td class="text-end fw-semibold">@((editQty * editUnitPrice).ToString("F2"))</td>
+                                        <td class="text-end text-nowrap">
+                                            <button class="btn btn-success btn-sm py-0 px-1 me-1" @onclick="() => SaveEdit(l.Id)" disabled="@lineItemSaving">✓</button>
+                                            <button class="btn btn-outline-secondary btn-sm py-0 px-1" @onclick="CancelEdit">✕</button>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td>@l.ProductName</td>
+                                        <td class="text-end">@l.Quantity</td>
+                                        <td class="text-end">@l.UnitPrice.ToString("F2")</td>
+                                        <td class="text-end fw-semibold">@l.LineTotal.ToString("F2")</td>
+                                        @if (order.Status == "Pending")
+                                        {
+                                            <td class="text-end text-nowrap">
+                                                <button class="btn btn-outline-primary btn-sm py-0 px-1 me-1" @onclick="() => StartEdit(l)">✎</button>
+                                                <button class="btn btn-outline-danger btn-sm py-0 px-1" @onclick="() => RemoveLineItem(l.Id)" disabled="@lineItemSaving">✕</button>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            }
+                            @if (order.Status == "Pending")
+                            {
+                                @if (showAddLineItem)
+                                {
+                                    <tr class="table-light">
+                                        <td style="min-width:200px">
+                                            <select class="form-select form-select-sm" @bind="newProductId" @bind:after="OnAddProductSelected">
+                                                <option value="">— Select product —</option>
+                                                @foreach (var p in products ?? [])
+                                                {
+                                                    <option value="@p.Id">
+                                                        @p.Name — @(p.StockQuantity > 0 ? $"{p.StockQuantity} in stock" : "Out of stock")
+                                                    </option>
+                                                }
+                                            </select>
+                                            @if (addStockWarning is not null)
+                                            {
+                                                <div class="small @(addStockWarning.StartsWith("⚠") ? "text-warning" : "text-danger")">@addStockWarning</div>
+                                            }
+                                        </td>
+                                        <td style="width:80px"><input class="form-control form-control-sm text-end" type="number" min="1" @bind="newQty" @bind:after="CheckAddStock" /></td>
+                                        <td style="width:100px"><input class="form-control form-control-sm text-end" type="number" step="0.01" @bind="newUnitPrice" /></td>
+                                        <td class="text-end fw-semibold text-muted">@((newQty * newUnitPrice).ToString("F2"))</td>
+                                        <td class="text-end text-nowrap">
+                                            <button class="btn btn-success btn-sm py-0 px-1 me-1" @onclick="AddLineItem" disabled="@lineItemSaving">✓</button>
+                                            <button class="btn btn-outline-secondary btn-sm py-0 px-1" @onclick="CancelAdd">✕</button>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5">
+                                            <button class="btn btn-link btn-sm p-0" @onclick="() => showAddLineItem = true">+ Add line item</button>
+                                        </td>
+                                    </tr>
+                                }
                             }
                         </tbody>
                         <tfoot class="table-light">
                             <tr class="fw-bold">
-                                <td colspan="3" class="text-end">Total</td>
+                                <td colspan="@(order.Status == "Pending" ? 3 : 3)" class="text-end">Total</td>
                                 <td class="text-end text-primary">@order.TotalAmount.ToString("F2") @order.Currency</td>
+                                @if (order.Status == "Pending") { <td></td> }
                             </tr>
                         </tfoot>
                     </table>
                 </div>
+                @if (!string.IsNullOrEmpty(lineItemError))
+                {
+                    <div class="card-footer text-danger small">@lineItemError</div>
+                }
             </div>
         </div>
 
@@ -164,7 +235,29 @@ else if (order is not null)
     private bool showCancelForm;
     private string cancelReason = "";
 
-    protected override async Task OnInitializedAsync() => await Load();
+    // Line item management
+    private bool lineItemSaving;
+    private string? lineItemError;
+
+    private bool showAddLineItem;
+    private string newProductId = "";
+    private string newProductName = "";
+    private int newQty = 1;
+    private decimal newUnitPrice;
+    private string? addStockWarning;
+
+    private Guid? editingLineItemId;
+    private int editQty;
+    private decimal editUnitPrice;
+
+    private List<ProductDto>? products;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var loadOrder = Load();
+        products = await Api.GetProductsAsync(isActive: true);
+        await loadOrder;
+    }
 
     private async Task Load()
     {
@@ -232,6 +325,101 @@ else if (order is not null)
             else actionError = await resp.Content.ReadAsStringAsync();
         }
         finally { actionSaving = false; }
+    }
+
+    private void StartEdit(OrderLineItemDto l)
+    {
+        editingLineItemId = l.Id;
+        editQty = l.Quantity;
+        editUnitPrice = l.UnitPrice;
+    }
+
+    private void CancelEdit() => editingLineItemId = null;
+
+    private async Task SaveEdit(Guid lineItemId)
+    {
+        lineItemError = null; lineItemSaving = true;
+        try
+        {
+            var resp = await Api.UpdateOrderLineItemAsync(Id, lineItemId, new { Quantity = editQty, UnitPrice = editUnitPrice });
+            if (resp.IsSuccessStatusCode) { editingLineItemId = null; await Load(); }
+            else lineItemError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { lineItemSaving = false; }
+    }
+
+    private void OnAddProductSelected()
+    {
+        addStockWarning = null;
+        if (Guid.TryParse(newProductId, out var pid))
+        {
+            var p = products?.FirstOrDefault(x => x.Id == pid);
+            if (p is not null)
+            {
+                newProductName = p.Name;
+                newUnitPrice = p.Price;
+                CheckAddStock();
+            }
+        }
+        else
+        {
+            newProductName = "";
+            newUnitPrice = 0;
+        }
+    }
+
+    private void CheckAddStock()
+    {
+        addStockWarning = null;
+        if (!Guid.TryParse(newProductId, out var pid)) return;
+        var p = products?.FirstOrDefault(x => x.Id == pid);
+        if (p is null) return;
+        if (p.StockQuantity == 0) addStockWarning = "⚠ Out of stock";
+        else if (newQty > p.StockQuantity) addStockWarning = $"⚠ Only {p.StockQuantity} in stock";
+    }
+
+    private void CancelAdd()
+    {
+        showAddLineItem = false;
+        newProductId = ""; newProductName = ""; newQty = 1; newUnitPrice = 0; addStockWarning = null;
+    }
+
+    private async Task AddLineItem()
+    {
+        lineItemError = null;
+        if (string.IsNullOrWhiteSpace(newProductName)) { lineItemError = "Please select a product."; return; }
+        if (newQty <= 0) { lineItemError = "Quantity must be positive."; return; }
+        lineItemSaving = true;
+        try
+        {
+            var productId = Guid.TryParse(newProductId, out var pid) ? pid : Guid.Empty;
+            var resp = await Api.AddOrderLineItemAsync(Id, new
+            {
+                ProductId = productId,
+                ProductName = newProductName,
+                Quantity = newQty,
+                UnitPrice = newUnitPrice
+            });
+            if (resp.IsSuccessStatusCode)
+            {
+                CancelAdd();
+                await Load();
+            }
+            else lineItemError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { lineItemSaving = false; }
+    }
+
+    private async Task RemoveLineItem(Guid lineItemId)
+    {
+        lineItemError = null; lineItemSaving = true;
+        try
+        {
+            var resp = await Api.DeleteOrderLineItemAsync(Id, lineItemId);
+            if (resp.IsSuccessStatusCode) await Load();
+            else lineItemError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { lineItemSaving = false; }
     }
 
     private static string GetStatusBadge(string status) => status switch

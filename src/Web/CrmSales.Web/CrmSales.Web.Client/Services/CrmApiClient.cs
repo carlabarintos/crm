@@ -10,6 +10,9 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<List<CategoryDto>?> GetCategoriesAsync()
         => _http.GetFromJsonAsync<List<CategoryDto>>("/api/categories");
 
+    public Task<HttpResponseMessage> CreateCategoryAsync(object body)
+        => _http.PostAsJsonAsync("/api/categories", body);
+
     // ── Products ───────────────────────────────────────────────────────────
     public Task<List<ProductDto>?> GetProductsAsync(string? search = null, bool? isActive = null)
     {
@@ -122,6 +125,25 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> CancelOrderAsync(Guid id, string reason)
         => _http.PostAsJsonAsync($"/api/orders/{id}/cancel", new { Reason = reason });
 
+    public Task<HttpResponseMessage> AddOrderLineItemAsync(Guid id, object body)
+        => _http.PostAsJsonAsync($"/api/orders/{id}/line-items", body);
+
+    public Task<HttpResponseMessage> UpdateOrderLineItemAsync(Guid id, Guid lineItemId, object body)
+        => _http.PutAsJsonAsync($"/api/orders/{id}/line-items/{lineItemId}", body);
+
+    public Task<HttpResponseMessage> DeleteOrderLineItemAsync(Guid id, Guid lineItemId)
+        => _http.DeleteAsync($"/api/orders/{id}/line-items/{lineItemId}");
+
+    // ── Companies ─────────────────────────────────────────────────────────
+    public Task<List<CompanyDto>?> GetCompaniesAsync()
+        => _http.GetFromJsonAsync<List<CompanyDto>>("/api/companies");
+
+    public Task<HttpResponseMessage> CreateCompanyAsync(object body)
+        => _http.PostAsJsonAsync("/api/companies", body);
+
+    public Task<HttpResponseMessage> CreateCompanyAdminAsync(Guid companyId, object body)
+        => _http.PostAsJsonAsync($"/api/companies/{companyId}/admin", body);
+
     // ── Users ──────────────────────────────────────────────────────────────
     public Task<List<UserDto>?> GetUsersAsync()
         => _http.GetFromJsonAsync<List<UserDto>>("/api/users");
@@ -188,3 +210,5 @@ public record OrderLineItemDto(Guid Id, Guid ProductId, string ProductName,
     int Quantity, decimal UnitPrice, decimal LineTotal);
 
 public record UserDto(Guid Id, string Email, string FirstName, string LastName, string FullName, string Role, bool IsActive);
+
+public record CompanyDto(Guid Id, string Name, string Slug, bool IsActive, DateTime CreatedAt);

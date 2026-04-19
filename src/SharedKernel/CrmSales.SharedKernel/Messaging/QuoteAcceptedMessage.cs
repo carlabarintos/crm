@@ -12,7 +12,9 @@ public record QuoteAcceptedMessage(
     decimal TotalAmount,
     string Currency,
     Guid OwnerId,
-    IReadOnlyList<QuoteLineItemMessage> LineItems);
+    IReadOnlyList<QuoteLineItemMessage> LineItems,
+    string TenantId = "master",
+    bool AutoComplete = false);
 
 public record QuoteLineItemMessage(
     Guid ProductId,

@@ -5,12 +5,50 @@
 
 <PageTitle>Products</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h3">Products</h1>
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Catalog</p>
+        <h1>Products</h1>
+    </div>
     <a href="/products/new" class="btn btn-primary">+ New Product</a>
 </div>
 
-<div class="row mb-3">
+<!-- Summary cards -->
+@if (products is not null)
+{
+    <div class="row g-3 mb-4 stagger-2">
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Active Products</div>
+                <div class="stat-card-value text-primary">@ActiveCount</div>
+                <div class="stat-card-sub">of @products.Count total</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Low Stock</div>
+                <div class="stat-card-value" style="color:#D97706">@LowStockCount</div>
+                <div class="stat-card-sub">1–10 units remaining</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Out of Stock</div>
+                <div class="stat-card-value text-danger">@OutOfStockCount</div>
+                <div class="stat-card-sub">0 units available</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Inventory Value</div>
+                <div class="stat-card-value text-success">@FormatInventoryValue()</div>
+                <div class="stat-card-sub">active products only</div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="row mb-3 stagger-3">
     <div class="col-md-4">
         <input class="form-control" placeholder="Search by name or SKU..." @bind="searchTerm" @bind:after="LoadProducts" />
     </div>
@@ -62,10 +100,51 @@ else
     </div>
 }
 
+<style>
+    .stat-card {
+        background: #fff;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+    }
+    .stat-card-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #9CA3AF;
+        margin-bottom: .3rem;
+    }
+    .stat-card-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+        margin-bottom: .2rem;
+    }
+    .stat-card-sub { font-size: 11.5px; color: #9CA3AF; }
+</style>
+
 @code {
     private List<ProductDto>? products;
     private string searchTerm = "";
     private string activeFilter = "";
+
+    private int ActiveCount => (products ?? []).Count(p => p.IsActive);
+    private int LowStockCount => (products ?? []).Count(p => p.IsActive && p.StockQuantity > 0 && p.StockQuantity <= 10);
+    private int OutOfStockCount => (products ?? []).Count(p => p.IsActive && p.StockQuantity == 0);
+    private decimal InventoryValue => (products ?? []).Where(p => p.IsActive).Sum(p => p.Price * p.StockQuantity);
+
+    private string FormatInventoryValue()
+    {
+        var sym = products?.FirstOrDefault()?.Currency switch
+        {
+            "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", var c => (c ?? "") + " "
+        };
+        return InventoryValue >= 1_000_000 ? $"{sym}{InventoryValue / 1_000_000:N1}M"
+             : InventoryValue >= 1_000     ? $"{sym}{InventoryValue / 1_000:N1}K"
+             : $"{sym}{InventoryValue:N0}";
+    }
 
     protected override async Task OnInitializedAsync() => await LoadProducts();
 
