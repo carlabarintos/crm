@@ -1,0 +1,10 @@
+.vs
+.git
+.github
+**/bin
+**/obj
+**/*.user
+**/*.suo
+**/TestResults
+**/node_modules
+.env.production

@@ -31,7 +31,7 @@ echo.
 
 REM ── Step 1: Login to GitHub Container Registry ───────────────────────────────
 echo [1/4] Logging in to ghcr.io...
-echo %GITHUB_TOKEN% | docker login ghcr.io -u %GITHUB_OWNER% --password-stdin
+echo %GITHUB_TOKEN% | podman login ghcr.io -u %GITHUB_OWNER% --password-stdin
 if %errorlevel% neq 0 (
     echo.
     echo ERROR: Docker login failed.
@@ -45,18 +45,18 @@ echo [2/4] Building images (this may take a few minutes)...
 echo.
 
 echo   Building API image...
-docker build -f Dockerfile.api -t ghcr.io/%GITHUB_OWNER%/crm-api:latest .
+podman build -f Dockerfile.api -t ghcr.io/%GITHUB_OWNER%/crm-api:latest .
 if %errorlevel% neq 0 ( echo ERROR: API image build failed. & exit /b 1 )
 
 echo   Building Web image...
-docker build -f Dockerfile.web -t ghcr.io/%GITHUB_OWNER%/crm-web:latest .
+podman build -f Dockerfile.web -t ghcr.io/%GITHUB_OWNER%/crm-web:latest .
 if %errorlevel% neq 0 ( echo ERROR: Web image build failed. & exit /b 1 )
 
 REM ── Step 3: Push images ──────────────────────────────────────────────────────
 echo.
 echo [3/4] Pushing images to ghcr.io...
-docker push ghcr.io/%GITHUB_OWNER%/crm-api:latest
-docker push ghcr.io/%GITHUB_OWNER%/crm-web:latest
+podman push ghcr.io/%GITHUB_OWNER%/crm-api:latest
+podman push ghcr.io/%GITHUB_OWNER%/crm-web:latest
 
 REM ── Step 4: Deploy on server ─────────────────────────────────────────────────
 echo.
