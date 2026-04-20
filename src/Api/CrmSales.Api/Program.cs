@@ -5,6 +5,7 @@ using CrmSales.Api.Middleware;
 using CrmSales.Api.MultiTenancy;
 using CrmSales.Api.Notifications;
 using CrmSales.Api.Services;
+using System.Threading.RateLimiting;
 using CrmSales.Contacts.Application;
 using CrmSales.Contacts.Infrastructure;
 using CrmSales.Opportunities.Application;
@@ -167,6 +168,36 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(builder.Configuration["AllowedOrigins"] ?? "http://localhost:5001")
               .AllowAnyMethod().AllowAnyHeader()));
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Authenticated users: 300 requests per minute per user
+    options.AddPolicy("authenticated", ctx =>
+    {
+        var user = ctx.User.FindFirst("preferred_username")?.Value
+                   ?? ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                   ?? "anonymous";
+        return RateLimitPartition.GetSlidingWindowLimiter(user, _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = 300,
+            Window = TimeSpan.FromMinutes(1),
+            SegmentsPerWindow = 6
+        });
+    });
+
+    // Global fallback: 60 requests per minute per IP
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+    {
+        var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1)
+        });
+    });
+});
+
 var app = builder.Build();
 
 // ── Ensure master schema + Companies table ────────────────────────────────
@@ -259,20 +290,22 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<TenantMiddleware>();
 app.UseAuthorization();
 
 // ── Map endpoint groups ────────────────────────────────────────────────────
-app.MapCompanyEndpoints();
-app.MapProductEndpoints();
-app.MapCategoryEndpoints();
-app.MapUserEndpoints();
-app.MapContactEndpoints();
-app.MapOpportunityEndpoints();
-app.MapQuoteEndpoints();
-app.MapOrderEndpoints();
-app.MapNotificationEndpoints();
-app.MapAuditEndpoints();
+var api = app.MapGroup("/").RequireRateLimiting("authenticated");
+api.MapCompanyEndpoints();
+api.MapProductEndpoints();
+api.MapCategoryEndpoints();
+api.MapUserEndpoints();
+api.MapContactEndpoints();
+api.MapOpportunityEndpoints();
+api.MapQuoteEndpoints();
+api.MapOrderEndpoints();
+api.MapNotificationEndpoints();
+api.MapAuditEndpoints();
 
 app.Run();
