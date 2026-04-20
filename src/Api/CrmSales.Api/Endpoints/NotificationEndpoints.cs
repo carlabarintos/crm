@@ -1,5 +1,6 @@
 using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
+using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json;
 
 namespace CrmSales.Api.Endpoints;
@@ -19,17 +20,41 @@ public static class NotificationEndpoints
             http.Response.Headers.Connection = "keep-alive";
             http.Response.Headers["X-Accel-Buffering"] = "no";
 
+            // Disable ASP.NET Core response buffering so events reach the client immediately
+            http.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
             var (channelId, reader) = broadcaster.Subscribe(tenant.TenantId);
             try
             {
-                // Send a heartbeat comment immediately to confirm the stream is open
+                // Confirm connection is open
                 await http.Response.WriteAsync(": connected\n\n", ct);
                 await http.Response.Body.FlushAsync(ct);
 
-                await foreach (var evt in reader.ReadAllAsync(ct))
+                while (!ct.IsCancellationRequested)
                 {
-                    var json = JsonSerializer.Serialize(evt);
-                    await http.Response.WriteAsync($"data: {json}\n\n", ct);
+                    // Race: wait for an event OR send a heartbeat every 15 s to keep the connection alive
+                    var waitForData = reader.WaitToReadAsync(ct).AsTask();
+                    var heartbeat = Task.Delay(15_000, ct);
+
+                    var completed = await Task.WhenAny(waitForData, heartbeat);
+
+                    if (ct.IsCancellationRequested) break;
+
+                    if (completed == waitForData)
+                    {
+                        // Drain all pending events
+                        while (reader.TryRead(out var evt))
+                        {
+                            var json = JsonSerializer.Serialize(evt);
+                            await http.Response.WriteAsync($"data: {json}\n\n", ct);
+                        }
+                    }
+                    else
+                    {
+                        // Heartbeat — keeps proxies and the client from treating the connection as dead
+                        await http.Response.WriteAsync(": heartbeat\n\n", ct);
+                    }
+
                     await http.Response.Body.FlushAsync(ct);
                 }
             }

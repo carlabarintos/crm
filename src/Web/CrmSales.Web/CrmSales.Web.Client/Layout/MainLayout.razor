@@ -3,7 +3,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @inject NotificationService NotifSvc
 @inject AuthenticationStateProvider AuthState
-@implements IDisposable
+@implements IAsyncDisposable
 
 <div class="page">
     <div class="sidebar">
@@ -23,8 +23,8 @@
             </div>
             <div class="topbar-right">
                 <!-- Notification bell -->
-                <div class="notif-bell-wrap" @onclick="ToggleBell">
-                    <button class="topbar-icon-btn" title="Notifications">
+                <div class="notif-bell-wrap">
+                    <button class="topbar-icon-btn" title="Notifications" @onclick="ToggleBell">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M8 2a4 4 0 0 1 4 4c0 4 1.5 5 1.5 5H2.5S4 10 4 6a4 4 0 0 1 4-4z" stroke-linecap="round" />
                             <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke-linecap="round" />
@@ -41,7 +41,8 @@
 
                     @if (_bellOpen)
                     {
-                        <div class="notif-dropdown" @onclick:stopPropagation>
+                        <div class="notif-backdrop" @onclick="CloseBell"></div>
+                        <div class="notif-dropdown">
                             <div class="notif-dropdown-header">
                                 <span>Notifications</span>
                                 @if (NotifSvc.UnreadCount > 0)
@@ -49,18 +50,20 @@
                                     <button class="notif-mark-read" @onclick="MarkRead">Mark all read</button>
                                 }
                             </div>
-                            @if (!NotifSvc.Recent.Any())
-                            {
-                                <div class="notif-empty">No notifications yet</div>
-                            }
-                            @foreach (var n in NotifSvc.Recent.Take(10))
-                            {
-                                <div class="notif-item @GetNotifClass(n.Type)">
-                                    <div class="notif-item-title">@n.Title</div>
-                                    <div class="notif-item-msg">@n.Message</div>
-                                    <div class="notif-item-time">@FormatTime(n.OccurredAt)</div>
-                                </div>
-                            }
+                            <div class="notif-list">
+                                @if (!NotifSvc.Recent.Any())
+                                {
+                                    <div class="notif-empty">No notifications yet</div>
+                                }
+                                @foreach (var n in NotifSvc.Recent)
+                                {
+                                    <div class="notif-item @GetNotifClass(n.Type)">
+                                        <div class="notif-item-title">@n.Title</div>
+                                        <div class="notif-item-msg">@n.Message</div>
+                                        <div class="notif-item-time">@FormatTime(n.OccurredAt)</div>
+                                    </div>
+                                }
+                            </div>
                         </div>
                     }
                 </div>
@@ -120,6 +123,12 @@
         line-height: 1;
     }
 
+    .notif-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+    }
+
     .notif-dropdown {
         position: absolute;
         top: calc(100% + 8px);
@@ -131,6 +140,14 @@
         box-shadow: 0 8px 24px rgba(0,0,0,.12);
         z-index: 1000;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        max-height: 420px;
+    }
+
+    .notif-list {
+        overflow-y: auto;
+        flex: 1;
     }
     .notif-dropdown-header {
         display: flex;
@@ -208,16 +225,31 @@
 @code {
     private bool _bellOpen;
     private readonly List<NotificationEventDto> _toasts = new();
-    private CancellationTokenSource _cts = new();
+    private bool _subscribed;
 
     protected override async Task OnInitializedAsync()
     {
+        AuthState.AuthenticationStateChanged += OnAuthStateChanged;
         var auth = await AuthState.GetAuthenticationStateAsync();
         if (auth.User.Identity?.IsAuthenticated == true)
+            EnsureStarted();
+    }
+
+    private async void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        var auth = await task;
+        if (auth.User.Identity?.IsAuthenticated == true)
+            EnsureStarted();
+    }
+
+    private void EnsureStarted()
+    {
+        if (!_subscribed)
         {
+            _subscribed = true;
             NotifSvc.OnNotification += OnNewNotification;
-            _ = NotifSvc.StartAsync(_cts.Token);
         }
+        _ = NotifSvc.StartAsync();
     }
 
     private void OnNewNotification(NotificationEventDto evt)
@@ -238,6 +270,8 @@
         _bellOpen = !_bellOpen;
         if (_bellOpen) NotifSvc.MarkAllRead();
     }
+
+    private void CloseBell() => _bellOpen = false;
 
     private void MarkRead()
     {
@@ -284,10 +318,11 @@
         return dt.ToString("MMM d, HH:mm");
     }
 
-    public void Dispose()
+    public ValueTask DisposeAsync()
     {
-        NotifSvc.OnNotification -= OnNewNotification;
-        _cts.Cancel();
-        _cts.Dispose();
+        AuthState.AuthenticationStateChanged -= OnAuthStateChanged;
+        if (_subscribed)
+            NotifSvc.OnNotification -= OnNewNotification;
+        return ValueTask.CompletedTask;
     }
 }

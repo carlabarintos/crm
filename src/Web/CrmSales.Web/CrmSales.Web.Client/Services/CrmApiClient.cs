@@ -5,6 +5,7 @@ namespace CrmSales.Web.Client.Services;
 public class CrmApiClient(HttpClient httpClient)
 {
     private readonly HttpClient _http = httpClient;
+    public Uri? BaseAddress => _http.BaseAddress;
 
     // ── Categories ─────────────────────────────────────────────────────────
     public Task<List<CategoryDto>?> GetCategoriesAsync()
@@ -139,8 +140,24 @@ public class CrmApiClient(HttpClient httpClient)
         => _http.GetAsync("/api/notifications/stream", HttpCompletionOption.ResponseHeadersRead, ct);
 
     // ── Audit ──────────────────────────────────────────────────────────────
-    public Task<AuditPageDto?> GetAuditLogsAsync(int page = 1, int pageSize = 50)
-        => _http.GetFromJsonAsync<AuditPageDto>($"/api/audit?page={page}&pageSize={pageSize}");
+    public Task<AuditPageDto?> GetAuditLogsAsync(
+        int page = 1, int pageSize = 50,
+        string? search = null, string? eventType = null,
+        string? entityType = null, string? actor = null,
+        DateTime? from = null, DateTime? to = null)
+    {
+        var q = $"page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(search)) q += $"&search={Uri.EscapeDataString(search)}";
+        if (!string.IsNullOrWhiteSpace(eventType)) q += $"&eventType={Uri.EscapeDataString(eventType)}";
+        if (!string.IsNullOrWhiteSpace(entityType)) q += $"&entityType={Uri.EscapeDataString(entityType)}";
+        if (!string.IsNullOrWhiteSpace(actor)) q += $"&actor={Uri.EscapeDataString(actor)}";
+        if (from.HasValue) q += $"&from={from.Value:O}";
+        if (to.HasValue) q += $"&to={to.Value:O}";
+        return _http.GetFromJsonAsync<AuditPageDto>($"/api/audit?{q}");
+    }
+
+    public Task<AuditSummaryDto?> GetAuditSummaryAsync()
+        => _http.GetFromJsonAsync<AuditSummaryDto>("/api/audit/summary");
 
     // ── Companies ─────────────────────────────────────────────────────────
     public Task<List<CompanyDto>?> GetCompaniesAsync()
@@ -230,3 +247,9 @@ public record AuditLogDto(
     string Description, string Actor, DateTime OccurredAt);
 
 public record AuditPageDto(int Total, int Page, int PageSize, List<AuditLogDto> Items);
+
+public record AuditSummaryDto(
+    int TotalAll, int TotalToday, int TotalWeek,
+    string? TopActor, int TopActorCount,
+    string? TopEvent, int TopEventCount,
+    List<string> Actors, List<string> EventTypes);

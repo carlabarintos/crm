@@ -77,12 +77,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             },
             OnMessageReceived = ctx =>
             {
-                var hasToken = !string.IsNullOrEmpty(ctx.Token) ||
-                    ctx.Request.Headers.ContainsKey("Authorization");
-                ctx.HttpContext.RequestServices
-                    .GetRequiredService<ILoggerFactory>()
-                    .CreateLogger("JwtBearer")
-                    .LogInformation("JWT token present: {HasToken}", hasToken);
+                // Allow token via query string for SSE connections (EventSource cannot set headers)
+                var queryToken = ctx.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(queryToken) &&
+                    ctx.Request.Path.StartsWithSegments("/api/notifications/stream"))
+                {
+                    ctx.Token = queryToken;
+                }
                 return Task.CompletedTask;
             }
         };
@@ -186,11 +187,34 @@ using (var scope = app.Services.CreateScope())
         auditCheckCmd.CommandText = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'master' AND table_name = 'AuditLogs')";
         var auditLogsExists = (bool)(await auditCheckCmd.ExecuteScalarAsync())!;
 
-        if (!companiesExists || !auditLogsExists)
+        if (!companiesExists)
         {
+            // Fresh install — let EF Core create all master tables at once
             app.Logger.LogInformation("master schema tables missing — creating tables.");
             await masterConn.CloseAsync();
             await masterCtx.GetService<IRelationalDatabaseCreator>().CreateTablesAsync();
+        }
+        else if (!auditLogsExists)
+        {
+            // Existing install being upgraded — create only the new AuditLogs table
+            app.Logger.LogInformation("AuditLogs table missing — creating it.");
+            await using var createAuditCmd = masterConn.CreateCommand();
+            createAuditCmd.CommandText = """
+                CREATE TABLE IF NOT EXISTS master."AuditLogs" (
+                    "Id"          uuid         NOT NULL,
+                    "TenantId"    varchar(100) NOT NULL,
+                    "EventType"   varchar(100) NOT NULL,
+                    "EntityType"  varchar(100) NOT NULL,
+                    "EntityId"    varchar(100) NOT NULL,
+                    "Description" varchar(500) NOT NULL,
+                    "Actor"       varchar(200) NOT NULL,
+                    "OccurredAt"  timestamp    NOT NULL,
+                    CONSTRAINT "PK_AuditLogs" PRIMARY KEY ("Id")
+                );
+                CREATE INDEX IF NOT EXISTS "IX_AuditLogs_TenantId_OccurredAt"
+                    ON master."AuditLogs" ("TenantId", "OccurredAt");
+                """;
+            await createAuditCmd.ExecuteNonQueryAsync();
         }
     }
     finally

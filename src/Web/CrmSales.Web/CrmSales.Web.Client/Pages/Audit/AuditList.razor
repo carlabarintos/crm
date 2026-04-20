@@ -1,62 +1,121 @@
 @page "/audit"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @using CrmSales.Web.Client.Services
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,SalesManager")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject CrmApiClient Api
 
-<PageTitle>Audit Log</PageTitle>
+<PageTitle>Event Log</PageTitle>
 
 <div class="page-header stagger-1">
     <div>
         <p class="page-header-meta">Admin</p>
-        <h1>Audit Log</h1>
+        <h1>Event Log</h1>
     </div>
 </div>
 
-@if (data is null)
+@if (_summary is not null)
+{
+    <div class="stat-row stagger-2">
+        <div class="stat-card">
+            <div class="stat-card-label">Total Events</div>
+            <div class="stat-card-value">@_summary.TotalAll.ToString("N0")</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-label">Today</div>
+            <div class="stat-card-value">@_summary.TotalToday</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-label">Last 7 Days</div>
+            <div class="stat-card-value">@_summary.TotalWeek</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-label">Most Active User</div>
+            <div class="stat-card-value" style="font-size:16px">@(_summary.TopActor ?? "—")</div>
+            @if (_summary.TopActorCount > 0)
+            {
+                <div class="stat-card-sub">@_summary.TopActorCount events</div>
+            }
+        </div>
+    </div>
+}
+
+<!-- Filters -->
+<div class="card stagger-3" style="padding:14px 16px;margin-bottom:16px">
+    <div class="audit-filters">
+        <input class="form-control form-control-sm" placeholder="Search descriptions, actors…"
+               @bind="_filterSearch" @bind:event="oninput" @onkeyup="OnSearchKey" style="min-width:200px;flex:1" />
+
+        <select class="form-select form-select-sm" @bind="_filterEventType" style="min-width:160px">
+            <option value="">All event types</option>
+            @foreach (var et in _eventTypes)
+            {
+                <option value="@et">@FormatEventType(et)</option>
+            }
+        </select>
+
+        <select class="form-select form-select-sm" @bind="_filterEntityType" style="min-width:130px">
+            <option value="">All entities</option>
+            <option value="Opportunity">Opportunity</option>
+            <option value="Quote">Quote</option>
+            <option value="Order">Order</option>
+        </select>
+
+        <select class="form-select form-select-sm" @bind="_filterActor" style="min-width:140px">
+            <option value="">All actors</option>
+            @foreach (var a in _actors)
+            {
+                <option value="@a">@a</option>
+            }
+        </select>
+
+        <button class="btn btn-sm btn-primary" @onclick="ApplyFilters">Apply</button>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetFilters">Reset</button>
+    </div>
+</div>
+
+@if (_data is null)
 {
     <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
 }
 else
 {
-    <div class="card stagger-2">
-        <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width:160px">When</th>
-                        <th style="width:120px">Actor</th>
-                        <th style="width:160px">Event</th>
-                        <th style="width:100px">Entity</th>
-                        <th>Description</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (!data.Items.Any())
-                    {
-                        <tr><td colspan="5" class="text-center text-muted py-4">No audit entries yet.</td></tr>
-                    }
-                    @foreach (var a in data.Items)
-                    {
-                        <tr>
-                            <td class="text-muted" style="font-size:12px;white-space:nowrap">@a.OccurredAt.ToLocalTime().ToString("MMM d, yyyy HH:mm")</td>
-                            <td style="font-size:12px;font-weight:600">@a.Actor</td>
-                            <td><span class="badge @GetEventBadge(a.EventType)" style="font-size:11px">@FormatEventType(a.EventType)</span></td>
-                            <td class="text-muted" style="font-size:12px">@a.EntityType</td>
-                            <td style="font-size:12.5px">@a.Description</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+    <div class="card stagger-4" style="overflow:hidden">
+        @if (!_data.Items.Any())
+        {
+            <div class="text-center text-muted py-5">No events match your filters.</div>
+        }
+        else
+        {
+            <div class="audit-timeline">
+                @foreach (var a in _data.Items)
+                {
+                    <div class="audit-row">
+                        <div class="audit-icon-col">
+                            <div class="audit-icon @GetIconClass(a.EventType)">
+                                @GetIconSvg(a.EventType)
+                            </div>
+                            <div class="audit-line"></div>
+                        </div>
+                        <div class="audit-body">
+                            <div class="audit-body-top">
+                                <span class="badge @GetEventBadge(a.EventType)">@FormatEventType(a.EventType)</span>
+                                <span class="audit-entity-tag">@a.EntityType</span>
+                                <span class="audit-actor">@a.Actor</span>
+                                <span class="audit-time">@FormatTime(a.OccurredAt)</span>
+                            </div>
+                            <div class="audit-desc">@a.Description</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
     </div>
 
-    <!-- Pagination -->
-    @if (data.Total > data.PageSize)
+    @if (_data.Total > _data.PageSize)
     {
-        var totalPages = (int)Math.Ceiling((double)data.Total / data.PageSize);
-        <div class="d-flex justify-content-between align-items-center mt-3 stagger-3">
-            <span class="text-muted small">@data.Total entries total</span>
+        var totalPages = (int)Math.Ceiling((double)_data.Total / _data.PageSize);
+        <div class="d-flex justify-content-between align-items-center mt-3 stagger-5">
+            <span class="text-muted small">@_data.Total events total</span>
             <div class="d-flex gap-2">
                 <button class="btn btn-sm btn-outline-secondary" disabled="@(_page <= 1)" @onclick="PrevPage">← Prev</button>
                 <span class="btn btn-sm btn-light disabled">@_page / @totalPages</span>
@@ -66,35 +125,258 @@ else
     }
 }
 
-@code {
-    private AuditPageDto? data;
-    private int _page = 1;
-
-    protected override async Task OnInitializedAsync() => await Load();
-
-    private async Task Load()
-    {
-        data = null;
-        data = await Api.GetAuditLogsAsync(_page, 50);
+<style>
+    .audit-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
     }
 
-    private async Task PrevPage() { _page--; await Load(); }
-    private async Task NextPage() { _page++; await Load(); }
+    .audit-timeline {
+        padding: 8px 0;
+    }
+
+    .audit-row {
+        display: flex;
+        gap: 0;
+        padding: 0 20px;
+    }
+
+    .audit-icon-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 36px;
+        flex-shrink: 0;
+        padding-top: 14px;
+    }
+
+    .audit-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        z-index: 1;
+    }
+
+    .audit-icon svg { width: 13px; height: 13px; }
+
+    .audit-icon-green  { background: #D1FAE5; color: #059669; }
+    .audit-icon-blue   { background: #DBEAFE; color: #2563EB; }
+    .audit-icon-red    { background: #FEE2E2; color: #DC2626; }
+    .audit-icon-yellow { background: #FEF3C7; color: #D97706; }
+    .audit-icon-purple { background: #EDE9FE; color: #7C3AED; }
+
+    .audit-line {
+        width: 2px;
+        flex: 1;
+        background: #F3F4F6;
+        margin: 4px 0;
+        min-height: 12px;
+    }
+
+    .audit-row:last-child .audit-line { display: none; }
+
+    .audit-body {
+        flex: 1;
+        padding: 12px 0 12px 14px;
+        border-bottom: 1px solid #F9FAFB;
+        min-width: 0;
+    }
+
+    .audit-row:last-child .audit-body { border-bottom: none; }
+
+    .audit-body-top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 4px;
+    }
+
+    .audit-entity-tag {
+        font-size: 11px;
+        color: #6B7280;
+        background: #F3F4F6;
+        border-radius: 4px;
+        padding: 1px 6px;
+    }
+
+    .audit-actor {
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .audit-time {
+        font-size: 11px;
+        color: #9CA3AF;
+        margin-left: auto;
+        white-space: nowrap;
+    }
+
+    .audit-desc {
+        font-size: 13px;
+        color: #4B5563;
+        line-height: 1.4;
+    }
+
+    .stat-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        background: #fff;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 16px 20px;
+    }
+
+    .stat-card-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #6B7280;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        margin-bottom: 6px;
+    }
+
+    .stat-card-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1.2;
+    }
+
+    .stat-card-sub {
+        font-size: 12px;
+        color: #9CA3AF;
+        margin-top: 2px;
+    }
+
+    .badge-soft-success { background: #D1FAE5; color: #065F46; }
+    .badge-soft-danger  { background: #FEE2E2; color: #991B1B; }
+    .badge-soft-info    { background: #DBEAFE; color: #1E40AF; }
+    .badge-soft-primary { background: #EDE9FE; color: #5B21B6; }
+    .badge-soft-neutral { background: #F3F4F6; color: #374151; }
+</style>
+
+@code {
+    private AuditPageDto? _data;
+    private AuditSummaryDto? _summary;
+    private int _page = 1;
+
+    private string _filterSearch = "";
+    private string _filterEventType = "";
+    private string _filterEntityType = "";
+    private string _filterActor = "";
+
+    private List<string> _actors = new();
+    private List<string> _eventTypes = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var summaryTask = Api.GetAuditSummaryAsync();
+        var dataTask = LoadAsync();
+        await Task.WhenAll(summaryTask, dataTask);
+        _summary = await summaryTask;
+        _actors = _summary?.Actors ?? new();
+        _eventTypes = _summary?.EventTypes ?? new();
+    }
+
+    private async Task LoadAsync()
+    {
+        _data = null;
+        _data = await Api.GetAuditLogsAsync(
+            page: _page, pageSize: 30,
+            search: NullIfEmpty(_filterSearch),
+            eventType: NullIfEmpty(_filterEventType),
+            entityType: NullIfEmpty(_filterEntityType),
+            actor: NullIfEmpty(_filterActor));
+    }
+
+    private async Task ApplyFilters() { _page = 1; await LoadAsync(); }
+    private async Task ResetFilters()
+    {
+        _filterSearch = _filterEventType = _filterEntityType = _filterActor = "";
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ApplyFilters();
+    }
+
+    private async Task PrevPage() { _page--; await LoadAsync(); }
+    private async Task NextPage() { _page++; await LoadAsync(); }
+
+    private static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
 
     private static string GetEventBadge(string type) => type switch
     {
-        var t when t.EndsWith(".won") || t.EndsWith(".delivered") || t.EndsWith(".accepted") => "badge-soft-success",
-        var t when t.EndsWith(".cancelled") || t.EndsWith(".rejected") => "badge-soft-danger",
-        var t when t.EndsWith(".shipped") || t.EndsWith(".sent") => "badge-soft-info",
-        var t when t.EndsWith(".created") => "badge-soft-primary",
-        _ => "badge-soft-neutral"
+        var t when t.EndsWith(".won") || t.EndsWith(".delivered") || t.EndsWith(".accepted") => "badge badge-soft-success",
+        var t when t.EndsWith(".cancelled") || t.EndsWith(".rejected") => "badge badge-soft-danger",
+        var t when t.EndsWith(".shipped") || t.EndsWith(".sent") => "badge badge-soft-info",
+        var t when t.EndsWith(".created") => "badge badge-soft-primary",
+        _ => "badge badge-soft-neutral"
     };
+
+    private static string GetIconClass(string type) => type switch
+    {
+        var t when t.EndsWith(".won") || t.EndsWith(".delivered") || t.EndsWith(".accepted") => "audit-icon-green",
+        var t when t.EndsWith(".cancelled") || t.EndsWith(".rejected") => "audit-icon-red",
+        var t when t.EndsWith(".shipped") || t.EndsWith(".sent") => "audit-icon-blue",
+        var t when t.EndsWith(".created") => "audit-icon-purple",
+        _ => "audit-icon-yellow"
+    };
+
+    private static MarkupString GetIconSvg(string type)
+    {
+        var svg = type switch
+        {
+            var t when t.EndsWith(".won") || t.EndsWith(".delivered") =>
+                """<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2.5 8.5l4 4 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>""",
+            var t when t.EndsWith(".cancelled") || t.EndsWith(".rejected") =>
+                """<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>""",
+            var t when t.EndsWith(".shipped") =>
+                """<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="5" width="10" height="8" rx="1"/><path d="M11 7h2l2 3v3h-4V7z"/><circle cx="4" cy="13" r="1.2" fill="currentColor" stroke="none"/><circle cx="13" cy="13" r="1.2" fill="currentColor" stroke="none"/></svg>""",
+            var t when t.EndsWith(".sent") =>
+                """<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8l12-5-5 12-2-4-5-3z" stroke-linejoin="round"/></svg>""",
+            var t when t.EndsWith(".created") =>
+                """<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg>""",
+            var t when t.EndsWith(".accepted") =>
+                """<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2.5 8.5l4 4 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>""",
+            _ =>
+                """<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.5l2 2" stroke-linecap="round"/></svg>"""
+        };
+        return new MarkupString(svg);
+    }
 
     private static string FormatEventType(string type)
     {
         var parts = type.Split('.');
-        return parts.Length == 2
-            ? $"{char.ToUpper(parts[1][0])}{parts[1][1..]} {char.ToUpper(parts[0][0])}{parts[0][1..]}"
-            : type;
+        if (parts.Length != 2) return type;
+        var action = $"{char.ToUpper(parts[1][0])}{parts[1][1..]}";
+        var entity = $"{char.ToUpper(parts[0][0])}{parts[0][1..]}";
+        return $"{action} {entity}";
+    }
+
+    private static string FormatTime(DateTime dt)
+    {
+        var local = dt.ToLocalTime();
+        var diff = DateTime.Now - local;
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return local.ToString("ddd HH:mm");
+        return local.ToString("MMM d, HH:mm");
     }
 }

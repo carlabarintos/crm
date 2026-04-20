@@ -29,7 +29,7 @@ builder.Services.AddHttpClient<CrmApiClient>(client => client.BaseAddress = new 
             authorizedUrls: [apiBaseUrl],
             scopes: ["crm-web-api-scope"]));
 
-builder.Services.AddSingleton<NotificationService>();
+builder.Services.AddScoped<NotificationService>();
 
 await builder.Build().RunAsync();
 
