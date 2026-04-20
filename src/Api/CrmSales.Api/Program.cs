@@ -112,6 +112,7 @@ builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddSingleton<INotificationBroadcaster, NotificationBroadcaster>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<TenantProvisioner>();
+builder.Services.AddHostedService<ExpiryCheckerService>();
 builder.Services.AddDbContext<MasterDbContext>(opts =>
     opts.UseNpgsql(connectionString));
 

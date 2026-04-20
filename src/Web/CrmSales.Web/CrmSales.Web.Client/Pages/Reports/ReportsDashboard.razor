@@ -1,0 +1,357 @@
+@page "/reports"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize(Roles = "Admin,SalesManager")]
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+
+<PageTitle>Reports — CRM Sales</PageTitle>
+
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Analytics</p>
+        <h1>Reports</h1>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+}
+else
+{
+    <!-- Win/Loss Summary -->
+    <div class="row g-3 mb-4 stagger-2">
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Closed Won</div>
+                <div class="stat-card-value text-success">@_wonCount</div>
+                <div class="stat-card-sub">@FormatCurrency(_wonValue)</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Closed Lost</div>
+                <div class="stat-card-value text-danger">@_lostCount</div>
+                <div class="stat-card-sub">@FormatCurrency(_lostValue)</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Win Rate</div>
+                <div class="stat-card-value text-primary">@_winRate</div>
+                <div class="stat-card-sub">@(_wonCount + _lostCount) closed total</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Total Revenue</div>
+                <div class="stat-card-value text-success">@FormatCurrency(_deliveredRevenue)</div>
+                <div class="stat-card-sub">from delivered orders</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quote Conversion -->
+    <div class="row g-3 mb-4 stagger-3">
+        <div class="col-12 col-md-6">
+            <div class="card h-100">
+                <div class="card-header rpt-card-header">Quote Conversion</div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        @foreach (var (label, count, cls) in QuoteStats)
+                        {
+                            <div class="col-6">
+                                <div class="rpt-mini-stat">
+                                    <div class="rpt-mini-label">@label</div>
+                                    <div class="rpt-mini-value @cls">@count</div>
+                                    @if (_totalQuotes > 0)
+                                    {
+                                        <div class="rpt-mini-pct">@((count * 100 / _totalQuotes).ToString("N0"))%</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    @if (_totalQuotes > 0)
+                    {
+                        <div class="rpt-funnel mt-3">
+                            @foreach (var (label, count, color) in QuoteFunnelBars)
+                            {
+                                var w = count * 100 / _totalQuotes;
+                                <div class="rpt-funnel-row">
+                                    <div class="rpt-funnel-label">@label</div>
+                                    <div class="rpt-funnel-track">
+                                        <div class="rpt-funnel-fill" style="width:@w%;background:@color">
+                                            @if (w > 10) { <span>@count</span> }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Sales Funnel -->
+        <div class="col-12 col-md-6">
+            <div class="card h-100">
+                <div class="card-header rpt-card-header">Sales Funnel (Opportunities)</div>
+                <div class="card-body">
+                    @if (_stageCounts.Count == 0)
+                    {
+                        <div class="text-muted text-center py-3" style="font-size:13px">No opportunities yet.</div>
+                    }
+                    else
+                    {
+                        var maxCount = _stageCounts.Values.Max(s => s.Count);
+                        @foreach (var (stage, label, color) in FunnelStages)
+                        {
+                            var data = _stageCounts.TryGetValue(stage, out var d) ? d : (Count: 0, Value: 0m);
+                            var w = maxCount > 0 ? data.Count * 100 / maxCount : 0;
+                            var pct = _totalOpps > 0 ? (data.Count * 100m / _totalOpps).ToString("N0") + "%" : "";
+                            <div class="rpt-funnel-row">
+                                <div class="rpt-funnel-label">@label</div>
+                                <div class="rpt-funnel-track">
+                                    <div class="rpt-funnel-fill" style="width:@(Math.Max(w, data.Count > 0 ? 5 : 0))%;background:@color">
+                                        @if (data.Count > 0) { <span>@data.Count</span> }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(pct))
+                                    {
+                                        <span class="rpt-funnel-pct">@pct</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Revenue -->
+    <div class="row g-3 mb-4 stagger-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header rpt-card-header">Monthly Revenue (Delivered Orders)</div>
+                <div class="card-body">
+                    @if (_monthlyRevenue.Count == 0)
+                    {
+                        <div class="text-muted text-center py-3" style="font-size:13px">No delivered orders yet.</div>
+                    }
+                    else
+                    {
+                        var maxRev = _monthlyRevenue.Values.Max();
+                        <div class="rpt-bar-chart">
+                            @foreach (var (month, rev) in _monthlyRevenue.OrderBy(kv => kv.Key))
+                            {
+                                var h = maxRev > 0 ? (double)(rev / maxRev * 140) : 0;
+                                <div class="rpt-bar-col">
+                                    <div class="rpt-bar-value">@FormatCurrencyShort(rev)</div>
+                                    <div class="rpt-bar" style="height:@(h.ToString("F0"))px"></div>
+                                    <div class="rpt-bar-label">@month</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Opportunities by Value -->
+    <div class="row g-3 mb-4 stagger-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header rpt-card-header">Top 5 Opportunities by Value</div>
+                <div class="card-body p-0">
+                    @if (_topOpps.Count == 0)
+                    {
+                        <div class="text-muted text-center py-3" style="font-size:13px">No opportunities yet.</div>
+                    }
+                    else
+                    {
+                        var maxVal = _topOpps.Max(o => o.Value);
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead class="table-light">
+                                    <tr><th>#</th><th>Opportunity</th><th>Account</th><th>Stage</th><th>Value</th></tr>
+                                </thead>
+                                <tbody>
+                                    @{ int rank = 0; }
+                                    @foreach (var o in _topOpps)
+                                    {
+                                        rank++;
+                                        var w = maxVal > 0 ? (int)(o.Value * 100 / maxVal) : 0;
+                                        <tr>
+                                            <td style="color:#9CA3AF;font-size:12px;width:24px">@rank</td>
+                                            <td>
+                                                <div style="font-weight:600;color:#111827;font-size:13px">@o.Name</div>
+                                                <div style="flex:1;height:4px;background:#F3F4F6;border-radius:2px;max-width:160px;margin-top:4px">
+                                                    <div style="height:100%;border-radius:2px;background:#6366f1;width:@(w)%"></div>
+                                                </div>
+                                            </td>
+                                            <td style="color:#6B7280;font-size:12.5px">@o.Account</td>
+                                            <td><span class="badge badge-soft-neutral" style="font-size:10.5px">@o.Stage</span></td>
+                                            <td style="font-weight:600;color:#111827">@FormatCurrency(o.Value)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .stat-card {
+        background: #fff; border: 1px solid #E5E7EB; border-radius: 12px;
+        padding: 1rem 1.25rem;
+    }
+    .stat-card-label {
+        font-size: 11.5px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: .05em; color: #9CA3AF; margin-bottom: .3rem;
+    }
+    .stat-card-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; margin-bottom: .2rem; }
+    .stat-card-sub { font-size: 11.5px; color: #9CA3AF; }
+
+    .rpt-card-header { font-size: 13px; font-weight: 700; color: #111827; }
+
+    .rpt-mini-stat { background:#F9FAFB; border-radius:8px; padding:.625rem .75rem; }
+    .rpt-mini-label { font-size:10.5px; color:#9CA3AF; text-transform:uppercase; letter-spacing:.05em; }
+    .rpt-mini-value { font-size:1.4rem; font-weight:700; font-variant-numeric:tabular-nums; }
+    .rpt-mini-pct { font-size:10.5px; color:#9CA3AF; }
+
+    .rpt-funnel { display:flex; flex-direction:column; gap:.4rem; }
+    .rpt-funnel-row { display:flex; align-items:center; gap:.75rem; }
+    .rpt-funnel-label { width:80px; font-size:11.5px; color:#374151; font-weight:500; flex-shrink:0; }
+    .rpt-funnel-track { flex:1; height:22px; background:#F3F4F6; border-radius:6px; overflow:visible; display:flex; align-items:center; position:relative; }
+    .rpt-funnel-fill {
+        height:100%; border-radius:6px;
+        display:flex; align-items:center; padding:0 8px;
+        font-size:11px; font-weight:600; color:rgba(255,255,255,.9);
+        white-space:nowrap; min-width:0;
+        transition: width .6s cubic-bezier(.16,1,.3,1);
+    }
+    .rpt-funnel-pct { font-size:10.5px; color:#9CA3AF; margin-left:.5rem; white-space:nowrap; }
+
+    .rpt-bar-chart {
+        display: flex; align-items: flex-end; gap: .75rem;
+        height: 180px; padding-bottom: 2rem; overflow-x: auto;
+    }
+    .rpt-bar-col { display:flex; flex-direction:column; align-items:center; gap:.25rem; min-width:48px; flex:1; max-width:80px; }
+    .rpt-bar-value { font-size:10px; color:#9CA3AF; font-weight:600; white-space:nowrap; }
+    .rpt-bar { background:linear-gradient(180deg,#6366f1,#818cf8); border-radius:4px 4px 0 0; width:100%; min-height:4px; transition:height .6s cubic-bezier(.16,1,.3,1); }
+    .rpt-bar-label { font-size:10px; color:#6B7280; white-space:nowrap; }
+</style>
+
+@code {
+    private bool _loading = true;
+
+    // Computed fields
+    private int _wonCount, _lostCount, _totalOpps, _totalQuotes;
+    private decimal _wonValue, _lostValue, _deliveredRevenue;
+    private string _winRate = "—";
+    private Dictionary<string, (int Count, decimal Value)> _stageCounts = new();
+    private Dictionary<string, decimal> _monthlyRevenue = new();
+    private List<(string Name, string Account, string Stage, decimal Value)> _topOpps = [];
+    private string _currency = "USD";
+
+    // Quote status counts
+    private int _qDraft, _qSent, _qAccepted, _qRejected, _qExpired;
+
+    private static readonly (string Stage, string Label, string Color)[] FunnelStages =
+    [
+        ("Prospecting",   "Prospect",  "linear-gradient(90deg,#6366f1,#818cf8)"),
+        ("Qualification", "Qualify",   "linear-gradient(90deg,#8b5cf6,#a78bfa)"),
+        ("Proposal",      "Proposal",  "linear-gradient(90deg,#06b6d4,#22d3ee)"),
+        ("ClosedWon",     "Closed Won","linear-gradient(90deg,#10b981,#34d399)"),
+        ("ClosedLost",    "Closed Lost","linear-gradient(90deg,#ef4444,#f87171)"),
+    ];
+
+    private IEnumerable<(string Label, int Count, string Cls)> QuoteStats =>
+    [
+        ("Draft",    _qDraft,    ""),
+        ("Sent",     _qSent,     "text-info"),
+        ("Accepted", _qAccepted, "text-success"),
+        ("Rejected", _qRejected, "text-danger"),
+    ];
+
+    private IEnumerable<(string Label, int Count, string Color)> QuoteFunnelBars =>
+    [
+        ("Sent",     _qSent,     "#0ea5e9"),
+        ("Accepted", _qAccepted, "#10b981"),
+        ("Rejected", _qRejected, "#ef4444"),
+        ("Expired",  _qExpired,  "#9CA3AF"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var oppTask   = Api.GetOpportunitiesAsync();
+        var quoteTask = Api.GetQuotesAsync();
+        var orderTask = Api.GetOrdersAsync();
+
+        var opps   = await oppTask   ?? [];
+        var quotes = await quoteTask ?? [];
+        var orders = await orderTask ?? [];
+
+        _currency = orders.FirstOrDefault()?.Currency
+            ?? opps.FirstOrDefault()?.Currency
+            ?? "USD";
+
+        // Opportunities
+        _totalOpps   = opps.Count;
+        _stageCounts = opps.GroupBy(o => o.Stage)
+            .ToDictionary(g => g.Key, g => (g.Count(), g.Sum(o => o.EstimatedValue)));
+        _wonCount  = _stageCounts.TryGetValue("ClosedWon",  out var w) ? w.Count : 0;
+        _lostCount = _stageCounts.TryGetValue("ClosedLost", out var l) ? l.Count : 0;
+        _wonValue  = _stageCounts.TryGetValue("ClosedWon",  out var wv) ? wv.Value : 0;
+        _lostValue = _stageCounts.TryGetValue("ClosedLost", out var lv) ? lv.Value : 0;
+        var closed = _wonCount + _lostCount;
+        _winRate = closed > 0 ? $"{(decimal)_wonCount / closed * 100:N0}%" : "—";
+
+        // Quotes
+        _totalQuotes = quotes.Count;
+        _qDraft    = quotes.Count(q => q.Status == "Draft");
+        _qSent     = quotes.Count(q => q.Status == "Sent");
+        _qAccepted = quotes.Count(q => q.Status == "Accepted");
+        _qRejected = quotes.Count(q => q.Status == "Rejected");
+        _qExpired  = quotes.Count(q => q.Status == "Expired");
+
+        // Orders
+        var delivered = orders.Where(o => o.Status == "Delivered").ToList();
+        _deliveredRevenue = delivered.Sum(o => o.TotalAmount);
+
+        _monthlyRevenue = delivered
+            .GroupBy(o => o.CreatedAt.ToString("MMM yy"))
+            .ToDictionary(g => g.Key, g => g.Sum(o => o.TotalAmount));
+
+        // Top 5 opportunities by estimated value
+        _topOpps = opps
+            .OrderByDescending(o => o.EstimatedValue)
+            .Take(5)
+            .Select(o => (o.Name, o.AccountName, o.Stage, o.EstimatedValue))
+            .ToList();
+
+        _loading = false;
+    }
+
+    private string FormatCurrency(decimal value)
+    {
+        var sym = _currency switch { "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => _currency + " " };
+        return value >= 1_000_000 ? $"{sym}{value / 1_000_000:N1}M"
+             : value >= 1_000     ? $"{sym}{value / 1_000:N1}K"
+             : $"{sym}{value:N0}";
+    }
+
+    private string FormatCurrencyShort(decimal value)
+    {
+        var sym = _currency switch { "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => "" };
+        return value >= 1_000_000 ? $"{sym}{value / 1_000_000:N1}M"
+             : value >= 1_000     ? $"{sym}{value / 1_000:N0}K"
+             : $"{sym}{value:N0}";
+    }
+}

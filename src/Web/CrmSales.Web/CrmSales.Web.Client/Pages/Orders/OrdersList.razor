@@ -2,6 +2,7 @@
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @using CrmSales.Web.Client.Services
 @inject CrmApiClient Api
+@inject IJSRuntime JS
 
 <PageTitle>Orders — CRM Sales</PageTitle>
 
@@ -10,7 +11,12 @@
         <p class="page-header-meta">Sales Pipeline</p>
         <h1>Orders</h1>
     </div>
-    <select class="form-select orders-desktop-filter" style="width:auto;min-width:150px" @bind="statusFilter" @bind:after="LoadOrders">
+    <div class="d-flex gap-2 align-items-center">
+        @if (_allOrders is not null && _allOrders.Any())
+        {
+            <button class="btn btn-outline-secondary btn-sm" @onclick="ExportCsv">Export CSV</button>
+        }
+        <select class="form-select orders-desktop-filter" style="width:auto;min-width:150px" @bind="statusFilter" @bind:after="LoadOrders">
         <option value="">All Statuses</option>
         <option value="Pending">Pending</option>
         <option value="Confirmed">Confirmed</option>
@@ -18,7 +24,8 @@
         <option value="Shipped">Shipped</option>
         <option value="Delivered">Delivered</option>
         <option value="Cancelled">Cancelled</option>
-    </select>
+        </select>
+    </div>
 </div>
 
 <!-- Summary cards -->
@@ -213,6 +220,17 @@ else
     private int ActiveCount => (_allOrders ?? []).Count(o => o.Status is "Confirmed" or "Processing" or "Shipped");
     private int CancelledCount => (_allOrders ?? []).Count(o => o.Status == "Cancelled");
     private string PrimaryCurrency => _allOrders?.FirstOrDefault()?.Currency ?? "USD";
+
+    private async Task ExportCsv()
+    {
+        var data = orders ?? _allOrders;
+        if (data is null) return;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Order #,Status,Total,Currency,Created,Shipped,Delivered");
+        foreach (var o in data)
+            sb.AppendLine($"\"{o.OrderNumber}\",\"{o.Status}\",{o.TotalAmount},\"{o.Currency}\",\"{o.CreatedAt:yyyy-MM-dd}\",\"{o.ShippedAt?.ToString("yyyy-MM-dd") ?? ""}\",\"{o.DeliveredAt?.ToString("yyyy-MM-dd") ?? ""}\"");
+        await JS.InvokeVoidAsync("downloadCsv", $"orders_{DateTime.Today:yyyyMMdd}.csv", sb.ToString());
+    }
 
     protected override async Task OnInitializedAsync()
     {

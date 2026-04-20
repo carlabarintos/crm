@@ -1,0 +1,151 @@
+@page "/products/categories"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize(Roles = "Admin")]
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+
+<PageTitle>Categories — CRM Sales</PageTitle>
+
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Catalog</p>
+        <h1>Categories</h1>
+    </div>
+    <button class="btn btn-primary" @onclick="() => { _showCreate = !_showCreate; _createError = null; }">
+        + New Category
+    </button>
+</div>
+
+@if (_showCreate)
+{
+    <div class="card mb-4 stagger-2">
+        <div class="card-header"><h6 class="mb-0">New Category</h6></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Name <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="_newName" placeholder="Category name" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Description</label>
+                    <input class="form-control" @bind="_newDescription" placeholder="Optional description" />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" @onclick="CreateCategory" disabled="@_creating">
+                        @if (_creating) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Save</span> }
+                    </button>
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(_createError))
+            {
+                <div class="alert alert-danger mt-3 mb-0">@_createError</div>
+            }
+        </div>
+    </div>
+}
+
+@if (_successMsg is not null)
+{
+    <div class="alert alert-success alert-dismissible mb-4" role="alert">
+        @_successMsg
+        <button type="button" class="btn-close" @onclick="() => _successMsg = null"></button>
+    </div>
+}
+
+<div class="mb-3 stagger-3">
+    <input class="form-control" style="max-width:300px" placeholder="Filter by name…"
+           @bind="_filter" @bind:after="StateHasChanged" />
+</div>
+
+@if (_categories is null)
+{
+    <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+}
+else
+{
+    var filtered = _categories.Where(c =>
+        string.IsNullOrEmpty(_filter) ||
+        c.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase) ||
+        (c.Description ?? "").Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    <div class="table-responsive stagger-3">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in filtered)
+                {
+                    <tr>
+                        <td style="font-weight:600;color:#111827">@c.Name</td>
+                        <td style="color:#6B7280">@(c.Description ?? "—")</td>
+                        <td>
+                            @if (c.IsActive)
+                            {
+                                <span class="badge badge-soft-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-soft-neutral">Inactive</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (!filtered.Any())
+                {
+                    <tr><td colspan="3" class="text-muted text-center py-3">No categories found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<CategoryDto>? _categories;
+    private string _filter = "";
+
+    private bool _showCreate;
+    private string _newName = "";
+    private string _newDescription = "";
+    private bool _creating;
+    private string? _createError;
+    private string? _successMsg;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+        => _categories = await Api.GetCategoriesAsync();
+
+    private async Task CreateCategory()
+    {
+        _createError = null;
+        if (string.IsNullOrWhiteSpace(_newName))
+        {
+            _createError = "Category name is required.";
+            return;
+        }
+
+        _creating = true;
+        try
+        {
+            var resp = await Api.CreateCategoryAsync(new { Name = _newName, Description = _newDescription });
+            if (resp.IsSuccessStatusCode)
+            {
+                _successMsg = $"Category \"{_newName}\" created.";
+                _newName = "";
+                _newDescription = "";
+                _showCreate = false;
+                await Load();
+            }
+            else
+            {
+                _createError = await resp.Content.ReadAsStringAsync();
+            }
+        }
+        finally { _creating = false; }
+    }
+}

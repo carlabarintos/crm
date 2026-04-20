@@ -3,6 +3,7 @@
 @using CrmSales.Web.Client.Services
 @inject CrmApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>@(quote?.QuoteNumber ?? "Quote")</PageTitle>
 
@@ -196,6 +197,13 @@ else if (quote is not null)
                     @if (!string.IsNullOrEmpty(actionError)) { <div class="text-danger small">@actionError</div> }
                     @if (!string.IsNullOrEmpty(actionSuccess)) { <div class="text-success small">@actionSuccess</div> }
 
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="PrintQuote">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-right:4px;vertical-align:-1px">
+                            <rect x="2" y="5" width="10" height="7" rx="1"/><path d="M4 5V2h6v3" stroke-linecap="round"/>
+                            <path d="M4 9h6M4 11h4" stroke-linecap="round"/>
+                        </svg>
+                        Print Quote
+                    </button>
                     <a href="/quotes" class="btn btn-outline-secondary btn-sm">Back to Quotes</a>
                 </div>
             </div>
@@ -223,6 +231,137 @@ else if (quote is not null)
         </div>
     </div>
 }
+
+<!-- Print layout: hidden on screen, shown during browser print -->
+@if (quote is not null)
+{
+    <div class="qprint-layout">
+        <div class="qprint-header">
+            <div>
+                <div class="qprint-company">CRM Sales</div>
+                <div class="qprint-sub">Sales Quotation</div>
+            </div>
+            <div class="text-end">
+                <div class="qprint-num">@quote.QuoteNumber</div>
+                <div class="qprint-meta">Created: @quote.CreatedAt.ToString("MMM dd, yyyy")</div>
+                @if (quote.ExpiryDate.HasValue)
+                {
+                    <div class="qprint-meta">Expires: @quote.ExpiryDate.Value.ToString("MMM dd, yyyy")</div>
+                }
+                <div class="qprint-meta">Status: @quote.Status</div>
+            </div>
+        </div>
+
+        <table class="qprint-table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th class="text-end">Qty</th>
+                    <th class="text-end">Unit Price</th>
+                    <th class="text-end">Discount</th>
+                    <th class="text-end">Line Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!quote.LineItems.Any())
+                {
+                    <tr><td colspan="5" style="text-align:center;color:#6B7280">No line items.</td></tr>
+                }
+                @foreach (var l in quote.LineItems)
+                {
+                    <tr>
+                        <td>@l.ProductName</td>
+                        <td class="text-end">@l.Quantity</td>
+                        <td class="text-end">@l.UnitPrice.ToString("F2")</td>
+                        <td class="text-end">@(l.DiscountPercent > 0 ? $"{l.DiscountPercent}%" : "—")</td>
+                        <td class="text-end">@l.LineTotal.ToString("F2")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                @if (quote.DiscountTotal > 0)
+                {
+                    <tr>
+                        <td colspan="4" class="text-end" style="color:#6B7280">Discount</td>
+                        <td class="text-end" style="color:#6B7280">-@quote.DiscountTotal.ToString("F2")</td>
+                    </tr>
+                }
+                <tr class="qprint-total-row">
+                    <td colspan="4" class="text-end">Total (@quote.Currency)</td>
+                    <td class="text-end">@quote.TotalAmount.ToString("F2")</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        @if (!string.IsNullOrWhiteSpace(quote.Notes))
+        {
+            <div class="qprint-notes">
+                <strong>Notes:</strong> @quote.Notes
+            </div>
+        }
+
+        <div class="qprint-footer">Thank you for your business.</div>
+    </div>
+}
+
+<style>
+    .qprint-layout { display: none; }
+
+    @@media print {
+        body * { visibility: hidden; }
+        .qprint-layout, .qprint-layout * { visibility: visible; display: revert; }
+        .qprint-layout {
+            display: block !important;
+            position: fixed;
+            inset: 0;
+            padding: 2.5cm 2cm;
+            background: #fff;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 11pt;
+            color: #111;
+        }
+        .qprint-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #111;
+        }
+        .qprint-company { font-size: 20pt; font-weight: 700; }
+        .qprint-sub { font-size: 10pt; color: #555; margin-top: 2px; }
+        .qprint-num { font-size: 14pt; font-weight: 700; }
+        .qprint-meta { font-size: 9pt; color: #555; }
+        .qprint-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+        .qprint-table th {
+            border-bottom: 1px solid #555;
+            padding: 6px 8px;
+            font-size: 9pt;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+        .qprint-table td { padding: 6px 8px; border-bottom: 1px solid #E5E7EB; }
+        .qprint-total-row td { font-weight: 700; border-top: 2px solid #111; border-bottom: none; }
+        .text-end { text-align: right; }
+        .qprint-notes {
+            border: 1px solid #E5E7EB;
+            border-radius: 4px;
+            padding: .75rem 1rem;
+            font-size: 10pt;
+            margin-bottom: 2rem;
+        }
+        .qprint-footer {
+            text-align: center;
+            font-size: 9pt;
+            color: #9CA3AF;
+            margin-top: 2rem;
+        }
+    }
+</style>
 
 @code {
     [Parameter] public Guid Id { get; set; }
@@ -352,6 +491,8 @@ else if (quote is not null)
         }
         finally { actionSaving = false; }
     }
+
+    private async Task PrintQuote() => await JS.InvokeVoidAsync("window.print");
 
     private static string GetStatusBadge(string status) => status switch
     {

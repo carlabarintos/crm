@@ -1,3 +1,16 @@
+// CSV download helper
+window.downloadCsv = function (filename, content) {
+    var blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
 // Native EventSource wrapper for SSE notifications
 window.notifSse = (function () {
     let _src = null;

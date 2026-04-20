@@ -297,6 +297,37 @@ else
 </div>
 </div>
 
+<!-- Recent Activity -->
+@if (recentActivity.Count > 0)
+{
+    <button type="button" class="mob-section-btn @(_activityOpen ? "open" : "")" @onclick="() => _activityOpen = !_activityOpen">
+        <span>Recent Activity</span>
+        <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+    </button>
+    <div class="mob-collapse @(_activityOpen ? "open" : "")">
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span style="font-size:14px;font-weight:700;color:#111827">Recent Activity</span>
+            <a href="/audit" class="btn btn-sm btn-outline-secondary" style="font-size:11px">View all</a>
+        </div>
+        <div class="card-body p-0">
+            <div class="act-feed">
+                @foreach (var log in recentActivity)
+                {
+                    <div class="act-row">
+                        <div class="act-dot @GetActDotClass(log.EventType)"></div>
+                        <div class="act-body">
+                            <div class="act-desc">@log.Description</div>
+                            <div class="act-meta">@log.Actor &middot; @FormatTimeAgo(log.OccurredAt)</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    </div>
+}
+
 } @* end loading else *@
 
 <style>
@@ -385,6 +416,27 @@ else
     .qa-label span { display: block; font-size: 11px; color: #9CA3AF; }
     .qa-arrow { color: #D1D5DB; flex-shrink: 0; transition: color .15s, transform .15s; }
     .quick-action-btn:hover .qa-arrow { color: #6366f1; transform: translateX(2px); }
+
+    .act-feed { padding: .25rem 0; }
+    .act-row {
+        display: flex;
+        align-items: flex-start;
+        gap: .875rem;
+        padding: .6rem 1.25rem;
+        border-bottom: 1px solid #F9FAFB;
+    }
+    .act-row:last-child { border-bottom: none; }
+    .act-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #D1D5DB; margin-top: 5px; flex-shrink: 0;
+    }
+    .act-dot-create  { background: #10b981; }
+    .act-dot-update  { background: #6366f1; }
+    .act-dot-delete  { background: #ef4444; }
+    .act-dot-status  { background: #f59e0b; }
+    .act-body { min-width: 0; }
+    .act-desc { font-size: 13px; color: #111827; font-weight: 500; }
+    .act-meta { font-size: 11.5px; color: #9CA3AF; margin-top: 1px; }
 </style>
 
 @code {
@@ -401,11 +453,13 @@ else
     private bool loading = true;
     private bool _kpiOpen = true;
     private bool _pipelineOpen = true;
+    private bool _activityOpen = true;
 
     private List<OpportunityDto> opps = [];
     private List<QuoteDto> quotes = [];
     private List<OrderDto> orders = [];
     private List<ProductDto> products = [];
+    private List<AuditLogDto> recentActivity = [];
 
     private decimal pipelineValue;
     private string pipelineCurrency = "PHP";
@@ -439,15 +493,17 @@ else
             return;
         }
 
-        var oppTask   = Api.GetOpportunitiesAsync();
-        var quoteTask = Api.GetQuotesAsync();
-        var orderTask = Api.GetOrdersAsync();
-        var prodTask  = Api.GetProductsAsync(isActive: true);
+        var oppTask      = Api.GetOpportunitiesAsync();
+        var quoteTask    = Api.GetQuotesAsync();
+        var orderTask    = Api.GetOrdersAsync();
+        var prodTask     = Api.GetProductsAsync(isActive: true);
+        var activityTask = Api.GetAuditLogsAsync(page: 1, pageSize: 8);
 
-        opps     = await oppTask   ?? [];
-        quotes   = await quoteTask ?? [];
-        orders   = await orderTask ?? [];
-        products = await prodTask  ?? [];
+        opps     = await oppTask      ?? [];
+        quotes   = await quoteTask    ?? [];
+        orders   = await orderTask    ?? [];
+        products = await prodTask     ?? [];
+        recentActivity = (await activityTask)?.Items ?? [];
 
         Compute();
         loading = false;
@@ -500,6 +556,25 @@ else
         if (!stageCounts.TryGetValue(stage, out var data) || data.Count == 0) return 0;
         var pct = (double)(data.Value / maxStageValue * 85);
         return Math.Max(pct, 10);
+    }
+
+    private static string GetActDotClass(string eventType)
+    {
+        var lower = eventType.ToLowerInvariant();
+        if (lower.Contains("creat") || lower.Contains("add")) return "act-dot-create";
+        if (lower.Contains("delet") || lower.Contains("remov") || lower.Contains("cancel")) return "act-dot-delete";
+        if (lower.Contains("status") || lower.Contains("sent") || lower.Contains("accept") || lower.Contains("reject") || lower.Contains("ship") || lower.Contains("deliver") || lower.Contains("expir")) return "act-dot-status";
+        return "act-dot-update";
+    }
+
+    private static string FormatTimeAgo(DateTime utc)
+    {
+        var diff = DateTime.UtcNow - utc;
+        if (diff.TotalMinutes < 2) return "just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+        return utc.ToString("MMM d");
     }
 
     private string FormatCurrency(decimal value)

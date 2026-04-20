@@ -2,6 +2,7 @@
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @using CrmSales.Web.Client.Services
 @inject CrmApiClient Api
+@inject IJSRuntime JS
 
 <PageTitle>Opportunities — CRM Sales</PageTitle>
 
@@ -11,7 +12,13 @@
         <p class="page-header-meta">Sales Pipeline</p>
         <h1>Opportunities</h1>
     </div>
-    <a href="/opportunities/new" class="btn btn-primary">+ New Opportunity</a>
+    <div class="d-flex gap-2">
+        @if (opportunities is not null && opportunities.Any())
+        {
+            <button class="btn btn-outline-secondary btn-sm" @onclick="ExportCsv">Export CSV</button>
+        }
+        <a href="/opportunities/new" class="btn btn-primary">+ New Opportunity</a>
+    </div>
 </div>
 
 <!-- Summary cards -->
@@ -284,6 +291,16 @@ else
     private string WinRate => (WonCount + LostCount) == 0 ? "—"
         : $"{(decimal)WonCount / (WonCount + LostCount) * 100:N0}%";
     private string PrimaryCurrency => opportunities?.FirstOrDefault()?.Currency ?? "USD";
+
+    private async Task ExportCsv()
+    {
+        if (opportunities is null) return;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Name,Account,Stage,Value,Currency,Probability,Close Date");
+        foreach (var o in opportunities)
+            sb.AppendLine($"\"{o.Name}\",\"{o.AccountName}\",\"{o.Stage}\",{o.EstimatedValue},\"{o.Currency}\",{o.Probability},\"{o.ExpectedCloseDate?.ToString("yyyy-MM-dd") ?? ""}\"");
+        await JS.InvokeVoidAsync("downloadCsv", $"opportunities_{DateTime.Today:yyyyMMdd}.csv", sb.ToString());
+    }
 
     protected override async Task OnInitializedAsync() => await LoadOpportunities();
 

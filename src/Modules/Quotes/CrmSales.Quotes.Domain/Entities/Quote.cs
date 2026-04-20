@@ -99,6 +99,14 @@ public sealed class Quote : AggregateRoot<Guid>
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void Expire()
+    {
+        if (Status != QuoteStatus.Sent)
+            throw new InvalidOperationException("Only sent quotes can be expired.");
+        Status = QuoteStatus.Expired;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     private static string GenerateQuoteNumber() =>
         $"QT-{DateTime.UtcNow:yyyyMM}-{Guid.NewGuid().ToString()[..6].ToUpperInvariant()}";
 }

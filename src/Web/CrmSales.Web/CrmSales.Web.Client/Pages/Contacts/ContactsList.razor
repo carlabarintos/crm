@@ -3,6 +3,7 @@
 @using CrmSales.Web.Client.Services
 @inject CrmApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Contacts</PageTitle>
 
@@ -11,7 +12,13 @@
         <h4 class="mb-0">Contacts</h4>
         <p class="text-muted small mb-0">Manage your customer contacts</p>
     </div>
-    <a href="/contacts/new" class="btn btn-primary btn-sm">+ New Contact</a>
+    <div class="d-flex gap-2">
+        @if (contacts is not null && contacts.Any())
+        {
+            <button class="btn btn-outline-secondary btn-sm" @onclick="ExportCsv">Export CSV</button>
+        }
+        <a href="/contacts/new" class="btn btn-primary btn-sm">+ New Contact</a>
+    </div>
 </div>
 
 <div class="card mb-3">
@@ -98,6 +105,16 @@ else
     private async Task Load()
     {
         contacts = await Api.GetContactsAsync(string.IsNullOrWhiteSpace(search) ? null : search);
+    }
+
+    private async Task ExportCsv()
+    {
+        if (contacts is null) return;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Name,Email,Phone,Company,Job Title");
+        foreach (var c in contacts)
+            sb.AppendLine($"\"{c.FullName}\",\"{c.Email ?? ""}\",\"{c.Phone ?? ""}\",\"{c.Company ?? ""}\",\"{c.JobTitle ?? ""}\"");
+        await JS.InvokeVoidAsync("downloadCsv", $"contacts_{DateTime.Today:yyyyMMdd}.csv", sb.ToString());
     }
 
     private async Task OnSearch(ChangeEventArgs e)

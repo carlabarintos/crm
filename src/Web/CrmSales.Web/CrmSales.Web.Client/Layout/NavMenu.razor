@@ -97,6 +97,20 @@
                 Products
             </NavLink>
         </div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="products/categories">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="1.5" y="1.5" width="5" height="5" rx="1"/>
+                        <rect x="8.5" y="1.5" width="5" height="5" rx="1"/>
+                        <rect x="1.5" y="8.5" width="5" height="5" rx="1"/>
+                        <rect x="8.5" y="8.5" width="5" height="5" rx="1"/>
+                    </svg>
+                </span>
+                Categories
+            </NavLink>
+        </div>
         </AuthorizeView>
 
         <span class="nav-section-label">People</span>
@@ -140,6 +154,21 @@
                 Event Log
             </NavLink>
         </div>
+
+        <AuthorizeView Roles="Admin,SalesManager" Context="reportCtx">
+        <span class="nav-section-label">Analytics</span>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="reports">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M2 12V8M5.5 12V5M9 12V7M12.5 12V3" stroke-linecap="round"/>
+                        <path d="M1 13h13" stroke-linecap="round"/>
+                    </svg>
+                </span>
+                Reports
+            </NavLink>
+        </div>
+        </AuthorizeView>
 
         </AuthorizeView>
 
