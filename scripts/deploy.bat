@@ -19,7 +19,7 @@ set GITHUB_OWNER=carlabarintos
 set GITHUB_TOKEN=your_github_pat_here
 set HETZNER_HOST=178.104.236.119
 set HETZNER_USER=root
-set SSH_KEY=%USERPROFILE%\.ssh\crm-deploy
+set SSH_KEY=%USERPROFILE%\.ssh\id_ed25519
 REM ─────────────────────────────────────────────────────────────────────────────
 
 echo.
