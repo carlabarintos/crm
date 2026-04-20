@@ -1,7 +1,9 @@
+using CrmSales.Api.Auditing;
 using CrmSales.Api.Endpoints;
 using CrmSales.Api.Master;
 using CrmSales.Api.Middleware;
 using CrmSales.Api.MultiTenancy;
+using CrmSales.Api.Notifications;
 using CrmSales.Api.Services;
 using CrmSales.Contacts.Application;
 using CrmSales.Contacts.Infrastructure;
@@ -89,6 +91,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesTransformer>();
 builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddSingleton<INotificationBroadcaster, NotificationBroadcaster>();
+builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<TenantProvisioner>();
 builder.Services.AddDbContext<MasterDbContext>(opts =>
     opts.UseNpgsql(connectionString));
@@ -178,9 +182,13 @@ using (var scope = app.Services.CreateScope())
         checkCmd.CommandText = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'master' AND table_name = 'Companies')";
         var companiesExists = (bool)(await checkCmd.ExecuteScalarAsync())!;
 
-        if (!companiesExists)
+        await using var auditCheckCmd = masterConn.CreateCommand();
+        auditCheckCmd.CommandText = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'master' AND table_name = 'AuditLogs')";
+        var auditLogsExists = (bool)(await auditCheckCmd.ExecuteScalarAsync())!;
+
+        if (!companiesExists || !auditLogsExists)
         {
-            app.Logger.LogInformation("master.Companies not found — creating tables.");
+            app.Logger.LogInformation("master schema tables missing — creating tables.");
             await masterConn.CloseAsync();
             await masterCtx.GetService<IRelationalDatabaseCreator>().CreateTablesAsync();
         }
@@ -238,5 +246,7 @@ app.MapContactEndpoints();
 app.MapOpportunityEndpoints();
 app.MapQuoteEndpoints();
 app.MapOrderEndpoints();
+app.MapNotificationEndpoints();
+app.MapAuditEndpoints();
 
 app.Run();

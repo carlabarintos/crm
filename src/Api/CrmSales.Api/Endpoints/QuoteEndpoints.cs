@@ -1,3 +1,6 @@
+using CrmSales.Api.Auditing;
+using CrmSales.SharedKernel.MultiTenancy;
+using CrmSales.Api.Notifications;
 using CrmSales.Opportunities.Domain.Entities;
 using CrmSales.Opportunities.Domain.Repositories;
 using CrmSales.Quotes.Domain.Entities;
@@ -53,10 +56,26 @@ public static class QuoteEndpoints
             });
         });
 
-        group.MapPost("/", async (CreateQuoteRequest req, IQuoteRepository repo, CancellationToken ct) =>
+        group.MapPost("/", async (
+            CreateQuoteRequest req,
+            HttpContext http,
+            IQuoteRepository repo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
+            CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var quote = Quote.Create(req.OpportunityId, req.OwnerId, req.Currency, req.ExpiryDate, req.Notes);
             await repo.AddAsync(quote, ct);
+
+            var msg = $"Quote {quote.QuoteNumber} created by {actor}";
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                "quote.created", "Quote Created", msg,
+                quote.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, "quote.created", "Quote",
+                quote.Id.ToString(), msg, actor, ct);
+
             return Results.Created($"/api/quotes/{quote.Id}", new { quote.Id, quote.QuoteNumber });
         });
 
@@ -72,32 +91,49 @@ public static class QuoteEndpoints
             return Results.Ok(new { quote.TotalAmount });
         });
 
-        group.MapPost("/{id:guid}/send", async (Guid id, IQuoteRepository repo, CancellationToken ct) =>
+        group.MapPost("/{id:guid}/send", async (
+            Guid id,
+            HttpContext http,
+            IQuoteRepository repo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
+            CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var quote = await repo.GetByIdAsync(id, ct);
             if (quote is null) return Results.NotFound();
             quote.Send();
             await repo.UpdateAsync(quote, ct);
+
+            var msg = $"Quote {quote.QuoteNumber} sent to customer by {actor}";
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                "quote.sent", "Quote Sent", msg,
+                quote.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, "quote.sent", "Quote",
+                quote.Id.ToString(), msg, actor, ct);
+
             return Results.Ok(new { quote.Id, Status = quote.Status.ToString() });
         }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager", "SalesRep"));
 
-        // Accept a quote — persists the change, auto-closes the linked opportunity (ClosedWon),
-        // then publishes QuoteAcceptedMessage to RabbitMQ so Orders can auto-create an Order.
         group.MapPost("/{id:guid}/accept", async (
             Guid id,
             HttpContext http,
             IQuoteRepository repo,
             IOpportunityRepository oppRepo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
             IMessageBus bus,
             CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var quote = await repo.GetByIdAsync(id, ct);
             if (quote is null) return Results.NotFound();
 
             quote.Accept();
             await repo.UpdateAsync(quote, ct);
 
-            // Auto-close the linked opportunity as Won
             var opp = await oppRepo.GetByIdAsync(quote.OpportunityId, ct);
             if (opp is not null && !opp.IsClosed)
             {
@@ -107,42 +143,55 @@ public static class QuoteEndpoints
 
             var tenantId = http.User.FindFirst("company_id")?.Value ?? "master";
 
-            // Publish async integration event → Wolverine routes to RabbitMQ → Orders creates Order
             await bus.PublishAsync(new QuoteAcceptedMessage(
-                quote.Id,
-                quote.QuoteNumber,
-                quote.OpportunityId,
-                quote.TotalAmount,
-                quote.Currency,
-                quote.OwnerId,
+                quote.Id, quote.QuoteNumber, quote.OpportunityId,
+                quote.TotalAmount, quote.Currency, quote.OwnerId,
                 quote.LineItems
                     .Select(l => new QuoteLineItemMessage(l.ProductId, l.ProductName, l.Quantity, l.UnitPrice))
                     .ToList(),
                 TenantId: tenantId));
 
+            var msg = $"Quote {quote.QuoteNumber} accepted by {actor}";
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                "quote.accepted", "Quote Accepted", msg,
+                quote.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, "quote.accepted", "Quote",
+                quote.Id.ToString(), msg, actor, ct);
+
             return Results.Ok(new { quote.Id, Status = quote.Status.ToString() });
         }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager", "SalesRep"));
 
-        // Reject a quote — persists the change and auto-closes the linked opportunity as Lost.
         group.MapPost("/{id:guid}/reject", async (
             Guid id,
             [FromBody] RejectQuoteRequest req,
+            HttpContext http,
             IQuoteRepository repo,
             IOpportunityRepository oppRepo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
             CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var quote = await repo.GetByIdAsync(id, ct);
             if (quote is null) return Results.NotFound();
             quote.Reject(req.Reason);
             await repo.UpdateAsync(quote, ct);
 
-            // Auto-close the linked opportunity as Lost
             var opp = await oppRepo.GetByIdAsync(quote.OpportunityId, ct);
             if (opp is not null && !opp.IsClosed)
             {
                 opp.ProgressStage(OpportunityStage.ClosedLost);
                 await oppRepo.UpdateAsync(opp, ct);
             }
+
+            var msg = $"Quote {quote.QuoteNumber} rejected by {actor}" +
+                      (string.IsNullOrWhiteSpace(req.Reason) ? "" : $": {req.Reason}");
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                "quote.rejected", "Quote Rejected", msg,
+                quote.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, "quote.rejected", "Quote",
+                quote.Id.ToString(), msg, actor, ct);
 
             return Results.Ok(new { quote.Id, Status = quote.Status.ToString() });
         }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager"));

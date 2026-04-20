@@ -1,3 +1,6 @@
+using CrmSales.Api.Auditing;
+using CrmSales.SharedKernel.MultiTenancy;
+using CrmSales.Api.Notifications;
 using CrmSales.Orders.Domain.Entities;
 using CrmSales.Orders.Domain.Repositories;
 using CrmSales.Products.Domain.Repositories;
@@ -49,42 +52,94 @@ public static class OrderEndpoints
             });
         });
 
-        group.MapPost("/{id:guid}/confirm", async (Guid id, IOrderRepository repo, CancellationToken ct) =>
+        group.MapPost("/{id:guid}/confirm", async (
+            Guid id,
+            HttpContext http,
+            IOrderRepository repo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
+            CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var order = await repo.GetByIdAsync(id, ct);
             if (order is null) return Results.NotFound();
             order.Confirm();
             await repo.UpdateAsync(order, ct);
+
+            var msg = $"Order {order.OrderNumber} confirmed by {actor}";
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                "order.confirmed", "Order Confirmed", msg,
+                order.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, "order.confirmed", "Order",
+                order.Id.ToString(), msg, actor, ct);
+
             return Results.Ok(new { order.Id, Status = order.Status.ToString() });
         });
 
-        group.MapPost("/{id:guid}/process", async (Guid id, IOrderRepository repo, CancellationToken ct) =>
+        group.MapPost("/{id:guid}/process", async (
+            Guid id,
+            HttpContext http,
+            IOrderRepository repo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
+            CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var order = await repo.GetByIdAsync(id, ct);
             if (order is null) return Results.NotFound();
             order.StartProcessing();
             await repo.UpdateAsync(order, ct);
+
+            var msg = $"Order {order.OrderNumber} started processing by {actor}";
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                "order.processing", "Order Processing", msg,
+                order.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, "order.processing", "Order",
+                order.Id.ToString(), msg, actor, ct);
+
             return Results.Ok(new { order.Id, Status = order.Status.ToString() });
         });
 
         group.MapPost("/{id:guid}/ship", async (
             Guid id,
             [FromBody] ShipOrderRequest req,
-            IOrderRepository repo, CancellationToken ct) =>
+            HttpContext http,
+            IOrderRepository repo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
+            CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var order = await repo.GetByIdAsync(id, ct);
             if (order is null) return Results.NotFound();
             order.Ship(req.TrackingInfo);
             await repo.UpdateAsync(order, ct);
+
+            var msg = $"Order {order.OrderNumber} shipped by {actor}" +
+                      (string.IsNullOrWhiteSpace(req.TrackingInfo) ? "" : $" — tracking: {req.TrackingInfo}");
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                "order.shipped", "Order Shipped", msg,
+                order.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, "order.shipped", "Order",
+                order.Id.ToString(), msg, actor, ct);
+
             return Results.Ok(new { order.Id, Status = order.Status.ToString(), order.ShippedAt });
         });
 
         group.MapPost("/{id:guid}/deliver", async (
             Guid id,
+            HttpContext http,
             IOrderRepository repo,
             IProductRepository productRepo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
             CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var order = await repo.GetByIdAsync(id, ct);
             if (order is null) return Results.NotFound();
             order.Deliver();
@@ -100,18 +155,39 @@ public static class OrderEndpoints
                 }
             }
 
+            var msg = $"Order {order.OrderNumber} delivered by {actor}";
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                "order.delivered", "Order Delivered", msg,
+                order.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, "order.delivered", "Order",
+                order.Id.ToString(), msg, actor, ct);
+
             return Results.Ok(new { order.Id, Status = order.Status.ToString(), order.DeliveredAt });
         });
 
         group.MapPost("/{id:guid}/cancel", async (
             Guid id,
             [FromBody] CancelOrderRequest req,
-            IOrderRepository repo, CancellationToken ct) =>
+            HttpContext http,
+            IOrderRepository repo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
+            CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var order = await repo.GetByIdAsync(id, ct);
             if (order is null) return Results.NotFound();
             order.Cancel(req.Reason);
             await repo.UpdateAsync(order, ct);
+
+            var msg = $"Order {order.OrderNumber} cancelled by {actor}: {req.Reason}";
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                "order.cancelled", "Order Cancelled", msg,
+                order.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, "order.cancelled", "Order",
+                order.Id.ToString(), msg, actor, ct);
+
             return Results.Ok(new { order.Id, Status = order.Status.ToString() });
         });
 

@@ -134,6 +134,14 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> DeleteOrderLineItemAsync(Guid id, Guid lineItemId)
         => _http.DeleteAsync($"/api/orders/{id}/line-items/{lineItemId}");
 
+    // ── Notifications ─────────────────────────────────────────────────────
+    public Task<HttpResponseMessage> GetNotificationStreamAsync(CancellationToken ct)
+        => _http.GetAsync("/api/notifications/stream", HttpCompletionOption.ResponseHeadersRead, ct);
+
+    // ── Audit ──────────────────────────────────────────────────────────────
+    public Task<AuditPageDto?> GetAuditLogsAsync(int page = 1, int pageSize = 50)
+        => _http.GetFromJsonAsync<AuditPageDto>($"/api/audit?page={page}&pageSize={pageSize}");
+
     // ── Companies ─────────────────────────────────────────────────────────
     public Task<List<CompanyDto>?> GetCompaniesAsync()
         => _http.GetFromJsonAsync<List<CompanyDto>>("/api/companies");
@@ -212,3 +220,13 @@ public record OrderLineItemDto(Guid Id, Guid ProductId, string ProductName,
 public record UserDto(Guid Id, string Email, string FirstName, string LastName, string FullName, string Role, bool IsActive);
 
 public record CompanyDto(Guid Id, string Name, string Slug, bool IsActive, DateTime CreatedAt);
+
+public record NotificationEventDto(
+    string Type, string Title, string Message,
+    string EntityId, string Actor, string TenantId, DateTime OccurredAt);
+
+public record AuditLogDto(
+    Guid Id, string EventType, string EntityType, string EntityId,
+    string Description, string Actor, DateTime OccurredAt);
+
+public record AuditPageDto(int Total, int Page, int PageSize, List<AuditLogDto> Items);

@@ -1,3 +1,6 @@
+using CrmSales.Api.Auditing;
+using CrmSales.SharedKernel.MultiTenancy;
+using CrmSales.Api.Notifications;
 using CrmSales.Opportunities.Domain.Entities;
 using CrmSales.Opportunities.Domain.Repositories;
 using Microsoft.AspNetCore.Mvc;
@@ -43,8 +46,16 @@ public static class OpportunityEndpoints
             });
         });
 
-        group.MapPost("/", async (CreateOpportunityRequest req, IOpportunityRepository repo, CancellationToken ct) =>
+        group.MapPost("/", async (
+            CreateOpportunityRequest req,
+            HttpContext http,
+            IOpportunityRepository repo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
+            CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var opp = Opportunity.Create(
                 req.Name, req.AccountName, req.ContactName,
                 req.ContactEmail, req.ContactPhone,
@@ -52,19 +63,53 @@ public static class OpportunityEndpoints
                 req.ExpectedCloseDate, req.Description, req.OwnerId,
                 req.ContactId);
             await repo.AddAsync(opp, ct);
+
+            var msg = $"'{opp.Name}' opportunity created by {actor}";
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                "opportunity.created", "Opportunity Created", msg,
+                opp.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, "opportunity.created", "Opportunity",
+                opp.Id.ToString(), msg, actor, ct);
+
             return Results.Created($"/api/opportunities/{opp.Id}", new { opp.Id, opp.Name });
         });
 
         group.MapPatch("/{id:guid}/stage", async (
             Guid id,
             [FromBody] ChangeStageRequest req,
+            HttpContext http,
             IOpportunityRepository repo,
+            INotificationBroadcaster broadcaster,
+            IAuditService audit,
+            ITenantContext tenant,
             CancellationToken ct) =>
         {
+            var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var opp = await repo.GetByIdAsync(id, ct);
             if (opp is null) return Results.NotFound();
+            var oldStage = opp.Stage.ToString();
             opp.ProgressStage(req.Stage);
             await repo.UpdateAsync(opp, ct);
+
+            string type, title, msg;
+            if (opp.Stage == OpportunityStage.ClosedWon)
+            {
+                type = "opportunity.won";
+                title = "Opportunity Won!";
+                msg = $"'{opp.Name}' won! {opp.EstimatedValue:N0} {opp.Currency} by {actor}";
+            }
+            else
+            {
+                type = "opportunity.stage_changed";
+                title = "Stage Updated";
+                msg = $"'{opp.Name}' moved from {oldStage} to {opp.Stage} by {actor}";
+            }
+
+            await broadcaster.BroadcastAsync(new NotificationEvent(
+                type, title, msg, opp.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
+            await audit.LogAsync(tenant.TenantId, type, "Opportunity",
+                opp.Id.ToString(), msg, actor, ct);
+
             return Results.Ok(new { opp.Id, Stage = opp.Stage.ToString(), opp.Probability });
         });
 
