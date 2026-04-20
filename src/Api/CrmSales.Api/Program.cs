@@ -50,7 +50,9 @@ builder.Services.AddHttpClient<KeycloakAdminClient>();
 // ── JWT Bearer authentication (Keycloak) ──────────────────────────────────
 var keycloakBase = builder.Configuration["Keycloak:AdminUrl"] ?? "http://localhost:8080";
 var keycloakRealm = builder.Configuration["Keycloak:Realm"] ?? "crm";
-var keycloakAuthority = $"{keycloakBase}/realms/{keycloakRealm}";
+// PublicUrl is the browser-facing Keycloak URL used as JWT issuer; falls back to AdminUrl
+var keycloakPublic = builder.Configuration["Keycloak:PublicUrl"] ?? keycloakBase;
+var keycloakAuthority = $"{keycloakPublic}/realms/{keycloakRealm}";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
