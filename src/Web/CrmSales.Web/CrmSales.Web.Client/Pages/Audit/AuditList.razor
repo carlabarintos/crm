@@ -305,7 +305,7 @@ else
     {
         _data = null;
         _data = await Api.GetAuditLogsAsync(
-            page: _page, pageSize: 30,
+            page: _page, pageSize: 10,
             search: NullIfEmpty(_filterSearch),
             eventType: NullIfEmpty(_filterEventType),
             entityType: NullIfEmpty(_filterEntityType),
