@@ -55,7 +55,6 @@
 
 /* ── Mobile toggler ───────────────────────────────────────── */
 .navbar-toggler {
-    appearance: none;
     cursor: pointer;
     width: 2.5rem;
     height: 2rem;
@@ -65,8 +64,9 @@
     border: 1px solid rgba(255,255,255,.15);
     border-radius: 6px;
     background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255,255,255,0.6%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center/1.3rem rgba(255,255,255,.06);
+    padding: 0;
 }
-.navbar-toggler:checked { background-color: rgba(255,255,255,.1); }
+.navbar-toggler.is-open { background-color: rgba(255,255,255,.1); }
 
 /* ── Section labels ───────────────────────────────────────── */
 .nav-section-label {
@@ -181,7 +181,7 @@
     scrollbar-width: none;
 }
 .nav-scrollable::-webkit-scrollbar { display: none; }
-.navbar-toggler:checked ~ .nav-scrollable { display: flex; }
+.nav-scrollable.show { display: flex; }
 
 @media (min-width: 641px) {
     .navbar-toggler { display: none; }

@@ -10,7 +10,7 @@
         <p class="page-header-meta">Sales Pipeline</p>
         <h1>Orders</h1>
     </div>
-    <select class="form-select" style="width:auto;min-width:150px" @bind="statusFilter" @bind:after="LoadOrders">
+    <select class="form-select orders-desktop-filter" style="width:auto;min-width:150px" @bind="statusFilter" @bind:after="LoadOrders">
         <option value="">All Statuses</option>
         <option value="Pending">Pending</option>
         <option value="Confirmed">Confirmed</option>
@@ -19,6 +19,65 @@
         <option value="Delivered">Delivered</option>
         <option value="Cancelled">Cancelled</option>
     </select>
+</div>
+
+<!-- Summary cards -->
+@if (_allOrders is not null)
+{
+    <button type="button" class="mob-section-btn @(_statsOpen ? "open" : "")" @onclick="() => _statsOpen = !_statsOpen">
+        <span>Summary</span>
+        <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+    </button>
+    <div class="mob-collapse @(_statsOpen ? "open" : "")">
+    <div class="row g-3 mb-4 stagger-2">
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Total Orders</div>
+                <div class="stat-card-value" style="color:#111827">@_allOrders.Count</div>
+                <div class="stat-card-sub">all time</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Revenue</div>
+                <div class="stat-card-value text-success">@FormatAmount(DeliveredRevenue, PrimaryCurrency)</div>
+                <div class="stat-card-sub">@DeliveredCount delivered</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Active</div>
+                <div class="stat-card-value" style="color:#0EA5E9">@ActiveCount</div>
+                <div class="stat-card-sub">confirmed · processing · shipped</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Cancelled</div>
+                <div class="stat-card-value text-danger">@CancelledCount</div>
+                <div class="stat-card-sub">of @_allOrders.Count total</div>
+            </div>
+        </div>
+    </div>
+    </div>
+}
+
+<button type="button" class="mob-section-btn @(_filtersOpen ? "open" : "")" @onclick="() => _filtersOpen = !_filtersOpen">
+    <span>Filters</span>
+    <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+</button>
+<div class="mob-collapse @(_filtersOpen ? "open" : "")">
+    <div class="mb-3">
+        <select class="form-select" style="width:100%" @bind="statusFilter" @bind:after="LoadOrders">
+            <option value="">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Confirmed">Confirmed</option>
+            <option value="Processing">Processing</option>
+            <option value="Shipped">Shipped</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Cancelled">Cancelled</option>
+        </select>
+    </div>
 </div>
 
 @if (orders is null)
@@ -93,6 +152,29 @@ else
 }
 
 <style>
+    .stat-card {
+        background: #fff;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+    }
+    .stat-card-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #9CA3AF;
+        margin-bottom: .3rem;
+    }
+    .stat-card-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+        margin-bottom: .2rem;
+    }
+    .stat-card-sub { font-size: 11.5px; color: #9CA3AF; }
+
     @@keyframes lst-shimmer {
         0%   { background-position: -400px 0; }
         100% { background-position:  400px 0; }
@@ -114,16 +196,37 @@ else
         width: 60px; height: 60px; border-radius: 16px; background: #F3F4F6;
         display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;
     }
+    @@media (max-width: 640.98px) {
+        .orders-desktop-filter { display: none; }
+    }
 </style>
 
 @code {
     private List<OrderDto>? orders;
+    private List<OrderDto>? _allOrders;
     private string statusFilter = "";
+    private bool _statsOpen = true;
+    private bool _filtersOpen = true;
 
-    protected override async Task OnInitializedAsync() => await LoadOrders();
+    private decimal DeliveredRevenue => (_allOrders ?? []).Where(o => o.Status == "Delivered").Sum(o => o.TotalAmount);
+    private int DeliveredCount => (_allOrders ?? []).Count(o => o.Status == "Delivered");
+    private int ActiveCount => (_allOrders ?? []).Count(o => o.Status is "Confirmed" or "Processing" or "Shipped");
+    private int CancelledCount => (_allOrders ?? []).Count(o => o.Status == "Cancelled");
+    private string PrimaryCurrency => _allOrders?.FirstOrDefault()?.Currency ?? "USD";
 
-    private async Task LoadOrders() =>
-        orders = await Api.GetOrdersAsync(string.IsNullOrEmpty(statusFilter) ? null : statusFilter);
+    protected override async Task OnInitializedAsync()
+    {
+        _allOrders = await Api.GetOrdersAsync(null);
+        orders = _allOrders;
+    }
+
+    private async Task LoadOrders()
+    {
+        orders = string.IsNullOrEmpty(statusFilter)
+            ? _allOrders
+            : (_allOrders ?? []).Where(o => o.Status == statusFilter).ToList();
+        await Task.CompletedTask;
+    }
 
     private static string GetStatusBadge(string status) => status switch
     {

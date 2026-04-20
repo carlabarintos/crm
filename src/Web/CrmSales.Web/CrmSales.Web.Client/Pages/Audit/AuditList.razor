@@ -15,6 +15,11 @@
 
 @if (_summary is not null)
 {
+    <button type="button" class="mob-section-btn @(_statsOpen ? "open" : "")" @onclick="() => _statsOpen = !_statsOpen">
+        <span>Summary</span>
+        <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+    </button>
+    <div class="mob-collapse @(_statsOpen ? "open" : "")">
     <div class="stat-row stagger-2">
         <div class="stat-card">
             <div class="stat-card-label">Total Events</div>
@@ -37,9 +42,15 @@
             }
         </div>
     </div>
+    </div>
 }
 
 <!-- Filters -->
+<button type="button" class="mob-section-btn @(_filtersOpen ? "open" : "")" @onclick="() => _filtersOpen = !_filtersOpen">
+    <span>Filters</span>
+    <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+</button>
+<div class="mob-collapse @(_filtersOpen ? "open" : "")">
 <div class="card stagger-3" style="padding:14px 16px;margin-bottom:16px">
     <div class="audit-filters">
         <input class="form-control form-control-sm" placeholder="Search descriptions, actors…"
@@ -81,6 +92,7 @@
             Showing only events you triggered.
         </div>
     }
+</div>
 </div>
 
 @if (_data is null)
@@ -276,12 +288,29 @@ else
     .badge-soft-info    { background: #DBEAFE; color: #1E40AF; }
     .badge-soft-primary { background: #EDE9FE; color: #5B21B6; }
     .badge-soft-neutral { background: #F3F4F6; color: #374151; }
+
+    @@media (max-width: 640.98px) {
+        .stat-row {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .audit-filters > * {
+            width: 100% !important;
+            min-width: 0 !important;
+            flex: none !important;
+        }
+        .audit-row { padding: 0 10px; }
+        .audit-time { margin-left: 0; width: 100%; }
+        .audit-body-top { gap: 5px; }
+    }
 </style>
 
 @code {
     private AuditPageDto? _data;
     private AuditSummaryDto? _summary;
     private int _page = 1;
+    private bool _statsOpen = true;
+    private bool _filtersOpen = true;
 
     private string _filterSearch = "";
     private string _filterEventType = "";

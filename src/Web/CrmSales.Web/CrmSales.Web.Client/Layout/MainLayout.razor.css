@@ -182,10 +182,10 @@ article.content { padding: 1.75rem 2rem; }
     .sidebar { width: 100%; }
     .main-panel { overflow: visible; }
     main { overflow: visible; }
-    article.content { padding: 1rem; }
-    .topbar-search { width: 160px; }
-    .topbar-search:focus { width: 180px; }
-    .search-kbd { display: none; }
+    article.content { padding: .75rem; }
+    .topbar { padding: 0 .75rem; gap: .375rem; }
+    .topbar-search-wrap { display: none; }
+    .btn-new-deal { padding: 6px 10px; font-size: 12px; }
 }
 
 @media (min-width: 641px) {

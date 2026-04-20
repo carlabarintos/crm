@@ -90,6 +90,11 @@ else
 </div>
 
 <!-- KPI Cards -->
+<button type="button" class="mob-section-btn @(_kpiOpen ? "open" : "")" @onclick="() => _kpiOpen = !_kpiOpen">
+    <span>KPI Overview</span>
+    <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+</button>
+<div class="mob-collapse @(_kpiOpen ? "open" : "")">
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl-3 stagger-1">
         <a href="/opportunities" class="kpi-card kpi-card-link">
@@ -155,7 +160,14 @@ else
     </div>
 </div>
 
+</div>
+
 <!-- Pipeline + Quick Actions -->
+<button type="button" class="mob-section-btn @(_pipelineOpen ? "open" : "")" @onclick="() => _pipelineOpen = !_pipelineOpen">
+    <span>Pipeline &amp; Quick Actions</span>
+    <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+</button>
+<div class="mob-collapse @(_pipelineOpen ? "open" : "")">
 <div class="row g-3 mb-4">
     <!-- Pipeline visualization -->
     <div class="col-md-8 stagger-5">
@@ -283,6 +295,7 @@ else
         </div>
     </div>
 </div>
+</div>
 
 } @* end loading else *@
 
@@ -386,6 +399,8 @@ else
     [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
 
     private bool loading = true;
+    private bool _kpiOpen = true;
+    private bool _pipelineOpen = true;
 
     private List<OpportunityDto> opps = [];
     private List<QuoteDto> quotes = [];

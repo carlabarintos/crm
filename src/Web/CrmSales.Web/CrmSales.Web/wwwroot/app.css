@@ -334,6 +334,46 @@ dd { font-size: 13.5px; color: var(--txt-1); margin-bottom: .875rem; font-weight
 .avatar-sm { width: 26px; height: 26px; font-size: 9px; }
 .avatar-square { border-radius: 8px; }
 
+/* ── Mobile collapsible sections ────────────────────────── */
+.mob-section-btn {
+    display: none;
+}
+.mob-collapse {
+    display: block;
+}
+@media (max-width: 640.98px) {
+    .mob-section-btn {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 9px 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--txt-2);
+        text-align: left;
+    }
+    .mob-section-btn .mob-chevron {
+        transition: transform .2s;
+        color: var(--txt-4);
+        flex-shrink: 0;
+    }
+    .mob-section-btn.open .mob-chevron {
+        transform: rotate(180deg);
+    }
+    .mob-collapse {
+        display: none;
+    }
+    .mob-collapse.open {
+        display: block;
+    }
+}
+
 /* ── Stage badge colors ──────────────────────────────────── */
 .stage-prospecting   { background: #F8FAFC;  color: #475569; border: 1px solid #E2E8F0; }
 .stage-qualification { background: #FFFBEB;  color: #92400E; border: 1px solid #FDE68A; }

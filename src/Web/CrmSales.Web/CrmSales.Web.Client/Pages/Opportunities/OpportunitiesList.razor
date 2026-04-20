@@ -17,6 +17,11 @@
 <!-- Summary cards -->
 @if (opportunities is not null)
 {
+    <button type="button" class="mob-section-btn @(_statsOpen ? "open" : "")" @onclick="() => _statsOpen = !_statsOpen">
+        <span>Summary</span>
+        <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+    </button>
+    <div class="mob-collapse @(_statsOpen ? "open" : "")">
     <div class="row g-3 mb-4 stagger-2">
         <div class="col-6 col-lg-3">
             <div class="stat-card">
@@ -47,9 +52,15 @@
             </div>
         </div>
     </div>
+    </div>
 }
 
 <!-- Filters -->
+<button type="button" class="mob-section-btn @(_filtersOpen ? "open" : "")" @onclick="() => _filtersOpen = !_filtersOpen">
+    <span>Filters</span>
+    <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+</button>
+<div class="mob-collapse @(_filtersOpen ? "open" : "")">
 <div class="d-flex gap-2 mb-4 stagger-3" style="flex-wrap:wrap">
     <div style="position:relative;flex:1;min-width:200px;max-width:320px">
         <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#9CA3AF;pointer-events:none"
@@ -69,6 +80,7 @@
         <option value="ClosedWon">Closed Won</option>
         <option value="ClosedLost">Closed Lost</option>
     </select>
+</div>
 </div>
 
 @if (opportunities is null)
@@ -260,6 +272,8 @@ else
     private List<OpportunityDto>? opportunities;
     private string searchTerm = "";
     private string selectedStage = "";
+    private bool _statsOpen = true;
+    private bool _filtersOpen = true;
 
     private IEnumerable<OpportunityDto> OpenOpps =>
         (opportunities ?? []).Where(o => o.Stage is not ("ClosedWon" or "ClosedLost"));

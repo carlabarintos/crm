@@ -14,9 +14,9 @@
     <div class="live-dot" title="Live"></div>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<button class="navbar-toggler @(_menuOpen ? "is-open" : "")" @onclick="() => _menuOpen = !_menuOpen" aria-label="Navigation menu"></button>
 
-<div class="nav-scrollable" @onclick="CloseMenu">
+<div class="nav-scrollable @(_menuOpen ? "show" : "")" @onclick="CloseMenu">
     <nav class="nav flex-column">
 
         <AuthorizeView Roles="SuperAdmin">
@@ -220,7 +220,8 @@
         return Task.CompletedTask;
     }
 
-    private void CloseMenu() { }
+    private bool _menuOpen;
+    private void CloseMenu() => _menuOpen = false;
 
     private async Task SignOut()
     {
