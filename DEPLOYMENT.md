@@ -36,12 +36,12 @@ Press Enter for all prompts. Two files are created in `C:\Users\YourName\.ssh\`:
 
 | File | What it is |
 |------|-----------|
-| `id_ed25519` | **Private key** — never share this |
-| `id_ed25519.pub` | **Public key** — paste into Hetzner |
+| `crm-deploy` | **Private key** — never share this |
+| `crm-deploy.pub` | **Public key** — paste into Hetzner |
 
 To view your public key:
 ```powershell
-type $env:USERPROFILE\.ssh\id_ed25519.pub
+type $env:USERPROFILE\.ssh\crm-deploy.pub
 ```
 Copy the whole line starting with `ssh-ed25519 ...`
 
@@ -60,7 +60,7 @@ Copy the whole line starting with `ssh-ed25519 ...`
    - Type: **CX22** (2 vCPU / 4 GB RAM)
    - SSH Keys: tick **crm-deploy**
    - Click **Create & Buy**
-5. Note the **IPv4 address** — e.g. `49.13.12.34`
+5. Note the **IPv4 address** — e.g. `178.104.236.119`
 6. **Firewalls** → **Create Firewall**, add these inbound rules:
    - TCP **22** (SSH)
    - TCP **80** (HTTP)
@@ -73,7 +73,7 @@ Copy the whole line starting with `ssh-ed25519 ...`
 
 Since you don't have a custom domain yet, use **nip.io** — a free service that maps any IP to a hostname automatically.
 
-> If your IP is `49.13.12.34`, your hostname is `49.13.12.34.nip.io`
+> If your IP is `178.104.236.119`, your hostname is `178.104.236.119.nip.io`
 
 No signup, no DNS changes — it just works. Let's Encrypt also accepts nip.io hostnames for SSL certificates.
 
@@ -89,12 +89,12 @@ No signup, no DNS changes — it just works. Let's Encrypt also accepts nip.io h
 
 SSH into the server:
 ```bash
-ssh root@49.13.12.34
+ssh root@178.104.236.119
 ```
 
 Run the setup script (replace with your actual IP):
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/carlabarintos/crm/master/scripts/setup-server.sh) 49.13.12.34.nip.io
+bash <(curl -s https://raw.githubusercontent.com/carlabarintos/crm/master/scripts/setup-server.sh) 178.104.236.119.nip.io
 ```
 
 The script will:
@@ -111,10 +111,10 @@ Change every `change_me` value to a strong password. Press `Ctrl+X`, `Y`, `Enter
 
 Then run the script again to finish:
 ```bash
-bash /opt/crm/scripts/setup-server.sh 49.13.12.34.nip.io
+bash /opt/crm/scripts/setup-server.sh 178.104.236.119.nip.io
 ```
 
-This gets the SSL certificate and starts all services. When it finishes, visit `https://49.13.12.34.nip.io`.
+This gets the SSL certificate and starts all services. When it finishes, visit `https://178.104.236.119.nip.io`.
 
 ---
 
@@ -124,7 +124,7 @@ You need your **private** key to give GitHub access to the server.
 
 On Windows:
 ```powershell
-type $env:USERPROFILE\.ssh\id_ed25519
+type $env:USERPROFILE\.ssh\crm-deploy
 ```
 Copy everything including the `-----BEGIN` and `-----END` lines.
 
@@ -132,7 +132,7 @@ In GitHub → your repo → **Settings** → **Secrets and variables** → **Act
 
 | Secret name | Value |
 |-------------|-------|
-| `HETZNER_HOST` | `49.13.12.34` |
+| `HETZNER_HOST` | `178.104.236.119` |
 | `HETZNER_USER` | `root` |
 | `HETZNER_SSH_KEY` | Your full private key (including BEGIN/END lines) |
 
@@ -152,7 +152,7 @@ Useful for urgent fixes or the very first deployment.
 - `GITHUB_TOKEN` — a Personal Access Token with `write:packages` scope
   (create at github.com → Settings → Developer settings → Personal access tokens)
 - `HETZNER_HOST` — your server IP
-- `SSH_KEY` — path to your private key (default is `%USERPROFILE%\.ssh\id_ed25519`)
+- `SSH_KEY` — path to your private key (default is `%USERPROFILE%\.ssh\crm-deploy`)
 
 Then double-click `scripts\deploy.bat` or run it from a terminal.
 
@@ -160,7 +160,7 @@ Then double-click `scripts\deploy.bat` or run it from a terminal.
 
 ## Useful server commands
 
-SSH into the server first: `ssh root@49.13.12.34`
+SSH into the server first: `ssh root@178.104.236.119`
 
 ```bash
 # Check all containers are running

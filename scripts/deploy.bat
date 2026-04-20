@@ -17,9 +17,9 @@ REM ============================================================================
 REM ── Edit these values once ───────────────────────────────────────────────────
 set GITHUB_OWNER=carlabarintos
 set GITHUB_TOKEN=your_github_pat_here
-set HETZNER_HOST=49.13.12.34
+set HETZNER_HOST=178.104.236.119
 set HETZNER_USER=root
-set SSH_KEY=%USERPROFILE%\.ssh\id_ed25519
+set SSH_KEY=%USERPROFILE%\.ssh\crm-deploy
 REM ─────────────────────────────────────────────────────────────────────────────
 
 echo.
@@ -72,7 +72,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo  ==========================================
-echo   Done! App is live.
+echo   Done! App is live at https://178.104.236.119.nip.io
 echo  ==========================================
 echo.
 endlocal
