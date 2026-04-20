@@ -315,6 +315,7 @@ var api = app.MapGroup("/").RequireRateLimiting("authenticated");
 api.MapCompanyEndpoints();
 api.MapProductEndpoints();
 api.MapCategoryEndpoints();
+api.MapProductImportEndpoint();
 api.MapUserEndpoints();
 api.MapContactEndpoints();
 api.MapOpportunityEndpoints();

@@ -1,7 +1,9 @@
 @page "/products"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @using CrmSales.Web.Client.Services
+@using Microsoft.AspNetCore.Components.Forms
 @inject CrmApiClient Api
+@inject IJSRuntime JS
 
 <PageTitle>Products</PageTitle>
 
@@ -10,8 +12,111 @@
         <p class="page-header-meta">Catalog</p>
         <h1>Products</h1>
     </div>
-    <a href="/products/new" class="btn btn-primary">+ New Product</a>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="DownloadTemplate">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-right:4px;vertical-align:-1px"><path d="M6.5 1v7M4 6l2.5 2.5L9 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 10v1a1 1 0 001 1h9a1 1 0 001-1v-1" stroke-linecap="round"/></svg>
+            CSV Template
+        </button>
+        <button class="btn btn-outline-primary btn-sm" @onclick="() => { _showImport = !_showImport; ResetImport(); }">
+            Import CSV
+        </button>
+        <a href="/products/new" class="btn btn-primary btn-sm">+ New Product</a>
+    </div>
 </div>
+
+<!-- CSV Import Panel -->
+@if (_showImport)
+{
+    <div class="card mb-4 stagger-2">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Import Products from CSV</h6>
+            <span class="text-muted" style="font-size:11.5px">Max 200 rows · Matched by SKU (existing skipped)</span>
+        </div>
+        <div class="card-body">
+            @if (_importResult is null)
+            {
+                <div class="mb-3">
+                    <label class="form-label">Select CSV file</label>
+                    <InputFile class="form-control" accept=".csv,text/csv" OnChange="OnFileSelected" />
+                    @if (!string.IsNullOrEmpty(_importParseError))
+                    {
+                        <div class="text-danger small mt-1">@_importParseError</div>
+                    }
+                </div>
+
+                @if (_importPreview.Count > 0)
+                {
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small">Preview — @_importPreview.Count row@(_importPreview.Count == 1 ? "" : "s") ready to import</span>
+                        </div>
+                        <div class="table-responsive" style="max-height:240px;overflow-y:auto">
+                            <table class="table table-sm table-bordered mb-0" style="font-size:12px">
+                                <thead class="table-light sticky-top">
+                                    <tr><th>#</th><th>Name</th><th>SKU</th><th>Price</th><th>Currency</th><th>Stock</th><th>Category</th></tr>
+                                </thead>
+                                <tbody>
+                                    @{ int rn = 0; }
+                                    @foreach (var row in _importPreview)
+                                    {
+                                        rn++;
+                                        bool hasError = string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Sku) || row.Price <= 0;
+                                        <tr class="@(hasError ? "table-warning" : "")">
+                                            <td class="text-muted">@rn</td>
+                                            <td>@row.Name</td>
+                                            <td style="font-family:monospace">@row.Sku</td>
+                                            <td>@row.Price.ToString("F2")</td>
+                                            <td>@row.Currency</td>
+                                            <td>@row.StockQuantity</td>
+                                            <td style="color:#6B7280">@(row.CategoryName ?? "—")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" @onclick="RunImport" disabled="@_importing">
+                        @if (_importing) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Import @_importPreview.Count @(_importPreview.Count == 1 ? "product" : "products")
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="ResetImport">Clear</button>
+                }
+            }
+            else
+            {
+                <div class="import-result">
+                    <div class="d-flex gap-3 mb-3 flex-wrap">
+                        <div class="import-stat import-stat-success">
+                            <div class="import-stat-val">@_importResult.Created</div>
+                            <div class="import-stat-lbl">Created</div>
+                        </div>
+                        <div class="import-stat import-stat-neutral">
+                            <div class="import-stat-val">@_importResult.Skipped</div>
+                            <div class="import-stat-lbl">Skipped (SKU exists)</div>
+                        </div>
+                        @if (_importResult.Errors.Count > 0)
+                        {
+                            <div class="import-stat import-stat-danger">
+                                <div class="import-stat-val">@_importResult.Errors.Count</div>
+                                <div class="import-stat-lbl">Errors</div>
+                            </div>
+                        }
+                    </div>
+                    @if (_importResult.Errors.Count > 0)
+                    {
+                        <div class="alert alert-warning py-2 mb-3" style="font-size:12.5px">
+                            @foreach (var e in _importResult.Errors) { <div>Row @e.Row: @e.Reason</div> }
+                        </div>
+                    }
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="ResetImport">Import another file</button>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => _showImport = false">Close</button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
 
 <!-- Summary cards -->
 @if (products is not null)
@@ -135,6 +240,19 @@ else
         margin-bottom: .2rem;
     }
     .stat-card-sub { font-size: 11.5px; color: #9CA3AF; }
+
+    .import-stat {
+        display: flex; flex-direction: column; align-items: center;
+        padding: .6rem 1.25rem; border-radius: 10px; min-width: 80px;
+    }
+    .import-stat-val { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+    .import-stat-lbl { font-size: 10.5px; color: #6B7280; margin-top: 2px; white-space: nowrap; }
+    .import-stat-success { background: #ECFDF5; }
+    .import-stat-success .import-stat-val { color: #059669; }
+    .import-stat-neutral { background: #F9FAFB; }
+    .import-stat-neutral .import-stat-val { color: #374151; }
+    .import-stat-danger { background: #FEF2F2; }
+    .import-stat-danger .import-stat-val { color: #DC2626; }
 </style>
 
 @code {
@@ -144,10 +262,22 @@ else
     private bool _statsOpen = true;
     private bool _filtersOpen = true;
 
+    // Import
+    private bool _showImport;
+    private bool _importing;
+    private string? _importParseError;
+    private List<ProductImportRow> _importPreview = [];
+    private ImportResult? _importResult;
+
+    private const int MaxImportRows = 200;
+    private const long MaxFileSizeBytes = 512 * 1024; // 512 KB
+
     private int ActiveCount => (products ?? []).Count(p => p.IsActive);
     private int LowStockCount => (products ?? []).Count(p => p.IsActive && p.StockQuantity > 0 && p.StockQuantity <= 10);
     private int OutOfStockCount => (products ?? []).Count(p => p.IsActive && p.StockQuantity == 0);
     private decimal InventoryValue => (products ?? []).Where(p => p.IsActive).Sum(p => p.Price * p.StockQuantity);
+
+    private record ProductImportRow(string Name, string Sku, string? Description, decimal Price, string Currency, int StockQuantity, string? CategoryName);
 
     private string FormatInventoryValue()
     {
@@ -167,5 +297,145 @@ else
         bool? isActive = activeFilter switch { "true" => true, "false" => false, _ => null };
         products = await Api.GetProductsAsync(
             string.IsNullOrEmpty(searchTerm) ? null : searchTerm, isActive);
+    }
+
+    // ── CSV Import ────────────────────────────────────────────────────────────
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _importParseError = null;
+        _importPreview = [];
+        _importResult = null;
+
+        var file = e.File;
+        if (file.Size > MaxFileSizeBytes)
+        {
+            _importParseError = "File too large. Maximum size is 512 KB.";
+            return;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream(MaxFileSizeBytes);
+            using var reader = new System.IO.StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+            var rows = ParseProductCsv(content);
+
+            if (rows.Count > MaxImportRows)
+            {
+                _importParseError = $"CSV contains {rows.Count} data rows. Maximum is {MaxImportRows}.";
+                return;
+            }
+
+            _importPreview = rows;
+        }
+        catch (Exception ex)
+        {
+            _importParseError = $"Failed to read file: {ex.Message}";
+        }
+    }
+
+    private static List<ProductImportRow> ParseProductCsv(string content)
+    {
+        var result = new List<ProductImportRow>();
+        var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        bool isFirst = true;
+
+        foreach (var rawLine in lines)
+        {
+            var line = rawLine.TrimEnd('\r').Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            var cols = SplitCsvLine(line);
+
+            if (isFirst)
+            {
+                isFirst = false;
+                if (cols.Count > 0 && cols[0].Trim().Equals("Name", StringComparison.OrdinalIgnoreCase))
+                    continue;
+            }
+
+            var name     = cols.Count > 0 ? cols[0].Trim() : "";
+            var sku      = cols.Count > 1 ? cols[1].Trim() : "";
+            var desc     = cols.Count > 2 ? cols[2].Trim() : "";
+            var priceStr = cols.Count > 3 ? cols[3].Trim() : "0";
+            var currency = cols.Count > 4 ? cols[4].Trim().ToUpperInvariant() : "USD";
+            var stockStr = cols.Count > 5 ? cols[5].Trim() : "0";
+            var catName  = cols.Count > 6 ? cols[6].Trim() : "";
+
+            decimal.TryParse(priceStr, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var price);
+            int.TryParse(stockStr, out var stock);
+            if (string.IsNullOrEmpty(currency)) currency = "USD";
+
+            result.Add(new ProductImportRow(
+                name, sku,
+                string.IsNullOrEmpty(desc) ? null : desc,
+                price, currency, stock,
+                string.IsNullOrEmpty(catName) ? null : catName));
+        }
+
+        return result;
+    }
+
+    private static List<string> SplitCsvLine(string line)
+    {
+        var result = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        bool inQuotes = false;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (c == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
+                else inQuotes = !inQuotes;
+            }
+            else if (c == ',' && !inQuotes) { result.Add(sb.ToString()); sb.Clear(); }
+            else sb.Append(c);
+        }
+        result.Add(sb.ToString());
+        return result;
+    }
+
+    private async Task RunImport()
+    {
+        if (_importPreview.Count == 0) return;
+        _importing = true;
+        try
+        {
+            var payload = _importPreview.Select(r => new
+            {
+                r.Name, r.Sku, r.Description, r.Price, r.Currency, r.StockQuantity, r.CategoryName
+            }).ToList();
+
+            var resp = await Api.ImportProductsAsync(payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                _importResult = await resp.Content.ReadFromJsonAsync<ImportResult>();
+                await LoadProducts();
+            }
+            else
+            {
+                _importParseError = $"Import failed: {await resp.Content.ReadAsStringAsync()}";
+            }
+        }
+        finally { _importing = false; }
+    }
+
+    private void ResetImport()
+    {
+        _importPreview = [];
+        _importParseError = null;
+        _importResult = null;
+    }
+
+    private async Task DownloadTemplate()
+    {
+        var csv = "Name,SKU,Description,Price,Currency,StockQuantity,CategoryName\n" +
+                  "\"Sample Widget\",SKU-001,\"A sample product description\",99.99,USD,50,Electronics\n" +
+                  "\"Another Product\",SKU-002,,149.00,USD,25,Clothing";
+        await JS.InvokeVoidAsync("downloadCsv", "products_template.csv", csv);
     }
 }

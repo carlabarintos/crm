@@ -2,7 +2,9 @@
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin")]
 @using CrmSales.Web.Client.Services
+@using Microsoft.AspNetCore.Components.Forms
 @inject CrmApiClient Api
+@inject IJSRuntime JS
 
 <PageTitle>Categories — CRM Sales</PageTitle>
 
@@ -11,9 +13,18 @@
         <p class="page-header-meta">Catalog</p>
         <h1>Categories</h1>
     </div>
-    <button class="btn btn-primary" @onclick="() => { _showCreate = !_showCreate; _createError = null; }">
-        + New Category
-    </button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="DownloadTemplate">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-right:4px;vertical-align:-1px"><path d="M6.5 1v7M4 6l2.5 2.5L9 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 10v1a1 1 0 001 1h9a1 1 0 001-1v-1" stroke-linecap="round"/></svg>
+            CSV Template
+        </button>
+        <button class="btn btn-outline-primary btn-sm" @onclick="() => { _showImport = !_showImport; _showCreate = false; ResetImport(); }">
+            Import CSV
+        </button>
+        <button class="btn btn-primary btn-sm" @onclick="() => { _showCreate = !_showCreate; _showImport = false; _createError = null; }">
+            + New Category
+        </button>
+    </div>
 </div>
 
 @if (_showCreate)
@@ -39,6 +50,97 @@
             @if (!string.IsNullOrEmpty(_createError))
             {
                 <div class="alert alert-danger mt-3 mb-0">@_createError</div>
+            }
+        </div>
+    </div>
+}
+
+@if (_showImport)
+{
+    <div class="card mb-4 stagger-2">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Import Categories from CSV</h6>
+            <span class="text-muted" style="font-size:11.5px">Max 100 rows · Matched by name (existing skipped)</span>
+        </div>
+        <div class="card-body">
+            @if (_importResult is null)
+            {
+                <div class="mb-3">
+                    <label class="form-label">Select CSV file</label>
+                    <InputFile class="form-control" accept=".csv,text/csv" OnChange="OnFileSelected" />
+                    @if (!string.IsNullOrEmpty(_importParseError))
+                    {
+                        <div class="text-danger small mt-1">@_importParseError</div>
+                    }
+                </div>
+
+                @if (_importPreview.Count > 0)
+                {
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small">Preview — @_importPreview.Count row@(_importPreview.Count == 1 ? "" : "s") ready to import</span>
+                        </div>
+                        <div class="table-responsive" style="max-height:220px;overflow-y:auto">
+                            <table class="table table-sm table-bordered mb-0" style="font-size:12.5px">
+                                <thead class="table-light sticky-top">
+                                    <tr><th>#</th><th>Name</th><th>Description</th></tr>
+                                </thead>
+                                <tbody>
+                                    @{ int rn = 0; }
+                                    @foreach (var row in _importPreview)
+                                    {
+                                        rn++;
+                                        <tr class="@(string.IsNullOrWhiteSpace(row.Name) ? "table-warning" : "")">
+                                            <td class="text-muted">@rn</td>
+                                            <td>@row.Name</td>
+                                            <td style="color:#6B7280">@row.Description</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" @onclick="RunImport" disabled="@_importing">
+                        @if (_importing) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Import @_importPreview.Count @(_importPreview.Count == 1 ? "category" : "categories")
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="ResetImport">Clear</button>
+                }
+            }
+            else
+            {
+                <div class="import-result">
+                    <div class="d-flex gap-3 mb-3 flex-wrap">
+                        <div class="import-stat import-stat-success">
+                            <div class="import-stat-val">@_importResult.Created</div>
+                            <div class="import-stat-lbl">Created</div>
+                        </div>
+                        <div class="import-stat import-stat-neutral">
+                            <div class="import-stat-val">@_importResult.Skipped</div>
+                            <div class="import-stat-lbl">Skipped (name exists)</div>
+                        </div>
+                        @if (_importResult.Errors.Count > 0)
+                        {
+                            <div class="import-stat import-stat-danger">
+                                <div class="import-stat-val">@_importResult.Errors.Count</div>
+                                <div class="import-stat-lbl">Errors</div>
+                            </div>
+                        }
+                    </div>
+                    @if (_importResult.Errors.Count > 0)
+                    {
+                        <div class="alert alert-warning py-2 mb-3" style="font-size:12.5px">
+                            @foreach (var e in _importResult.Errors)
+                            {
+                                <div>Row @e.Row: @e.Reason</div>
+                            }
+                        </div>
+                    }
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="ResetImport">Import another file</button>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => _showImport = false">Close</button>
+                    </div>
+                </div>
             }
         </div>
     </div>
@@ -104,10 +206,26 @@ else
     </div>
 }
 
+<style>
+    .import-stat {
+        display: flex; flex-direction: column; align-items: center;
+        padding: .6rem 1.25rem; border-radius: 10px; min-width: 80px;
+    }
+    .import-stat-val { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+    .import-stat-lbl { font-size: 10.5px; color: #6B7280; margin-top: 2px; white-space: nowrap; }
+    .import-stat-success { background: #ECFDF5; }
+    .import-stat-success .import-stat-val { color: #059669; }
+    .import-stat-neutral { background: #F9FAFB; }
+    .import-stat-neutral .import-stat-val { color: #374151; }
+    .import-stat-danger { background: #FEF2F2; }
+    .import-stat-danger .import-stat-val { color: #DC2626; }
+</style>
+
 @code {
     private List<CategoryDto>? _categories;
     private string _filter = "";
 
+    // Create
     private bool _showCreate;
     private string _newName = "";
     private string _newDescription = "";
@@ -115,20 +233,24 @@ else
     private string? _createError;
     private string? _successMsg;
 
+    // Import
+    private bool _showImport;
+    private bool _importing;
+    private string? _importParseError;
+    private List<(string Name, string? Description)> _importPreview = [];
+    private ImportResult? _importResult;
+
+    private const int MaxImportRows = 100;
+    private const long MaxFileSizeBytes = 256 * 1024; // 256 KB
+
     protected override async Task OnInitializedAsync() => await Load();
 
-    private async Task Load()
-        => _categories = await Api.GetCategoriesAsync();
+    private async Task Load() => _categories = await Api.GetCategoriesAsync();
 
     private async Task CreateCategory()
     {
         _createError = null;
-        if (string.IsNullOrWhiteSpace(_newName))
-        {
-            _createError = "Category name is required.";
-            return;
-        }
-
+        if (string.IsNullOrWhiteSpace(_newName)) { _createError = "Category name is required."; return; }
         _creating = true;
         try
         {
@@ -136,16 +258,136 @@ else
             if (resp.IsSuccessStatusCode)
             {
                 _successMsg = $"Category \"{_newName}\" created.";
-                _newName = "";
-                _newDescription = "";
+                _newName = ""; _newDescription = "";
                 _showCreate = false;
+                await Load();
+            }
+            else { _createError = await resp.Content.ReadAsStringAsync(); }
+        }
+        finally { _creating = false; }
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _importParseError = null;
+        _importPreview = [];
+        _importResult = null;
+
+        var file = e.File;
+        if (file.Size > MaxFileSizeBytes)
+        {
+            _importParseError = $"File too large. Maximum size is 256 KB.";
+            return;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream(MaxFileSizeBytes);
+            using var reader = new System.IO.StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+            var rows = ParseCsv(content);
+
+            if (rows.Count > MaxImportRows)
+            {
+                _importParseError = $"CSV contains {rows.Count} rows. Maximum is {MaxImportRows}.";
+                return;
+            }
+
+            _importPreview = rows;
+        }
+        catch (Exception ex)
+        {
+            _importParseError = $"Failed to read file: {ex.Message}";
+        }
+    }
+
+    private static List<(string Name, string? Description)> ParseCsv(string content)
+    {
+        var result = new List<(string, string?)>();
+        var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        bool isFirst = true;
+
+        foreach (var rawLine in lines)
+        {
+            var line = rawLine.TrimEnd('\r').Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            var cols = SplitCsvLine(line);
+
+            // Skip header row
+            if (isFirst)
+            {
+                isFirst = false;
+                if (cols.Count > 0 && cols[0].Trim().Equals("Name", StringComparison.OrdinalIgnoreCase))
+                    continue;
+            }
+
+            var name = cols.Count > 0 ? cols[0].Trim() : "";
+            var desc = cols.Count > 1 ? cols[1].Trim() : null;
+            if (string.IsNullOrEmpty(desc)) desc = null;
+
+            result.Add((name, desc));
+        }
+
+        return result;
+    }
+
+    private static List<string> SplitCsvLine(string line)
+    {
+        var result = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        bool inQuotes = false;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (c == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
+                else inQuotes = !inQuotes;
+            }
+            else if (c == ',' && !inQuotes)
+            {
+                result.Add(sb.ToString());
+                sb.Clear();
+            }
+            else sb.Append(c);
+        }
+        result.Add(sb.ToString());
+        return result;
+    }
+
+    private async Task RunImport()
+    {
+        if (_importPreview.Count == 0) return;
+        _importing = true;
+        try
+        {
+            var payload = _importPreview.Select(r => new { Name = r.Name, Description = r.Description }).ToList();
+            var resp = await Api.ImportCategoriesAsync(payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                _importResult = await resp.Content.ReadFromJsonAsync<ImportResult>();
                 await Load();
             }
             else
             {
-                _createError = await resp.Content.ReadAsStringAsync();
+                _importParseError = $"Import failed: {await resp.Content.ReadAsStringAsync()}";
             }
         }
-        finally { _creating = false; }
+        finally { _importing = false; }
+    }
+
+    private void ResetImport()
+    {
+        _importPreview = [];
+        _importParseError = null;
+        _importResult = null;
+    }
+
+    private async Task DownloadTemplate()
+    {
+        var csv = "Name,Description\nElectronics,Consumer electronics and gadgets\nClothing,Apparel and accessories";
+        await JS.InvokeVoidAsync("downloadCsv", "categories_template.csv", csv);
     }
 }

@@ -14,6 +14,12 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> CreateCategoryAsync(object body)
         => _http.PostAsJsonAsync("/api/categories", body);
 
+    public Task<HttpResponseMessage> ImportCategoriesAsync(object rows)
+        => _http.PostAsJsonAsync("/api/categories/import", rows);
+
+    public Task<HttpResponseMessage> ImportProductsAsync(object rows)
+        => _http.PostAsJsonAsync("/api/products/import", rows);
+
     // ── Products ───────────────────────────────────────────────────────────
     public Task<List<ProductDto>?> GetProductsAsync(string? search = null, bool? isActive = null)
     {
@@ -188,6 +194,8 @@ public class CrmApiClient(HttpClient httpClient)
 
 // ── DTOs ──────────────────────────────────────────────────────────────────
 public record CategoryDto(Guid Id, string Name, string? Description, bool IsActive);
+public record ImportRowError(int Row, string Reason);
+public record ImportResult(int Created, int Skipped, List<ImportRowError> Errors);
 
 public record ProductDto(Guid Id, string Name, string? Description, string Sku,
     decimal Price, string Currency, Guid CategoryId, string? CategoryName,
