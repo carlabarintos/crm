@@ -5,6 +5,7 @@ using CrmSales.Api.Middleware;
 using CrmSales.Api.MultiTenancy;
 using CrmSales.Api.Notifications;
 using CrmSales.Api.Services;
+using Serilog;
 using System.Threading.RateLimiting;
 using CrmSales.Contacts.Application;
 using CrmSales.Contacts.Infrastructure;
@@ -35,6 +36,19 @@ using Wolverine.RabbitMQ;
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((ctx, config) =>
+{
+    config
+        .ReadFrom.Configuration(ctx.Configuration)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", "crm-api")
+        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+
+    var seqUrl = ctx.Configuration["Seq:Url"];
+    if (!string.IsNullOrEmpty(seqUrl))
+        config.WriteTo.Seq(seqUrl);
+});
 
 builder.AddServiceDefaults();
 

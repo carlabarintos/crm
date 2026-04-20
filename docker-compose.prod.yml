@@ -8,8 +8,24 @@ volumes:
   crm-postgres-data:
   crm-rabbitmq-data:
   crm-keycloak-data:
+  crm-seq-data:
 
 services:
+
+  # ── Seq (structured log server) ────────────────────────────────────────────
+  seq:
+    image: datalust/seq:latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_ADMINPASSWORDHASH: ${SEQ_ADMIN_PASSWORD_HASH:-}
+    volumes:
+      - crm-seq-data:/data
+    ports:
+      - "127.0.0.1:5341:5341"
+      - "127.0.0.1:8090:80"
+    networks:
+      - crm-net
 
   # ── PostgreSQL ─────────────────────────────────────────────────────────────
   postgres:
@@ -83,6 +99,7 @@ services:
         Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       ConnectionStrings__rabbitmq: >-
         amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      Seq__Url: http://seq:5341
       Keycloak__AdminUrl: http://keycloak:8080/auth
       Keycloak__PublicUrl: https://${DOMAIN}/auth
       Keycloak__Realm: crm
@@ -95,6 +112,8 @@ services:
       rabbitmq:
         condition: service_healthy
       keycloak:
+        condition: service_started
+      seq:
         condition: service_started
     networks:
       - crm-net
