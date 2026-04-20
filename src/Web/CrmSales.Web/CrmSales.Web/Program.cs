@@ -5,7 +5,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 var keycloakBase = builder.Configuration["Keycloak:AdminUrl"] ?? "http://localhost:8080";
-var keycloakAuthority = $"{keycloakBase}/realms/crm";
+// PublicUrl is the browser-facing Keycloak URL (may differ from internal AdminUrl)
+var keycloakPublic = builder.Configuration["Keycloak:PublicUrl"] ?? keycloakBase;
+var keycloakAuthority = $"{keycloakPublic}/realms/crm";
 var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7267";
 
 builder.Services.AddRazorComponents()

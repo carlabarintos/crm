@@ -106,6 +106,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ApiBaseUrl: https://${DOMAIN}
       Keycloak__AdminUrl: http://keycloak:8080/auth
+      Keycloak__PublicUrl: https://${DOMAIN}/auth
       Keycloak__Realm: crm
     depends_on:
       - crm-api
