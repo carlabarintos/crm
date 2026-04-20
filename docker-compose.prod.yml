@@ -85,6 +85,8 @@ services:
         amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
       Keycloak__AdminUrl: http://keycloak:8080/auth
       Keycloak__Realm: crm
+      Keycloak__AdminUsername: ${KEYCLOAK_ADMIN}
+      Keycloak__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD}
       AllowedOrigins: https://${DOMAIN}
     depends_on:
       postgres:
