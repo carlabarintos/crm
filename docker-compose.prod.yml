@@ -8,8 +8,6 @@ volumes:
   crm-postgres-data:
   crm-rabbitmq-data:
   crm-keycloak-data:
-  crm-certbot-conf:
-  crm-certbot-www:
 
 services:
 
@@ -121,8 +119,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - crm-certbot-conf:/etc/letsencrypt:ro
-      - crm-certbot-www:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - crm-api
       - crm-web
