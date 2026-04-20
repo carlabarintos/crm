@@ -14,6 +14,7 @@ public static class AuditEndpoints
             .RequireAuthorization();
 
         group.MapGet("/", async (
+            HttpContext http,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50,
             [FromQuery] string? search = null,
@@ -28,6 +29,14 @@ public static class AuditEndpoints
         {
             pageSize = Math.Clamp(pageSize, 1, 100);
             page = Math.Max(1, page);
+
+            // SalesReps can only see their own events — ignore any actor filter from the client
+            var isSalesRepOnly = http.User.IsInRole("SalesRep") &&
+                                 !http.User.IsInRole("Admin") &&
+                                 !http.User.IsInRole("SalesManager");
+
+            if (isSalesRepOnly)
+                actor = http.User.FindFirst("preferred_username")?.Value;
 
             var query = db.AuditLogs
                 .Where(a => a.TenantId == tenant.TenantId);
@@ -64,10 +73,15 @@ public static class AuditEndpoints
                 })
                 .ToListAsync(ct);
 
-            return Results.Ok(new { Total = total, Page = page, PageSize = pageSize, Items = items });
+            return Results.Ok(new
+            {
+                Total = total, Page = page, PageSize = pageSize, Items = items,
+                ScopedToSelf = isSalesRepOnly
+            });
         });
 
         group.MapGet("/summary", async (
+            HttpContext http,
             ITenantContext tenant = default!,
             MasterDbContext db = default!,
             CancellationToken ct = default) =>
@@ -75,7 +89,16 @@ public static class AuditEndpoints
             var todayUtc = DateTime.UtcNow.Date;
             var weekUtc = todayUtc.AddDays(-6);
 
+            var isSalesRepOnly = http.User.IsInRole("SalesRep") &&
+                                 !http.User.IsInRole("Admin") &&
+                                 !http.User.IsInRole("SalesManager");
+
+            var selfActor = http.User.FindFirst("preferred_username")?.Value;
+
             var logs = db.AuditLogs.Where(a => a.TenantId == tenant.TenantId);
+
+            if (isSalesRepOnly && selfActor is not null)
+                logs = logs.Where(a => a.Actor == selfActor);
 
             var totalAll = await logs.CountAsync(ct);
             var totalToday = await logs.CountAsync(a => a.OccurredAt >= todayUtc, ct);

@@ -246,7 +246,7 @@ public record AuditLogDto(
     Guid Id, string EventType, string EntityType, string EntityId,
     string Description, string Actor, DateTime OccurredAt);
 
-public record AuditPageDto(int Total, int Page, int PageSize, List<AuditLogDto> Items);
+public record AuditPageDto(int Total, int Page, int PageSize, List<AuditLogDto> Items, bool ScopedToSelf = false);
 
 public record AuditSummaryDto(
     int TotalAll, int TotalToday, int TotalWeek,
