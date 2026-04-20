@@ -1,0 +1,48 @@
+{
+  "realm": "crm",
+  "enabled": true,
+  "displayName": "CRM Sales",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      { "name": "SuperAdmin", "description": "Platform super-admin" },
+      { "name": "Admin",       "description": "Company administrator" },
+      { "name": "SalesManager","description": "Sales manager" },
+      { "name": "SalesRep",    "description": "Sales representative" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "crm-web-app-client",
+      "name": "CRM Web App",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "https://178.104.236.119.nip.io/*",
+        "http://localhost:5270/*",
+        "https://localhost:7270/*"
+      ],
+      "webOrigins": [
+        "https://178.104.236.119.nip.io",
+        "http://localhost:5270",
+        "https://localhost:7270"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ],
+  "scopeMappings": [],
+  "clientScopeMappings": {}
+}
