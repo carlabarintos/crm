@@ -60,8 +60,10 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
       KC_HOSTNAME: ${DOMAIN}
       KC_HTTP_RELATIVE_PATH: /auth
-      KC_PROXY: edge
+      KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     volumes:
@@ -75,8 +77,8 @@ services:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/auth/health/ready || exit 1"]
       interval: 20s
       timeout: 10s
-      retries: 10
-      start_period: 60s
+      retries: 15
+      start_period: 120s
 
   # ── CRM API ────────────────────────────────────────────────────────────────
   crm-api:
