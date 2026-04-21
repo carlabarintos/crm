@@ -5,6 +5,7 @@
 @inject CrmApiClient Api
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
 
 <PageTitle>New Opportunity</PageTitle>
 
@@ -107,48 +108,97 @@
             <div class="card-body">
                 @if (!creatingContact)
                 {
-                    <!-- Select existing contact -->
-                    @if (contacts is null)
+                    <!-- Searchable contact combobox -->
+                    @if (selectedContact is not null)
                     {
-                        <div class="text-muted small">Loading contacts...</div>
-                    }
-                    else if (!contacts.Any())
-                    {
-                        <p class="text-muted small">No contacts yet. Click "+ New Contact" to create one.</p>
-                        <input class="form-control form-control-sm" @bind="contactName" placeholder="Contact name (required)" />
+                        <!-- Selected chip -->
+                        <div class="contact-chip">
+                            <div class="contact-avatar-sm">@selectedContact.FirstName[0]@selectedContact.LastName[0]</div>
+                            <div class="contact-chip-body">
+                                <div class="contact-chip-name">@selectedContact.FullName</div>
+                                @if (selectedContact.Email is not null)
+                                {
+                                    <div class="contact-chip-sub">@selectedContact.Email</div>
+                                }
+                                @if (selectedContact.Company is not null)
+                                {
+                                    <div class="contact-chip-sub">@selectedContact.Company</div>
+                                }
+                            </div>
+                            <button type="button" class="contact-chip-clear" @onclick="ClearContact" title="Remove contact">
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg>
+                            </button>
+                        </div>
                     }
                     else
                     {
-                        <div class="mb-2">
-                            <label class="form-label form-label-sm">Select existing contact</label>
-                            <select class="form-select form-select-sm" @bind="selectedContactIdRaw" @bind:after="OnContactSelected">
-                                <option value="">— None / enter manually —</option>
-                                @foreach (var c in contacts)
+                        <!-- Search input + dropdown -->
+                        <div class="contact-combobox" @onclick:stopPropagation>
+                            <div class="contact-combobox-input-wrap">
+                                <svg class="contact-search-icon" width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#9CA3AF" stroke-width="1.5"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5l3 3" stroke-linecap="round"/></svg>
+                                <input class="form-control form-control-sm contact-combobox-input"
+                                       placeholder="Search contacts by name, email, or company…"
+                                       value="@_contactSearch"
+                                       @oninput="OnContactSearchInput"
+                                       @onfocus="OnContactSearchFocus"
+                                       @onblur="OnContactSearchBlur"
+                                       autocomplete="off" />
+                                @if (_contactSearchLoading)
                                 {
-                                    <option value="@c.Id">@c.FullName @(c.Company != null ? $"({c.Company})" : "")</option>
+                                    <span class="contact-search-spinner spinner-border spinner-border-sm"></span>
                                 }
-                            </select>
-                        </div>
-                        @if (string.IsNullOrEmpty(selectedContactIdRaw))
-                        {
-                            <div class="mt-2">
-                                <label class="form-label form-label-sm">Or enter contact name manually</label>
-                                <input class="form-control form-control-sm" @bind="contactName" placeholder="Contact name" />
-                                <input class="form-control form-control-sm mt-1" type="email" @bind="contactEmail" placeholder="Email (optional)" />
-                                <input class="form-control form-control-sm mt-1" @bind="contactPhone" placeholder="Phone (optional)" />
                             </div>
-                        }
-                        else if (selectedContact is not null)
-                        {
-                            <div class="mt-2 p-2 rounded" style="background:#F3F4F6">
-                                <div class="d-flex align-items-center gap-2 mb-1">
-                                    <div class="contact-avatar-sm">@selectedContact.FirstName[0]@selectedContact.LastName[0]</div>
-                                    <strong>@selectedContact.FullName</strong>
+
+                            @if (_dropdownOpen)
+                            {
+                                <div class="contact-dropdown" @ref="_dropdownRef" @onscroll="OnDropdownScroll">
+                                    @if (_contactResults.Any())
+                                    {
+                                        @foreach (var c in _contactResults)
+                                        {
+                                            var captured = c;
+                                            <div class="contact-dropdown-item" @onmousedown="() => SelectContact(captured)">
+                                                <div class="contact-avatar-xs">@c.FirstName[0]@c.LastName[0]</div>
+                                                <div class="contact-dropdown-item-body">
+                                                    <div class="contact-dropdown-name">@c.FullName</div>
+                                                    @if (c.Company is not null || c.Email is not null)
+                                                    {
+                                                        <div class="contact-dropdown-sub">@(c.Company ?? c.Email)</div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (_contactLoadingMore)
+                                        {
+                                            <div class="contact-dropdown-loading-more">
+                                                <span class="spinner-border spinner-border-sm text-secondary"></span>
+                                            </div>
+                                        }
+                                    }
+                                    else if (!_contactSearchLoading)
+                                    {
+                                        <div class="contact-dropdown-empty">
+                                            @if (string.IsNullOrWhiteSpace(_contactSearch))
+                                            {
+                                                <span>No contacts yet</span>
+                                            }
+                                            else
+                                            {
+                                                <span>No contacts match "<strong>@_contactSearch</strong>"</span>
+                                            }
+                                        </div>
+                                    }
                                 </div>
-                                @if (selectedContact.Email != null) { <div class="small text-muted">@selectedContact.Email</div> }
-                                @if (selectedContact.Company != null) { <div class="small text-muted">@selectedContact.Company</div> }
-                            </div>
-                        }
+                            }
+                        </div>
+
+                        <!-- Manual entry fallback -->
+                        <div class="mt-2">
+                            <label class="form-label form-label-sm text-muted">Or enter manually</label>
+                            <input class="form-control form-control-sm" @bind="contactName" placeholder="Contact name (required)" />
+                            <input class="form-control form-control-sm mt-1" type="email" @bind="contactEmail" placeholder="Email (optional)" />
+                            <input class="form-control form-control-sm mt-1" @bind="contactPhone" placeholder="Phone (optional)" />
+                        </div>
                     }
                 }
                 else
@@ -183,12 +233,78 @@
 </div>
 
 <style>
+    /* ── Contact avatars ───────────────────────────── */
     .contact-avatar-sm {
         width: 28px; height: 28px; border-radius: 50%;
         background: linear-gradient(135deg, #6366F1, #8B5CF6);
         display: flex; align-items: center; justify-content: center;
         font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0;
         text-transform: uppercase;
+    }
+    .contact-avatar-xs {
+        width: 24px; height: 24px; border-radius: 50%;
+        background: linear-gradient(135deg, #6366F1, #8B5CF6);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 9px; font-weight: 700; color: #fff; flex-shrink: 0;
+        text-transform: uppercase;
+    }
+
+    /* ── Selected chip ──────────────────────────────── */
+    .contact-chip {
+        display: flex; align-items: flex-start; gap: .6rem;
+        padding: .6rem .75rem; border-radius: 10px;
+        border: 1px solid #D1FAE5; background: #F0FDF4;
+    }
+    .contact-chip-body { flex: 1; min-width: 0; }
+    .contact-chip-name { font-size: 13px; font-weight: 600; color: #111827; }
+    .contact-chip-sub  { font-size: 11.5px; color: #6B7280; }
+    .contact-chip-clear {
+        background: none; border: none; padding: 0; cursor: pointer;
+        color: #9CA3AF; flex-shrink: 0; margin-top: 1px;
+        transition: color .15s;
+    }
+    .contact-chip-clear:hover { color: #EF4444; }
+
+    /* ── Combobox container ─────────────────────────── */
+    .contact-combobox { position: relative; }
+    .contact-combobox-input-wrap { position: relative; }
+    .contact-search-icon {
+        position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+        pointer-events: none; z-index: 1;
+    }
+    .contact-combobox-input {
+        padding-left: 28px !important;
+        padding-right: 28px !important;
+    }
+    .contact-search-spinner {
+        position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+        color: #9CA3AF;
+    }
+
+    /* ── Dropdown panel ─────────────────────────────── */
+    .contact-dropdown {
+        position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 200;
+        background: #fff; border: 1px solid #E5E7EB; border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.10);
+        max-height: 240px; overflow-y: auto;
+    }
+    .contact-dropdown-item {
+        display: flex; align-items: center; gap: .6rem;
+        padding: .5rem .75rem; cursor: pointer;
+        border-bottom: 1px solid #F9FAFB;
+        transition: background .1s;
+    }
+    .contact-dropdown-item:last-child { border-bottom: none; }
+    .contact-dropdown-item:hover { background: #F5F3FF; }
+    .contact-dropdown-item-body { min-width: 0; }
+    .contact-dropdown-name { font-size: 13px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .contact-dropdown-sub  { font-size: 11px; color: #9CA3AF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .contact-dropdown-empty {
+        padding: .875rem .75rem; font-size: 12.5px; color: #9CA3AF; text-align: center;
+    }
+    .contact-dropdown-loading-more {
+        display: flex; justify-content: center; padding: .5rem;
+        border-top: 1px solid #F3F4F6;
     }
 </style>
 
@@ -205,10 +321,17 @@
     private string? description;
     private string ownerIdRaw = "";
 
-    // Contact selection
-    private string selectedContactIdRaw = "";
+    // Contact combobox state
+    private string _contactSearch = "";
+    private List<ContactDto> _contactResults = [];
+    private string? _contactCursor;
+    private bool _contactHasMore;
+    private bool _contactSearchLoading;
+    private bool _contactLoadingMore;
+    private bool _dropdownOpen;
+    private System.Threading.CancellationTokenSource? _searchCts;
     private ContactDto? selectedContact;
-    private List<ContactDto>? contacts;
+    private ElementReference _dropdownRef;
 
     // Inline contact creation
     private bool creatingContact;
@@ -224,7 +347,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var contactsTask = Api.GetContactsAsync();
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
 
         isSalesRep = auth.User.IsInRole("SalesRep");
@@ -249,29 +371,111 @@
             else if (users?.Count == 1)
                 ownerIdRaw = users[0].Id.ToString();
         }
-
-        contacts = await contactsTask;
     }
 
-    private void OnContactSelected()
+    // ── Contact combobox ──────────────────────────────────────────────────
+
+    private async Task OnContactSearchInput(ChangeEventArgs e)
     {
-        if (Guid.TryParse(selectedContactIdRaw, out var cid))
+        _contactSearch = e.Value?.ToString() ?? "";
+        _contactCursor = null;
+        _contactResults = [];
+        _contactHasMore = false;
+        _dropdownOpen = true;
+
+        _searchCts?.Cancel();
+        _searchCts = new System.Threading.CancellationTokenSource();
+        var token = _searchCts.Token;
+
+        await Task.Delay(260);
+        if (token.IsCancellationRequested) return;
+
+        await FetchContacts(reset: true, ct: token);
+    }
+
+    private async Task OnContactSearchFocus()
+    {
+        _dropdownOpen = true;
+        if (!_contactResults.Any() && !_contactSearchLoading)
+            await FetchContacts(reset: true);
+    }
+
+    private async Task OnContactSearchBlur()
+    {
+        // Delay so @onmousedown on dropdown items fires first
+        await Task.Delay(180);
+        _dropdownOpen = false;
+    }
+
+    private async Task FetchContacts(bool reset = false, System.Threading.CancellationToken ct = default)
+    {
+        if (reset)
         {
-            selectedContact = contacts?.FirstOrDefault(c => c.Id == cid);
-            if (selectedContact != null)
-            {
-                contactName = selectedContact.FullName;
-                contactEmail = selectedContact.Email;
-                contactPhone = selectedContact.Phone;
-                if (string.IsNullOrWhiteSpace(accountName) && selectedContact.Company != null)
-                    accountName = selectedContact.Company;
-            }
+            _contactCursor = null;
+            _contactResults = [];
+            _contactSearchLoading = true;
         }
         else
         {
-            selectedContact = null;
+            _contactLoadingMore = true;
+        }
+
+        try
+        {
+            var result = await Api.GetContactsAsync(
+                string.IsNullOrWhiteSpace(_contactSearch) ? null : _contactSearch,
+                limit: 5, cursor: _contactCursor);
+
+            if (ct.IsCancellationRequested) return;
+
+            _contactResults.AddRange(result?.Items ?? []);
+            _contactCursor = result?.NextCursor;
+            _contactHasMore = result?.HasMore ?? false;
+        }
+        finally
+        {
+            _contactSearchLoading = false;
+            _contactLoadingMore = false;
+            StateHasChanged();
         }
     }
+
+    private async Task LoadMoreContacts() => await FetchContacts(reset: false);
+
+    private async Task OnDropdownScroll()
+    {
+        if (!_contactHasMore || _contactLoadingMore || _contactSearchLoading) return;
+        var nearBottom = await JS.InvokeAsync<bool>("isScrolledNearBottom", _dropdownRef, 40);
+        if (nearBottom) await LoadMoreContacts();
+    }
+
+    private void SelectContact(ContactDto c)
+    {
+        selectedContact = c;
+        contactName  = c.FullName;
+        contactEmail = c.Email;
+        contactPhone = c.Phone;
+        if (string.IsNullOrWhiteSpace(accountName) && c.Company is not null)
+            accountName = c.Company;
+
+        _dropdownOpen = false;
+        _contactSearch = "";
+        _contactResults = [];
+    }
+
+    private void ClearContact()
+    {
+        selectedContact = null;
+        contactName = "";
+        contactEmail = null;
+        contactPhone = null;
+        _contactSearch = "";
+        _contactResults = [];
+        _contactCursor = null;
+        _contactHasMore = false;
+    }
+
+    // ── Inline contact creation ───────────────────────────────────────────
 
     private async Task CreateContact()
     {
@@ -292,20 +496,21 @@
 
             if (resp.IsSuccessStatusCode)
             {
-                // Reload contacts and auto-select the new one
-                contacts = await Api.GetContactsAsync();
-                var created = contacts?.FirstOrDefault(c =>
+                // Fetch the newly created contact by searching its name to get the Id
+                var results = await Api.GetContactsAsync(newContactFirst + " " + newContactLast, limit: 5);
+                var created = results?.Items.FirstOrDefault(c =>
                     c.FirstName == newContactFirst && c.LastName == newContactLast);
-                if (created != null)
+
+                if (created is not null)
+                    SelectContact(created);
+                else
                 {
-                    selectedContactIdRaw = created.Id.ToString();
-                    selectedContact = created;
-                    contactName = created.FullName;
-                    contactEmail = created.Email;
-                    contactPhone = created.Phone;
-                    if (string.IsNullOrWhiteSpace(accountName) && created.Company != null)
-                        accountName = created.Company;
+                    // Fallback: populate manually
+                    contactName = $"{newContactFirst} {newContactLast}".Trim();
+                    contactEmail = newContactEmail;
+                    contactPhone = newContactPhone;
                 }
+
                 creatingContact = false;
                 newContactFirst = ""; newContactLast = "";
                 newContactEmail = null; newContactPhone = null;
@@ -327,14 +532,11 @@
         if (!Guid.TryParse(ownerIdRaw, out var ownerGuid))
         { error = "Please select an owner."; return; }
 
-        // If no contact selected and no manual name — require at least a name
-        var resolvedContactName = contactName;
-        if (string.IsNullOrWhiteSpace(resolvedContactName) && selectedContact != null)
-            resolvedContactName = selectedContact.FullName;
+        var resolvedContactName = selectedContact?.FullName ?? contactName;
         if (string.IsNullOrWhiteSpace(resolvedContactName))
         { error = "Please select or enter a contact name."; return; }
 
-        Guid? contactId = Guid.TryParse(selectedContactIdRaw, out var cid) ? cid : null;
+        Guid? contactId = selectedContact?.Id;
 
         saving = true;
         try

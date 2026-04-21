@@ -4,6 +4,7 @@ using CrmSales.Api.Notifications;
 using CrmSales.Orders.Domain.Entities;
 using CrmSales.Orders.Domain.Repositories;
 using CrmSales.Products.Domain.Repositories;
+using CrmSales.SharedKernel.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CrmSales.Api.Endpoints;
@@ -17,22 +18,43 @@ public static class OrderEndpoints
             .RequireAuthorization();
 
         group.MapGet("/", async (
-            [FromQuery] OrderStatus? status,
-            [FromQuery] Guid? customerId,
-            IOrderRepository repo, CancellationToken ct) =>
+            IOrderRepository repo,
+            CancellationToken ct,
+            [FromQuery] string? search = null,
+            [FromQuery] OrderStatus? status = null,
+            [FromQuery] int limit = 20,
+            [FromQuery] string? cursor = null) =>
         {
-            var orders = status.HasValue
-                ? await repo.GetByStatusAsync(status.Value, ct)
-                : customerId.HasValue
-                    ? await repo.GetByCustomerAsync(customerId.Value, ct)
-                    : await repo.GetAllAsync(ct);
-
-            return Results.Ok(orders.Select(o => new
+            var result = await repo.SearchAsync(search, status, limit, cursor, ct);
+            return Results.Ok(new
             {
-                o.Id, o.OrderNumber, o.QuoteId,
-                Status = o.Status.ToString(), o.TotalAmount, o.Currency,
-                o.CreatedAt, o.ShippedAt, o.DeliveredAt
-            }));
+                items = result.Items.Select(o => new
+                {
+                    o.Id, o.OrderNumber, o.QuoteId,
+                    Status = o.Status.ToString(), o.TotalAmount, o.Currency,
+                    o.CreatedAt, o.ShippedAt, o.DeliveredAt
+                }),
+                result.NextCursor,
+                result.HasMore
+            });
+        });
+
+        group.MapGet("/summary", async (IOrderRepository repo, CancellationToken ct) =>
+        {
+            var s = await repo.GetSummaryAsync(ct);
+            var monthly = s.MonthlyRevenue
+                .ToDictionary(m => new DateTime(m.Year, m.Month, 1).ToString("MMM yy"), m => m.Revenue);
+            return Results.Ok(new
+            {
+                totalCount      = s.Total,
+                pendingCount    = s.Pending,
+                activeCount     = s.Active,
+                deliveredCount  = s.Delivered,
+                cancelledCount  = s.Cancelled,
+                deliveredRevenue = s.DeliveredRevenue,
+                currency        = s.Currency,
+                monthlyRevenue  = monthly
+            });
         });
 
         group.MapGet("/{id:guid}", async (Guid id, IOrderRepository repo, CancellationToken ct) =>

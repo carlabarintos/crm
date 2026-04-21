@@ -323,5 +323,6 @@ api.MapQuoteEndpoints();
 api.MapOrderEndpoints();
 api.MapNotificationEndpoints();
 api.MapAuditEndpoints();
+api.MapDashboardEndpoints();
 
 app.Run();

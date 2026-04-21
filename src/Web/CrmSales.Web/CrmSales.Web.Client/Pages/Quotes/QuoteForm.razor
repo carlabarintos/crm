@@ -97,43 +97,22 @@
             <div class="card-body">
                 @if (!creatingOpportunity)
                 {
-                    <!-- Select existing opportunity -->
-                    @if (opportunities is null)
+                    <OpportunityCombobox Value="selectedOpportunity" ValueChanged="OnOpportunitySelected" />
+                    @if (selectedOpportunity is not null)
                     {
-                        <div class="text-muted small">Loading opportunities...</div>
-                    }
-                    else if (!opportunities.Any())
-                    {
-                        <p class="text-muted small mb-2">No opportunities yet. Click "+ New Opportunity" to create one.</p>
-                    }
-                    else
-                    {
-                        <div class="mb-2">
-                            <label class="form-label form-label-sm">Select existing opportunity</label>
-                            <select class="form-select" @bind="opportunityIdRaw" @bind:after="OnOpportunitySelected">
-                                <option value="">— Select opportunity —</option>
-                                @foreach (var o in opportunities)
-                                {
-                                    <option value="@o.Id">@o.Name — @o.AccountName</option>
-                                }
-                            </select>
-                        </div>
-                        @if (selectedOpportunity is not null)
-                        {
-                            <div class="p-3 rounded" style="background:#F3F4F6">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <div class="fw-semibold">@selectedOpportunity.Name</div>
-                                        <div class="text-muted small">@selectedOpportunity.AccountName</div>
-                                        <div class="text-muted small">Contact: @selectedOpportunity.ContactName</div>
-                                    </div>
-                                    <span class="badge bg-light text-dark border">@selectedOpportunity.Stage</span>
+                        <div class="mt-2 p-3 rounded" style="background:#F3F4F6">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="fw-semibold">@selectedOpportunity.Name</div>
+                                    <div class="text-muted small">@selectedOpportunity.AccountName</div>
+                                    <div class="text-muted small">Contact: @selectedOpportunity.ContactName</div>
                                 </div>
-                                <div class="mt-1 small text-primary fw-semibold">
-                                    @selectedOpportunity.Currency @selectedOpportunity.EstimatedValue.ToString("N2")
-                                </div>
+                                <span class="badge bg-light text-dark border">@selectedOpportunity.Stage</span>
                             </div>
-                        }
+                            <div class="mt-1 small text-primary fw-semibold">
+                                @selectedOpportunity.Currency @selectedOpportunity.EstimatedValue.ToString("N2")
+                            </div>
+                        </div>
                     }
                 }
                 else
@@ -220,15 +199,7 @@
                 <div class="row g-2 mb-3 align-items-end">
                     <div class="col-md-5">
                         <label class="form-label form-label-sm">Product</label>
-                        <select class="form-select form-select-sm" @bind="newItemProductId" @bind:after="OnProductSelected">
-                            <option value="">— Select product —</option>
-                            @foreach (var p in products ?? [])
-                            {
-                                <option value="@p.Id">
-                                    @p.Name — @(p.StockQuantity > 0 ? $"{p.StockQuantity} in stock" : "Out of stock")
-                                </option>
-                            }
-                        </select>
+                        <ProductCombobox Value="selectedProduct" ValueChanged="OnProductSelected" />
                         @if (selectedProduct is not null)
                         {
                             <div class="mt-1 small @StockClass(selectedProduct.StockQuantity)">
@@ -254,7 +225,7 @@
                         <input type="number" class="form-control form-control-sm" @bind="newItemDiscount" min="0" max="100" />
                     </div>
                     <div class="col-md-1">
-                        <button class="btn btn-sm btn-outline-primary w-100" @onclick="AddLineItemDraft" title="Add">+</button>
+                        <button class="btn btn-sm btn-outline-primary w-100" @onclick="AddLineItemDraft" title="Add" disabled="@(selectedProduct is null)">+</button>
                     </div>
                 </div>
                 @if (!string.IsNullOrEmpty(lineItemWarning))
@@ -322,16 +293,13 @@
     public Guid? OpportunityId { get; set; }
 
     // Quote fields
-    private string opportunityIdRaw = "";
     private string ownerIdRaw = "";
     private string currency = "PHP";
     private DateTime? expiryDate = DateTime.Today.AddDays(2);
     private string? notes;
 
     private OpportunityDto? selectedOpportunity;
-    private List<OpportunityDto>? opportunities;
     private List<UserDto>? users;
-    private List<ProductDto>? products;
     private bool isSalesRep;
     private bool saving;
     private string? error;
@@ -348,7 +316,6 @@
 
     // Line items
     private List<LineItemDraft> lineItems = new();
-    private string newItemProductId = "";
     private int newItemQty = 1;
     private decimal newItemUnitPrice;
     private decimal newItemDiscount;
@@ -359,26 +326,20 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var oppTask = Api.GetOpportunitiesAsync();
-        var prodTask = Api.GetProductsAsync(isActive: true);
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-
         isSalesRep = auth.User.IsInRole("SalesRep");
         var currentEmail = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
             ?? auth.User.FindFirst("email")?.Value;
 
-        opportunities = await oppTask;
-        products = await prodTask;
-
+        // Pre-select opportunity if passed via query param
         if (OpportunityId.HasValue)
         {
-            opportunityIdRaw = OpportunityId.Value.ToString();
-            selectedOpportunity = opportunities?.FirstOrDefault(o => o.Id == OpportunityId.Value);
-        }
-        else if (opportunities?.Count == 1)
-        {
-            opportunityIdRaw = opportunities[0].Id.ToString();
-            selectedOpportunity = opportunities[0];
+            var opp = await Api.GetOpportunityAsync(OpportunityId.Value);
+            if (opp is not null)
+                selectedOpportunity = new OpportunityDto(opp.Id, opp.Name, opp.AccountName,
+                    opp.ContactId, opp.ContactName, opp.Stage, opp.EstimatedValue,
+                    opp.Currency, opp.Probability, opp.ExpectedCloseDate, opp.OwnerId,
+                    opp.CreatedAt, opp.UpdatedAt);
         }
 
         if (isSalesRep)
@@ -393,17 +354,8 @@
             users = await Api.GetUsersAsync();
             var match = users?.FirstOrDefault(u =>
                 string.Equals(u.Email, currentEmail, StringComparison.OrdinalIgnoreCase));
-
-            if (match is not null)
-            {
-                ownerIdRaw = match.Id.ToString();
-                newOppOwnerIdRaw = match.Id.ToString();
-            }
-            else if (users?.Count == 1)
-            {
-                ownerIdRaw = users[0].Id.ToString();
-                newOppOwnerIdRaw = users[0].Id.ToString();
-            }
+            if (match is not null) { ownerIdRaw = match.Id.ToString(); newOppOwnerIdRaw = match.Id.ToString(); }
+            else if (users?.Count == 1) { ownerIdRaw = users[0].Id.ToString(); newOppOwnerIdRaw = users[0].Id.ToString(); }
         }
     }
 
@@ -414,39 +366,27 @@
     private static string StockClass(int stock) =>
         stock == 0 ? "text-danger" : stock <= LowStockThreshold ? "text-warning" : "text-success";
 
-    private void OnProductSelected()
+    private void OnProductSelected(ProductDto? p)
     {
+        selectedProduct = p;
+        newItemUnitPrice = p?.Price ?? 0;
         lineItemWarning = null;
-        if (Guid.TryParse(newItemProductId, out var pid))
-        {
-            selectedProduct = products?.FirstOrDefault(p => p.Id == pid);
-            if (selectedProduct is not null)
-                newItemUnitPrice = selectedProduct.Price;
-        }
-        else
-        {
-            selectedProduct = null;
-            newItemUnitPrice = 0;
-        }
     }
 
     private void AddLineItemDraft()
     {
         lineItemError = null;
         lineItemWarning = null;
-        if (!Guid.TryParse(newItemProductId, out var pid)) { lineItemError = "Please select a product."; return; }
+        if (selectedProduct is null) { lineItemError = "Please select a product."; return; }
         if (newItemQty <= 0) { lineItemError = "Quantity must be at least 1."; return; }
         if (newItemUnitPrice < 0) { lineItemError = "Unit price cannot be negative."; return; }
 
-        var product = products?.FirstOrDefault(p => p.Id == pid);
-        if (product is null) { lineItemError = "Product not found."; return; }
+        if (selectedProduct.StockQuantity == 0)
+            lineItemWarning = $"{selectedProduct.Name} is currently out of stock.";
+        else if (newItemQty > selectedProduct.StockQuantity)
+            lineItemWarning = $"Only {selectedProduct.StockQuantity} units of {selectedProduct.Name} available — quoting {newItemQty}.";
 
-        if (product.StockQuantity == 0)
-            lineItemWarning = $"{product.Name} is currently out of stock.";
-        else if (newItemQty > product.StockQuantity)
-            lineItemWarning = $"Only {product.StockQuantity} units of {product.Name} available — quoting {newItemQty}.";
-
-        var existing = lineItems.FirstOrDefault(l => l.ProductId == pid);
+        var existing = lineItems.FirstOrDefault(l => l.ProductId == selectedProduct.Id);
         if (existing is not null)
         {
             var idx = lineItems.IndexOf(existing);
@@ -454,23 +394,16 @@
         }
         else
         {
-            lineItems.Add(new LineItemDraft(pid, product.Name, newItemQty, newItemUnitPrice, newItemDiscount));
+            lineItems.Add(new LineItemDraft(selectedProduct.Id, selectedProduct.Name, newItemQty, newItemUnitPrice, newItemDiscount));
         }
 
         selectedProduct = null;
-        newItemProductId = "";
         newItemQty = 1;
         newItemUnitPrice = 0;
         newItemDiscount = 0;
     }
 
-    private void OnOpportunitySelected()
-    {
-        if (Guid.TryParse(opportunityIdRaw, out var oid))
-            selectedOpportunity = opportunities?.FirstOrDefault(o => o.Id == oid);
-        else
-            selectedOpportunity = null;
-    }
+    private void OnOpportunitySelected(OpportunityDto? o) => selectedOpportunity = o;
 
     private async Task CreateOpportunity()
     {
@@ -500,14 +433,9 @@
 
             if (resp.IsSuccessStatusCode)
             {
-                opportunities = await Api.GetOpportunitiesAsync();
-                var created = opportunities?.FirstOrDefault(o =>
-                    o.Name == newOppName && o.AccountName == newOppAccount);
-                if (created != null)
-                {
-                    opportunityIdRaw = created.Id.ToString();
-                    selectedOpportunity = created;
-                }
+                var results = (await Api.GetOpportunitiesAsync(newOppName, limit: 5))?.Items ?? [];
+                var created = results.FirstOrDefault(o => o.Name == newOppName && o.AccountName == newOppAccount);
+                if (created is not null) selectedOpportunity = created;
                 creatingOpportunity = false;
                 newOppName = ""; newOppAccount = ""; newOppContact = "";
                 newOppValue = 0; newOppCloseDate = null;
@@ -523,8 +451,9 @@
     private async Task Save()
     {
         error = null;
-        if (!Guid.TryParse(opportunityIdRaw, out var oppId)) { error = "Please select or create an opportunity."; return; }
+        if (selectedOpportunity is null) { error = "Please select or create an opportunity."; return; }
         if (!Guid.TryParse(ownerIdRaw, out var ownerGuid)) { error = "Please select an owner."; return; }
+        var oppId = selectedOpportunity.Id;
 
         saving = true;
         try

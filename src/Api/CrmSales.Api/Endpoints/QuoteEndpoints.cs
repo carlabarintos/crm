@@ -20,22 +20,61 @@ public static class QuoteEndpoints
             .RequireAuthorization();
 
         group.MapGet("/", async (
-            [FromQuery] Guid? opportunityId,
-            [FromQuery] Guid? ownerId,
-            IQuoteRepository repo, CancellationToken ct) =>
+            IQuoteRepository repo,
+            CancellationToken ct,
+            [FromQuery] Guid? opportunityId = null,
+            [FromQuery] Guid? ownerId = null,
+            [FromQuery] string? search = null,
+            [FromQuery] string? status = null,
+            [FromQuery] int limit = 20,
+            [FromQuery] string? cursor = null) =>
         {
-            var quotes = opportunityId.HasValue
-                ? await repo.GetByOpportunityAsync(opportunityId.Value, ct)
-                : ownerId.HasValue
-                    ? await repo.GetByOwnerAsync(ownerId.Value, ct)
-                    : await repo.GetAllAsync(ct);
-
-            return Results.Ok(quotes.Select(q => new
+            // When filtering by opportunity, return full list (used on opportunity detail page)
+            if (opportunityId.HasValue && search is null && status is null)
             {
-                q.Id, q.QuoteNumber, q.OpportunityId,
-                Status = q.Status.ToString(), q.TotalAmount, q.Currency,
-                q.ExpiryDate, q.CreatedAt
-            }));
+                var all = await repo.GetByOpportunityAsync(opportunityId.Value, ct);
+                return Results.Ok(new
+                {
+                    items = all.Select(q => new
+                    {
+                        q.Id, q.QuoteNumber, q.OpportunityId,
+                        Status = q.Status.ToString(), q.TotalAmount, q.Currency,
+                        q.ExpiryDate, q.CreatedAt
+                    }),
+                    nextCursor = (string?)null,
+                    hasMore = false
+                });
+            }
+
+            var result = await repo.SearchPagedAsync(search, status, opportunityId, limit, cursor, ct);
+            return Results.Ok(new
+            {
+                items = result.Items.Select(q => new
+                {
+                    q.Id, q.QuoteNumber, q.OpportunityId,
+                    Status = q.Status.ToString(), q.TotalAmount, q.Currency,
+                    q.ExpiryDate, q.CreatedAt
+                }),
+                result.NextCursor,
+                result.HasMore
+            });
+        });
+
+        group.MapGet("/summary", async (IQuoteRepository repo, CancellationToken ct) =>
+        {
+            var s = await repo.GetSummaryAsync(ct);
+            return Results.Ok(new
+            {
+                totalCount    = s.Total,
+                draftCount    = s.Draft,
+                sentCount     = s.Sent,
+                acceptedCount = s.Accepted,
+                rejectedCount = s.Rejected,
+                expiredCount  = s.Expired,
+                sentValue     = s.SentValue,
+                acceptedValue = s.AcceptedValue,
+                currency      = s.Currency
+            });
         });
 
         group.MapGet("/{id:guid}", async (Guid id, IQuoteRepository repo, CancellationToken ct) =>

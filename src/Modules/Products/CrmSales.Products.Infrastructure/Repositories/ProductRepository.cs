@@ -1,6 +1,7 @@
 using CrmSales.Products.Domain.Entities;
 using CrmSales.Products.Domain.Repositories;
 using CrmSales.Products.Infrastructure.Persistence;
+using CrmSales.SharedKernel.Application;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrmSales.Products.Infrastructure.Repositories;
@@ -27,14 +28,63 @@ internal sealed class ProductRepository(ProductsDbContext dbContext) : IProductR
             .AnyAsync(ct);
     }
 
-    public async Task<IReadOnlyList<Product>> SearchAsync(string? term, bool? isActive, CancellationToken ct = default)
+    public async Task<CursorPaginationResult<Product>> SearchAsync(string? term, bool? isActive, int limit, string? cursor, CancellationToken ct = default)
     {
         var query = dbContext.Products.AsQueryable();
+
         if (!string.IsNullOrWhiteSpace(term))
-            query = query.Where(p => p.Name.Contains(term) || p.Sku.Value.Contains(term));
+        {
+            var pattern = $"%{term}%";
+            query = query.Where(p => EF.Functions.ILike(p.Name, pattern) || EF.Functions.ILike(p.Sku.Value, pattern));
+        }
         if (isActive.HasValue)
             query = query.Where(p => p.IsActive == isActive.Value);
-        return await query.OrderBy(p => p.Name).ToListAsync(ct);
+
+        // Apply cursor if provided
+        if (!string.IsNullOrEmpty(cursor) && Guid.TryParse(cursor, out var cursorId))
+            query = query.Where(p => p.Id > cursorId);
+
+        var items = await query
+            .OrderBy(p => p.Id)
+            .Take(limit + 1)
+            .ToListAsync(ct);
+
+        string? nextCursor = null;
+        if (items.Count > limit)
+        {
+            items.RemoveAt(items.Count - 1);
+            nextCursor = items[^1].Id.ToString();
+        }
+
+        return CursorPaginationResult<Product>.Create(items, nextCursor);
+    }
+
+    public async Task<ProductSummaryData> GetSummaryAsync(CancellationToken ct = default)
+    {
+        var stats = await dbContext.Products
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Total      = g.Count(),
+                Active     = g.Count(p => p.IsActive),
+                LowStock   = g.Count(p => p.IsActive && p.StockQuantity > 0 && p.StockQuantity <= 10),
+                OutOfStock = g.Count(p => p.IsActive && p.StockQuantity == 0),
+            })
+            .FirstOrDefaultAsync(ct);
+
+        var inventoryValue = await dbContext.Products
+            .Where(p => p.IsActive)
+            .SumAsync(p => p.Price.Amount * p.StockQuantity, ct);
+
+        var currency = await dbContext.Products
+            .Where(p => p.IsActive)
+            .Select(p => p.Price.Currency)
+            .FirstOrDefaultAsync(ct) ?? "USD";
+
+        return new ProductSummaryData(
+            stats?.Total ?? 0, stats?.Active ?? 0,
+            stats?.LowStock ?? 0, stats?.OutOfStock ?? 0,
+            inventoryValue, currency);
     }
 
     public async Task AddAsync(Product aggregate, CancellationToken ct = default)
@@ -66,6 +116,34 @@ internal sealed class ProductCategoryRepository(ProductsDbContext dbContext) : I
 
     public async Task<bool> ExistsAsync(Guid id, CancellationToken ct = default) =>
         await dbContext.Categories.AnyAsync(c => c.Id == id, ct);
+
+    public async Task<CursorPaginationResult<ProductCategory>> SearchAsync(string? term, int limit, string? cursor, CancellationToken ct = default)
+    {
+        var query = dbContext.Categories.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(term))
+        {
+            var pattern = $"%{term}%";
+            query = query.Where(c => EF.Functions.ILike(c.Name, pattern) || EF.Functions.ILike(c.Description ?? "", pattern));
+        }
+
+        if (!string.IsNullOrEmpty(cursor) && Guid.TryParse(cursor, out var cursorId))
+            query = query.Where(c => c.Id > cursorId);
+
+        var items = await query
+            .OrderBy(c => c.Id)
+            .Take(limit + 1)
+            .ToListAsync(ct);
+
+        string? nextCursor = null;
+        if (items.Count > limit)
+        {
+            items.RemoveAt(items.Count - 1);
+            nextCursor = items[^1].Id.ToString();
+        }
+
+        return CursorPaginationResult<ProductCategory>.Create(items, nextCursor);
+    }
 
     public async Task AddAsync(ProductCategory aggregate, CancellationToken ct = default)
     {

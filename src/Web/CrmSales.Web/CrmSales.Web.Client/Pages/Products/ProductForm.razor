@@ -49,21 +49,10 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Category <span class="text-danger">*</span></label>
-                    <div class="d-flex gap-2">
-                        <select class="form-select" @bind="categoryId">
-                            @if (categories is null)
-                            {
-                                <option value="@Guid.Empty">Loading…</option>
-                            }
-                            else
-                            {
-                                <option value="@Guid.Empty">— Select category —</option>
-                                @foreach (var cat in categories)
-                                {
-                                    <option value="@cat.Id">@cat.Name</option>
-                                }
-                            }
-                        </select>
+                    <div class="d-flex gap-2 align-items-start">
+                        <div class="flex-grow-1">
+                            <CategoryCombobox @bind-Value="_selectedCategory" />
+                        </div>
                         <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
                                 @onclick="() => showNewCategory = !showNewCategory">
                             + New
@@ -130,8 +119,7 @@
     private decimal price;
     private string currency = "PHP";
     private int stockQuantity;
-    private Guid categoryId;
-    private List<CategoryDto>? categories;
+    private CategoryDto? _selectedCategory;
     private bool saving;
     private string? error;
 
@@ -143,10 +131,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        categories = await Api.GetCategoriesAsync();
-        if (categories?.Any() == true && categoryId == Guid.Empty)
-            categoryId = categories[0].Id;
-
         if (Id.HasValue)
         {
             var p = await Api.GetProductAsync(Id.Value);
@@ -158,7 +142,9 @@
                 price = p.Price;
                 currency = p.Currency;
                 stockQuantity = p.StockQuantity;
-                categoryId = p.CategoryId;
+                // Load the matching category for the chip display
+                var cats = await Api.GetCategoriesAsync();
+                _selectedCategory = cats?.Items.FirstOrDefault(c => c.Id == p.CategoryId);
             }
         }
     }
@@ -175,10 +161,11 @@
             var resp = await Api.CreateCategoryAsync(new { Name = newCategoryName, Description = newCategoryDescription });
             if (resp.IsSuccessStatusCode)
             {
-                categories = await Api.GetCategoriesAsync();
-                var created = categories?.FirstOrDefault(c =>
+                // Search for the newly created category and auto-select it
+                var results = await Api.GetCategoriesAsync(newCategoryName.Trim(), limit: 5);
+                var created = results?.Items.FirstOrDefault(c =>
                     string.Equals(c.Name, newCategoryName.Trim(), StringComparison.OrdinalIgnoreCase));
-                if (created is not null) categoryId = created.Id;
+                if (created is not null) _selectedCategory = created;
                 newCategoryName = "";
                 newCategoryDescription = null;
                 showNewCategory = false;
@@ -197,11 +184,12 @@
             error = "Name, SKU and a positive Price are required.";
             return;
         }
-        if (categoryId == Guid.Empty)
+        if (_selectedCategory is null)
         {
             error = "Please select a category.";
             return;
         }
+        var categoryId = _selectedCategory.Id;
 
         saving = true;
         try

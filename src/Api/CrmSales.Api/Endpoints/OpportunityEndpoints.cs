@@ -3,6 +3,7 @@ using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
 using CrmSales.Opportunities.Domain.Entities;
 using CrmSales.Opportunities.Domain.Repositories;
+using CrmSales.SharedKernel.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CrmSales.Api.Endpoints;
@@ -16,20 +17,47 @@ public static class OpportunityEndpoints
             .RequireAuthorization();
 
         group.MapGet("/", async (
-            [FromQuery] string? search,
-            [FromQuery] OpportunityStage? stage,
-            [FromQuery] Guid? ownerId,
             IOpportunityRepository repo,
-            CancellationToken ct) =>
+            CancellationToken ct,
+            [FromQuery] string? search = null,
+            [FromQuery] OpportunityStage? stage = null,
+            [FromQuery] Guid? ownerId = null,
+            [FromQuery] int limit = 20,
+            [FromQuery] string? cursor = null) =>
         {
-            var opportunities = await repo.SearchAsync(search, stage, ownerId, ct);
-            return Results.Ok(opportunities.Select(o => new
+            var result = await repo.SearchAsync(search, stage, ownerId, limit, cursor, ct);
+            return Results.Ok(new
             {
-                o.Id, o.Name, o.AccountName, o.ContactId, o.ContactName,
-                Stage = o.Stage.ToString(), o.EstimatedValue, o.Currency,
-                o.Probability, o.ExpectedCloseDate, o.OwnerId,
-                o.CreatedAt, o.UpdatedAt
-            }));
+                items = result.Items.Select(o => new
+                {
+                    o.Id, o.Name, o.AccountName, o.ContactId, o.ContactName,
+                    Stage = o.Stage.ToString(), o.EstimatedValue, o.Currency,
+                    o.Probability, o.ExpectedCloseDate, o.OwnerId,
+                    o.CreatedAt, o.UpdatedAt
+                }),
+                result.NextCursor,
+                result.HasMore
+            });
+        });
+
+        group.MapGet("/summary", async (IOpportunityRepository repo, CancellationToken ct) =>
+        {
+            var s = await repo.GetSummaryAsync(ct);
+            var closed = s.Won + s.Lost;
+            var winRate = closed > 0 ? $"{(decimal)s.Won / closed * 100:N0}%" : "—";
+            return Results.Ok(new
+            {
+                totalCount     = s.Total,
+                openCount      = s.Total - s.Won - s.Lost,
+                wonCount       = s.Won,
+                lostCount      = s.Lost,
+                winRate,
+                pipelineValue  = s.PipelineValue,
+                weightedValue  = s.WeightedValue,
+                avgDaysToClose = Math.Round(s.AvgDaysToClose, 0),
+                currency       = s.Currency,
+                byStage        = s.ByStage.Select(st => new { stage = st.Stage, count = st.Count, value = st.Value })
+            });
         });
 
         group.MapGet("/{id:guid}", async (Guid id, IOpportunityRepository repo, CancellationToken ct) =>

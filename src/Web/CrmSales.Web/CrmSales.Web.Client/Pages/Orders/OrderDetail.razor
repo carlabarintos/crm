@@ -122,16 +122,8 @@ else if (order is not null)
                                 @if (showAddLineItem)
                                 {
                                     <tr class="table-light">
-                                        <td style="min-width:200px">
-                                            <select class="form-select form-select-sm" @bind="newProductId" @bind:after="OnAddProductSelected">
-                                                <option value="">— Select product —</option>
-                                                @foreach (var p in products ?? [])
-                                                {
-                                                    <option value="@p.Id">
-                                                        @p.Name — @(p.StockQuantity > 0 ? $"{p.StockQuantity} in stock" : "Out of stock")
-                                                    </option>
-                                                }
-                                            </select>
+                                        <td style="min-width:220px">
+                                            <ProductCombobox Value="_newProduct" ValueChanged="OnAddProductSelected" />
                                             @if (addStockWarning is not null)
                                             {
                                                 <div class="small @(addStockWarning.StartsWith("⚠") ? "text-warning" : "text-danger")">@addStockWarning</div>
@@ -240,8 +232,7 @@ else if (order is not null)
     private string? lineItemError;
 
     private bool showAddLineItem;
-    private string newProductId = "";
-    private string newProductName = "";
+    private ProductDto? _newProduct;
     private int newQty = 1;
     private decimal newUnitPrice;
     private string? addStockWarning;
@@ -250,14 +241,7 @@ else if (order is not null)
     private int editQty;
     private decimal editUnitPrice;
 
-    private List<ProductDto>? products;
-
-    protected override async Task OnInitializedAsync()
-    {
-        var loadOrder = Load();
-        products = await Api.GetProductsAsync(isActive: true);
-        await loadOrder;
-    }
+    protected override async Task OnInitializedAsync() => await Load();
 
     private async Task Load()
     {
@@ -348,55 +332,40 @@ else if (order is not null)
         finally { lineItemSaving = false; }
     }
 
-    private void OnAddProductSelected()
+    private void OnAddProductSelected(ProductDto? p)
     {
+        _newProduct = p;
+        newUnitPrice = p?.Price ?? 0;
         addStockWarning = null;
-        if (Guid.TryParse(newProductId, out var pid))
-        {
-            var p = products?.FirstOrDefault(x => x.Id == pid);
-            if (p is not null)
-            {
-                newProductName = p.Name;
-                newUnitPrice = p.Price;
-                CheckAddStock();
-            }
-        }
-        else
-        {
-            newProductName = "";
-            newUnitPrice = 0;
-        }
+        CheckAddStock();
     }
 
     private void CheckAddStock()
     {
         addStockWarning = null;
-        if (!Guid.TryParse(newProductId, out var pid)) return;
-        var p = products?.FirstOrDefault(x => x.Id == pid);
-        if (p is null) return;
-        if (p.StockQuantity == 0) addStockWarning = "⚠ Out of stock";
-        else if (newQty > p.StockQuantity) addStockWarning = $"⚠ Only {p.StockQuantity} in stock";
+        if (_newProduct is null) return;
+        if (_newProduct.StockQuantity == 0) addStockWarning = "⚠ Out of stock";
+        else if (newQty > _newProduct.StockQuantity) addStockWarning = $"⚠ Only {_newProduct.StockQuantity} in stock";
     }
 
     private void CancelAdd()
     {
         showAddLineItem = false;
-        newProductId = ""; newProductName = ""; newQty = 1; newUnitPrice = 0; addStockWarning = null;
+        _newProduct = null; newQty = 1; newUnitPrice = 0; addStockWarning = null;
     }
 
     private async Task AddLineItem()
     {
         lineItemError = null;
-        if (string.IsNullOrWhiteSpace(newProductName)) { lineItemError = "Please select a product."; return; }
+        if (_newProduct is null) { lineItemError = "Please select a product."; return; }
         if (newQty <= 0) { lineItemError = "Quantity must be positive."; return; }
         lineItemSaving = true;
         try
         {
-            var productId = Guid.TryParse(newProductId, out var pid) ? pid : Guid.Empty;
             var resp = await Api.AddOrderLineItemAsync(Id, new
             {
-                ProductId = productId,
-                ProductName = newProductName,
+                ProductId = _newProduct.Id,
+                ProductName = _newProduct.Name,
                 Quantity = newQty,
                 UnitPrice = newUnitPrice
             });

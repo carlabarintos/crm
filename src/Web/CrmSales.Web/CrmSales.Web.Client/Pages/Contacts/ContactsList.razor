@@ -13,7 +13,7 @@
         <p class="text-muted small mb-0">Manage your customer contacts</p>
     </div>
     <div class="d-flex gap-2">
-        @if (contacts is not null && contacts.Any())
+        @if (contacts.Any())
         {
             <button class="btn btn-outline-secondary btn-sm" @onclick="ExportCsv">Export CSV</button>
         }
@@ -24,12 +24,12 @@
 <div class="card mb-3">
     <div class="card-body py-2">
         <input class="form-control form-control-sm" style="max-width:320px"
-               value="@search" @oninput="OnSearch"
-               placeholder="Search by name, email, company..." />
+               @bind="search" @onkeyup="OnSearchKey"
+               placeholder="Search by name, email, company…" />
     </div>
 </div>
 
-@if (contacts is null)
+@if (_loading)
 {
     <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
 }
@@ -83,6 +83,16 @@ else
     </div>
 }
 
+@if (hasMore)
+{
+    <div class="text-center py-3">
+        <button class="btn btn-outline-primary btn-sm" @onclick="LoadMore" disabled="@isLoadingMore">
+            @if (isLoadingMore) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            Load More
+        </button>
+    </div>
+}
+
 <style>
     .contact-avatar {
         width: 32px; height: 32px; border-radius: 50%;
@@ -94,9 +104,12 @@ else
 </style>
 
 @code {
-    private List<ContactDto>? contacts;
+    private List<ContactDto> contacts = [];
     private string search = "";
-    private System.Threading.CancellationTokenSource? _cts;
+    private string? cursor;
+    private bool hasMore;
+    private bool isLoadingMore;
+    private bool _loading = true;
 
     private void GoToContact(Guid id) => Nav.NavigateTo("/contacts/" + id);
 
@@ -104,12 +117,33 @@ else
 
     private async Task Load()
     {
-        contacts = await Api.GetContactsAsync(string.IsNullOrWhiteSpace(search) ? null : search);
+        _loading = true;
+        cursor = null;
+        var result = await Api.GetContactsAsync(
+            string.IsNullOrWhiteSpace(search) ? null : search, 20, null);
+        contacts = result?.Items ?? [];
+        cursor = result?.NextCursor;
+        hasMore = result?.HasMore ?? false;
+        _loading = false;
+    }
+
+    private async Task LoadMore()
+    {
+        if (isLoadingMore || !hasMore) return;
+        isLoadingMore = true;
+        try
+        {
+            var result = await Api.GetContactsAsync(
+                string.IsNullOrWhiteSpace(search) ? null : search, 20, cursor);
+            contacts.AddRange(result?.Items ?? []);
+            cursor = result?.NextCursor;
+            hasMore = result?.HasMore ?? false;
+        }
+        finally { isLoadingMore = false; }
     }
 
     private async Task ExportCsv()
     {
-        if (contacts is null) return;
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("Name,Email,Phone,Company,Job Title");
         foreach (var c in contacts)
@@ -117,14 +151,8 @@ else
         await JS.InvokeVoidAsync("downloadCsv", $"contacts_{DateTime.Today:yyyyMMdd}.csv", sb.ToString());
     }
 
-    private async Task OnSearch(ChangeEventArgs e)
+    private async Task OnSearchKey(KeyboardEventArgs e)
     {
-        search = e.Value?.ToString() ?? "";
-        _cts?.Cancel();
-        _cts = new System.Threading.CancellationTokenSource();
-        var token = _cts.Token;
-        await Task.Delay(300);
-        if (!token.IsCancellationRequested)
-            await Load();
+        if (e.Key == "Enter") await Load();
     }
 }

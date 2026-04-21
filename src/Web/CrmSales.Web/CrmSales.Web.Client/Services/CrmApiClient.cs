@@ -8,8 +8,16 @@ public class CrmApiClient(HttpClient httpClient)
     public Uri? BaseAddress => _http.BaseAddress;
 
     // ── Categories ─────────────────────────────────────────────────────────
-    public Task<List<CategoryDto>?> GetCategoriesAsync()
-        => _http.GetFromJsonAsync<List<CategoryDto>>("/api/categories");
+    public Task<PaginatedResult<CategoryDto>?> GetCategoriesAsync(string? search = null, int limit = 20, string? cursor = null)
+    {
+        var url = "/api/categories";
+        var query = new List<string>();
+        if (!string.IsNullOrEmpty(search)) query.Add($"search={Uri.EscapeDataString(search)}");
+        if (limit != 20) query.Add($"limit={limit}");
+        if (!string.IsNullOrEmpty(cursor)) query.Add($"cursor={cursor}");
+        if (query.Count > 0) url += "?" + string.Join("&", query);
+        return _http.GetFromJsonAsync<PaginatedResult<CategoryDto>>(url);
+    }
 
     public Task<HttpResponseMessage> CreateCategoryAsync(object body)
         => _http.PostAsJsonAsync("/api/categories", body);
@@ -21,14 +29,19 @@ public class CrmApiClient(HttpClient httpClient)
         => _http.PostAsJsonAsync("/api/products/import", rows);
 
     // ── Products ───────────────────────────────────────────────────────────
-    public Task<List<ProductDto>?> GetProductsAsync(string? search = null, bool? isActive = null)
+    public Task<ProductSummaryDto?> GetProductSummaryAsync()
+        => _http.GetFromJsonAsync<ProductSummaryDto>("/api/products/summary");
+
+    public Task<PaginatedResult<ProductDto>?> GetProductsAsync(string? search = null, bool? isActive = null, int limit = 20, string? cursor = null)
     {
         var url = "/api/products";
         var query = new List<string>();
         if (!string.IsNullOrEmpty(search)) query.Add($"search={Uri.EscapeDataString(search)}");
         if (isActive.HasValue) query.Add($"isActive={isActive}");
+        if (limit != 20) query.Add($"limit={limit}");
+        if (!string.IsNullOrEmpty(cursor)) query.Add($"cursor={cursor}");
         if (query.Count > 0) url += "?" + string.Join("&", query);
-        return _http.GetFromJsonAsync<List<ProductDto>>(url);
+        return _http.GetFromJsonAsync<PaginatedResult<ProductDto>>(url);
     }
 
     public Task<ProductDto?> GetProductAsync(Guid id)
@@ -44,12 +57,19 @@ public class CrmApiClient(HttpClient httpClient)
         => _http.DeleteAsync($"/api/products/{id}");
 
     // ── Contacts ──────────────────────────────────────────────────────────────
-    public Task<List<ContactDto>?> GetContactsAsync(string? search = null)
+    public Task<PaginatedResult<ContactDto>?> GetContactsAsync(string? search = null, int limit = 20, string? cursor = null)
     {
         var url = "/api/contacts";
-        if (!string.IsNullOrEmpty(search)) url += $"?search={Uri.EscapeDataString(search)}";
-        return _http.GetFromJsonAsync<List<ContactDto>>(url);
+        var query = new List<string>();
+        if (!string.IsNullOrEmpty(search)) query.Add($"search={Uri.EscapeDataString(search)}");
+        if (limit != 20) query.Add($"limit={limit}");
+        if (!string.IsNullOrEmpty(cursor)) query.Add($"cursor={cursor}");
+        if (query.Count > 0) url += "?" + string.Join("&", query);
+        return _http.GetFromJsonAsync<PaginatedResult<ContactDto>>(url);
     }
+
+    public Task<ContactSummaryDto?> GetContactSummaryAsync()
+        => _http.GetFromJsonAsync<ContactSummaryDto>("/api/contacts/summary");
 
     public Task<ContactDetailDto?> GetContactAsync(Guid id)
         => _http.GetFromJsonAsync<ContactDetailDto>($"/api/contacts/{id}");
@@ -64,14 +84,19 @@ public class CrmApiClient(HttpClient httpClient)
         => _http.DeleteAsync($"/api/contacts/{id}");
 
     // ── Opportunities ──────────────────────────────────────────────────────
-    public Task<List<OpportunityDto>?> GetOpportunitiesAsync(string? search = null, string? stage = null)
+    public Task<OpportunitySummaryDto?> GetOpportunitySummaryAsync()
+        => _http.GetFromJsonAsync<OpportunitySummaryDto>("/api/opportunities/summary");
+
+    public Task<PaginatedResult<OpportunityDto>?> GetOpportunitiesAsync(string? search = null, string? stage = null, int limit = 20, string? cursor = null)
     {
         var url = "/api/opportunities";
         var query = new List<string>();
         if (!string.IsNullOrEmpty(search)) query.Add($"search={Uri.EscapeDataString(search)}");
         if (!string.IsNullOrEmpty(stage)) query.Add($"stage={Uri.EscapeDataString(stage)}");
+        if (limit != 20) query.Add($"limit={limit}");
+        if (!string.IsNullOrEmpty(cursor)) query.Add($"cursor={cursor}");
         if (query.Count > 0) url += "?" + string.Join("&", query);
-        return _http.GetFromJsonAsync<List<OpportunityDto>>(url);
+        return _http.GetFromJsonAsync<PaginatedResult<OpportunityDto>>(url);
     }
 
     public Task<OpportunityDetailDto?> GetOpportunityAsync(Guid id)
@@ -87,9 +112,21 @@ public class CrmApiClient(HttpClient httpClient)
         => _http.PostAsJsonAsync($"/api/opportunities/{id}/activities", body);
 
     // ── Quotes ─────────────────────────────────────────────────────────────
-    public Task<List<QuoteDto>?> GetQuotesAsync(Guid? opportunityId = null)
-        => _http.GetFromJsonAsync<List<QuoteDto>>(
-            opportunityId.HasValue ? $"/api/quotes?opportunityId={opportunityId}" : "/api/quotes");
+    public Task<QuotesSummaryDto?> GetQuotesSummaryAsync()
+        => _http.GetFromJsonAsync<QuotesSummaryDto>("/api/quotes/summary");
+
+    public Task<PaginatedResult<QuoteDto>?> GetQuotesAsync(Guid? opportunityId = null, string? search = null, string? status = null, int limit = 20, string? cursor = null)
+    {
+        var url = "/api/quotes";
+        var query = new List<string>();
+        if (opportunityId.HasValue) query.Add($"opportunityId={opportunityId}");
+        if (!string.IsNullOrEmpty(search)) query.Add($"search={Uri.EscapeDataString(search)}");
+        if (!string.IsNullOrEmpty(status)) query.Add($"status={Uri.EscapeDataString(status)}");
+        if (limit != 20) query.Add($"limit={limit}");
+        if (!string.IsNullOrEmpty(cursor)) query.Add($"cursor={cursor}");
+        if (query.Count > 0) url += "?" + string.Join("&", query);
+        return _http.GetFromJsonAsync<PaginatedResult<QuoteDto>>(url);
+    }
 
     public Task<QuoteDetailDto?> GetQuoteAsync(Guid id)
         => _http.GetFromJsonAsync<QuoteDetailDto>($"/api/quotes/{id}");
@@ -110,9 +147,23 @@ public class CrmApiClient(HttpClient httpClient)
         => _http.PostAsJsonAsync($"/api/quotes/{id}/reject", new { Reason = reason });
 
     // ── Orders ─────────────────────────────────────────────────────────────
-    public Task<List<OrderDto>?> GetOrdersAsync(string? status = null)
-        => _http.GetFromJsonAsync<List<OrderDto>>(
-            status != null ? $"/api/orders?status={status}" : "/api/orders");
+    public Task<OrdersSummaryDto?> GetOrdersSummaryAsync()
+        => _http.GetFromJsonAsync<OrdersSummaryDto>("/api/orders/summary");
+
+    public Task<DashboardDto?> GetDashboardAsync()
+        => _http.GetFromJsonAsync<DashboardDto>("/api/dashboard");
+
+    public Task<PaginatedResult<OrderDto>?> GetOrdersAsync(string? search = null, string? status = null, int limit = 20, string? cursor = null)
+    {
+        var url = "/api/orders";
+        var query = new List<string>();
+        if (!string.IsNullOrEmpty(search)) query.Add($"search={Uri.EscapeDataString(search)}");
+        if (!string.IsNullOrEmpty(status)) query.Add($"status={status}");
+        if (limit != 20) query.Add($"limit={limit}");
+        if (!string.IsNullOrEmpty(cursor)) query.Add($"cursor={cursor}");
+        if (query.Count > 0) url += "?" + string.Join("&", query);
+        return _http.GetFromJsonAsync<PaginatedResult<OrderDto>>(url);
+    }
 
     public Task<OrderDetailDto?> GetOrderAsync(Guid id)
         => _http.GetFromJsonAsync<OrderDetailDto>($"/api/orders/{id}");
@@ -197,6 +248,8 @@ public record CategoryDto(Guid Id, string Name, string? Description, bool IsActi
 public record ImportRowError(int Row, string Reason);
 public record ImportResult(int Created, int Skipped, List<ImportRowError> Errors);
 
+public record PaginatedResult<T>(List<T> Items, string? NextCursor, bool HasMore);
+
 public record ProductDto(Guid Id, string Name, string? Description, string Sku,
     decimal Price, string Currency, Guid CategoryId, string? CategoryName,
     bool IsActive, int StockQuantity, DateTime CreatedAt, DateTime UpdatedAt);
@@ -261,3 +314,33 @@ public record AuditSummaryDto(
     string? TopActor, int TopActorCount,
     string? TopEvent, int TopEventCount,
     List<string> Actors, List<string> EventTypes);
+
+public record ContactSummaryDto(int TotalCount, int ActiveCount);
+
+public record ProductSummaryDto(
+    int TotalCount, int ActiveCount, int LowStockCount, int OutOfStockCount,
+    decimal InventoryValue, string Currency);
+
+public record StageSummaryItemDto(string Stage, int Count, decimal Value);
+public record OpportunitySummaryDto(
+    int TotalCount, int OpenCount, int WonCount, int LostCount,
+    string WinRate, decimal PipelineValue, decimal WeightedValue,
+    double AvgDaysToClose, string Currency, List<StageSummaryItemDto> ByStage);
+
+public record QuotesSummaryDto(
+    int TotalCount, int DraftCount, int SentCount, int AcceptedCount, int RejectedCount, int ExpiredCount,
+    decimal SentValue, decimal AcceptedValue, string Currency);
+
+public record OrdersSummaryDto(
+    int TotalCount, int PendingCount, int ActiveCount, int DeliveredCount, int CancelledCount,
+    decimal DeliveredRevenue, string Currency, Dictionary<string, decimal> MonthlyRevenue);
+
+public record TopOpportunityItemDto(string Name, string Account, string Stage, decimal Value, string Currency);
+
+public record DashboardDto(
+    OpportunitySummaryDto Opportunities,
+    QuotesSummaryDto Quotes,
+    OrdersSummaryDto Orders,
+    Dictionary<string, decimal> MonthlyRevenue,
+    List<TopOpportunityItemDto> TopOpportunities,
+    string Currency);

@@ -156,20 +156,15 @@
 
 <div class="mb-3 stagger-3">
     <input class="form-control" style="max-width:300px" placeholder="Filter by name…"
-           @bind="_filter" @bind:after="StateHasChanged" />
+           @bind="searchTerm" @onkeyup="@(async (KeyboardEventArgs e) => { if (e.Key == "Enter") await Search(); })" />
 </div>
 
-@if (_categories is null)
+@if (categories is null && !isLoadingMore)
 {
     <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
 }
 else
 {
-    var filtered = _categories.Where(c =>
-        string.IsNullOrEmpty(_filter) ||
-        c.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase) ||
-        (c.Description ?? "").Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
-
     <div class="table-responsive stagger-3">
         <table class="table table-hover align-middle">
             <thead class="table-light">
@@ -180,7 +175,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var c in filtered)
+                @foreach (var c in categories)
                 {
                     <tr>
                         <td style="font-weight:600;color:#111827">@c.Name</td>
@@ -197,12 +192,22 @@ else
                         </td>
                     </tr>
                 }
-                @if (!filtered.Any())
+                @if (!categories.Any())
                 {
                     <tr><td colspan="3" class="text-muted text-center py-3">No categories found.</td></tr>
                 }
             </tbody>
         </table>
+    </div>
+}
+
+@if (hasMore)
+{
+    <div class="text-center py-3">
+        <button class="btn btn-outline-primary" @onclick="LoadMore" disabled="@isLoadingMore">
+            @if (isLoadingMore) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            Load More
+        </button>
     </div>
 }
 
@@ -222,8 +227,12 @@ else
 </style>
 
 @code {
-    private List<CategoryDto>? _categories;
-    private string _filter = "";
+    private List<CategoryDto> categories = [];
+    private string searchTerm = "";
+    private string? cursor;
+    private bool hasMore;
+    private bool isLoadingMore;
+    private System.Timers.Timer? _searchDebounce;
 
     // Create
     private bool _showCreate;
@@ -243,9 +252,64 @@ else
     private const int MaxImportRows = 100;
     private const long MaxFileSizeBytes = 256 * 1024; // 256 KB
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        _searchDebounce = new System.Timers.Timer(300);
+        _searchDebounce.AutoReset = false;
+        _searchDebounce.Elapsed += async (_, _) => await Search();
+        await Load();
+    }
 
-    private async Task Load() => _categories = await Api.GetCategoriesAsync();
+    private async Task Search()
+    {
+        cursor = null;
+        await Load();
+    }
+
+    private async Task OnSearchChanged()
+    {
+        _searchDebounce?.Stop();
+        _searchDebounce?.Start();
+    }
+
+    private async Task Load()
+    {
+        var result = await Api.GetCategoriesAsync(
+            string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+            20, cursor);
+
+        if (cursor is null)
+        {
+            categories = result?.Items ?? [];
+        }
+        else
+        {
+            categories.AddRange(result?.Items ?? []);
+        }
+
+        cursor = result?.NextCursor;
+        hasMore = result?.HasMore ?? false;
+    }
+
+    private async Task LoadMore()
+    {
+        if (isLoadingMore || !hasMore) return;
+        isLoadingMore = true;
+        try
+        {
+            var result = await Api.GetCategoriesAsync(
+                string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+                20, cursor);
+
+            categories.AddRange(result?.Items ?? []);
+            cursor = result?.NextCursor;
+            hasMore = result?.HasMore ?? false;
+        }
+        finally
+        {
+            isLoadingMore = false;
+        }
+    }
 
     private async Task CreateCategory()
     {
@@ -260,7 +324,7 @@ else
                 _successMsg = $"Category \"{_newName}\" created.";
                 _newName = ""; _newDescription = "";
                 _showCreate = false;
-                await Load();
+                await Search();
             }
             else { _createError = await resp.Content.ReadAsStringAsync(); }
         }
@@ -368,7 +432,7 @@ else
             if (resp.IsSuccessStatusCode)
             {
                 _importResult = await resp.Content.ReadFromJsonAsync<ImportResult>();
-                await Load();
+                await Search();
             }
             else
             {
@@ -390,4 +454,6 @@ else
         var csv = "Name,Description\nElectronics,Consumer electronics and gadgets\nClothing,Apparel and accessories";
         await JS.InvokeVoidAsync("downloadCsv", "categories_template.csv", csv);
     }
+
+    public void Dispose() => _searchDebounce?.Dispose();
 }

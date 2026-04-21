@@ -22,7 +22,7 @@
 </div>
 
 <!-- Summary cards -->
-@if (opportunities is not null)
+@if (_summary is not null)
 {
     <button type="button" class="mob-section-btn @(_statsOpen ? "open" : "")" @onclick="() => _statsOpen = !_statsOpen">
         <span>Summary</span>
@@ -33,28 +33,28 @@
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Open Pipeline</div>
-                <div class="stat-card-value text-primary">@FormatValue(PipelineValue, PrimaryCurrency)</div>
-                <div class="stat-card-sub">@OpenOpps.Count() open</div>
+                <div class="stat-card-value text-primary">@FormatValue(_summary.PipelineValue, _summary.Currency)</div>
+                <div class="stat-card-sub">@_summary.OpenCount open</div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Weighted Value</div>
-                <div class="stat-card-value" style="color:#7C3AED">@FormatValue(WeightedValue, PrimaryCurrency)</div>
+                <div class="stat-card-value" style="color:#7C3AED">@FormatValue(_summary.WeightedValue, _summary.Currency)</div>
                 <div class="stat-card-sub">by probability</div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Win Rate</div>
-                <div class="stat-card-value text-success">@WinRate</div>
-                <div class="stat-card-sub">@WonCount won · @LostCount lost</div>
+                <div class="stat-card-value text-success">@_summary.WinRate</div>
+                <div class="stat-card-sub">@_summary.WonCount won · @_summary.LostCount lost</div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Total</div>
-                <div class="stat-card-value" style="color:#111827">@opportunities.Count</div>
+                <div class="stat-card-value" style="color:#111827">@_summary.TotalCount</div>
                 <div class="stat-card-sub">all opportunities</div>
             </div>
         </div>
@@ -75,9 +75,9 @@
             <circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5l3 3" stroke-linecap="round"/>
         </svg>
         <input class="form-control" style="padding-left:30px" placeholder="Search opportunities…"
-               @bind="searchTerm" @bind:after="LoadOpportunities" />
+               @bind="searchTerm" @onkeyup="OnSearchKey" />
     </div>
-    <select class="form-select" style="width:auto;min-width:150px" @bind="selectedStage" @bind:after="LoadOpportunities">
+    <select class="form-select" style="width:auto;min-width:150px" @bind="selectedStage" @bind:after="OnFilterChanged">
         <option value="">All Stages</option>
         <option value="Prospecting">Prospecting</option>
         <option value="Qualification">Qualification</option>
@@ -90,7 +90,7 @@
 </div>
 </div>
 
-@if (opportunities is null)
+@if (opportunities is null && !isLoadingMore)
 {
     <!-- Skeleton table -->
     <div class="table-responsive">
@@ -124,7 +124,7 @@
         </table>
     </div>
 }
-else if (!opportunities.Any())
+else if (!opportunities.Any() && !isLoadingMore)
 {
     <div class="opp-empty stagger-4">
         <div class="opp-empty-icon">
@@ -193,6 +193,16 @@ else
                 }
             </tbody>
         </table>
+    </div>
+}
+
+@if (hasMore)
+{
+    <div class="text-center py-3">
+        <button class="btn btn-outline-primary" @onclick="LoadMore" disabled="@isLoadingMore">
+            @if (isLoadingMore) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            Load More
+        </button>
     </div>
 }
 
@@ -276,21 +286,15 @@ else
 </style>
 
 @code {
-    private List<OpportunityDto>? opportunities;
+    private List<OpportunityDto> opportunities = [];
+    private OpportunitySummaryDto? _summary;
     private string searchTerm = "";
     private string selectedStage = "";
+    private string? cursor;
+    private bool hasMore;
+    private bool isLoadingMore;
     private bool _statsOpen = true;
     private bool _filtersOpen = true;
-
-    private IEnumerable<OpportunityDto> OpenOpps =>
-        (opportunities ?? []).Where(o => o.Stage is not ("ClosedWon" or "ClosedLost"));
-    private decimal PipelineValue => OpenOpps.Sum(o => o.EstimatedValue);
-    private decimal WeightedValue => OpenOpps.Sum(o => o.EstimatedValue * o.Probability / 100m);
-    private int WonCount => (opportunities ?? []).Count(o => o.Stage == "ClosedWon");
-    private int LostCount => (opportunities ?? []).Count(o => o.Stage == "ClosedLost");
-    private string WinRate => (WonCount + LostCount) == 0 ? "—"
-        : $"{(decimal)WonCount / (WonCount + LostCount) * 100:N0}%";
-    private string PrimaryCurrency => opportunities?.FirstOrDefault()?.Currency ?? "USD";
 
     private async Task ExportCsv()
     {
@@ -302,12 +306,65 @@ else
         await JS.InvokeVoidAsync("downloadCsv", $"opportunities_{DateTime.Today:yyyyMMdd}.csv", sb.ToString());
     }
 
-    protected override async Task OnInitializedAsync() => await LoadOpportunities();
+    protected override async Task OnInitializedAsync()
+    {
+        var summaryTask = Api.GetOpportunitySummaryAsync();
+        await LoadOpportunities();
+        _summary = await summaryTask;
+    }
 
-    private async Task LoadOpportunities() =>
-        opportunities = await Api.GetOpportunitiesAsync(
-            string.IsNullOrEmpty(searchTerm) ? null : searchTerm,
-            string.IsNullOrEmpty(selectedStage) ? null : selectedStage);
+    private async Task Search()
+    {
+        cursor = null;
+        await LoadOpportunities();
+    }
+
+    private async Task OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await Search();
+    }
+
+    private async Task OnFilterChanged()
+    {
+        await Search();
+    }
+
+    private async Task LoadOpportunities()
+    {
+        var result = await Api.GetOpportunitiesAsync(
+            string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+            string.IsNullOrEmpty(selectedStage) ? null : selectedStage,
+            20, cursor);
+
+        if (cursor is null)
+            opportunities = result?.Items ?? [];
+        else
+            opportunities.AddRange(result?.Items ?? []);
+
+        cursor = result?.NextCursor;
+        hasMore = result?.HasMore ?? false;
+    }
+
+    private async Task LoadMore()
+    {
+        if (isLoadingMore || !hasMore) return;
+        isLoadingMore = true;
+        try
+        {
+            var result = await Api.GetOpportunitiesAsync(
+                string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+                string.IsNullOrEmpty(selectedStage) ? null : selectedStage,
+                20, cursor);
+
+            opportunities.AddRange(result?.Items ?? []);
+            cursor = result?.NextCursor;
+            hasMore = result?.HasMore ?? false;
+        }
+        finally
+        {
+            isLoadingMore = false;
+        }
+    }
 
     private static string GetStageBadge(string stage) => stage switch
     {
@@ -341,4 +398,5 @@ else
              : value >= 1_000     ? $"{sym}{value / 1_000:N1}K"
              : $"{sym}{value:N0}";
     }
+
 }

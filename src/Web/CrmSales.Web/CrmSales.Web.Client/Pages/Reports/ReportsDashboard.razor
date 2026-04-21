@@ -24,28 +24,28 @@ else
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Closed Won</div>
-                <div class="stat-card-value text-success">@_wonCount</div>
-                <div class="stat-card-sub">@FormatCurrency(_wonValue)</div>
+                <div class="stat-card-value text-success">@(_data?.Opportunities.WonCount ?? 0)</div>
+                <div class="stat-card-sub">@FormatCurrency(_data?.Opportunities.PipelineValue ?? 0)</div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Closed Lost</div>
-                <div class="stat-card-value text-danger">@_lostCount</div>
-                <div class="stat-card-sub">@FormatCurrency(_lostValue)</div>
+                <div class="stat-card-value text-danger">@(_data?.Opportunities.LostCount ?? 0)</div>
+                <div class="stat-card-sub">&nbsp;</div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Win Rate</div>
-                <div class="stat-card-value text-primary">@_winRate</div>
-                <div class="stat-card-sub">@(_wonCount + _lostCount) closed total</div>
+                <div class="stat-card-value text-primary">@(_data?.Opportunities.WinRate ?? "—")</div>
+                <div class="stat-card-sub">@((_data?.Opportunities.WonCount ?? 0) + (_data?.Opportunities.LostCount ?? 0)) closed total</div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Total Revenue</div>
-                <div class="stat-card-value text-success">@FormatCurrency(_deliveredRevenue)</div>
+                <div class="stat-card-value text-success">@FormatCurrency(_data?.Orders.DeliveredRevenue ?? 0)</div>
                 <div class="stat-card-sub">from delivered orders</div>
             </div>
         </div>
@@ -98,18 +98,24 @@ else
             <div class="card h-100">
                 <div class="card-header rpt-card-header">Sales Funnel (Opportunities)</div>
                 <div class="card-body">
-                    @if (_stageCounts.Count == 0)
+                    @{
+                        var stageLookup = _data?.Opportunities.ByStage
+                            .ToDictionary(s => s.Stage, s => (s.Count, s.Value))
+                            ?? new Dictionary<string, (int, decimal)>();
+                        var totalOpps = _data?.Opportunities.TotalCount ?? 0;
+                        var maxCount = stageLookup.Values.DefaultIfEmpty((0, 0m)).Max(s => s.Item1);
+                    }
+                    @if (stageLookup.Count == 0)
                     {
                         <div class="text-muted text-center py-3" style="font-size:13px">No opportunities yet.</div>
                     }
                     else
                     {
-                        var maxCount = _stageCounts.Values.Max(s => s.Count);
                         @foreach (var (stage, label, color) in FunnelStages)
                         {
-                            var data = _stageCounts.TryGetValue(stage, out var d) ? d : (Count: 0, Value: 0m);
+                            var data = stageLookup.TryGetValue(stage, out var d) ? d : (Count: 0, Value: 0m);
                             var w = maxCount > 0 ? data.Count * 100 / maxCount : 0;
-                            var pct = _totalOpps > 0 ? (data.Count * 100m / _totalOpps).ToString("N0") + "%" : "";
+                            var pct = totalOpps > 0 ? (data.Count * 100m / totalOpps).ToString("N0") + "%" : "";
                             <div class="rpt-funnel-row">
                                 <div class="rpt-funnel-label">@label</div>
                                 <div class="rpt-funnel-track">
@@ -135,15 +141,18 @@ else
             <div class="card">
                 <div class="card-header rpt-card-header">Monthly Revenue (Delivered Orders)</div>
                 <div class="card-body">
-                    @if (_monthlyRevenue.Count == 0)
+                    @{
+                        var monthly = _data?.MonthlyRevenue ?? new Dictionary<string, decimal>();
+                    }
+                    @if (monthly.Count == 0)
                     {
                         <div class="text-muted text-center py-3" style="font-size:13px">No delivered orders yet.</div>
                     }
                     else
                     {
-                        var maxRev = _monthlyRevenue.Values.Max();
+                        var maxRev = monthly.Values.Max();
                         <div class="rpt-bar-chart">
-                            @foreach (var (month, rev) in _monthlyRevenue.OrderBy(kv => kv.Key))
+                            @foreach (var (month, rev) in monthly.OrderBy(kv => kv.Key))
                             {
                                 var h = maxRev > 0 ? (double)(rev / maxRev * 140) : 0;
                                 <div class="rpt-bar-col">
@@ -165,13 +174,16 @@ else
             <div class="card">
                 <div class="card-header rpt-card-header">Top 5 Opportunities by Value</div>
                 <div class="card-body p-0">
-                    @if (_topOpps.Count == 0)
+                    @{
+                        var topOpps = _data?.TopOpportunities ?? [];
+                    }
+                    @if (!topOpps.Any())
                     {
                         <div class="text-muted text-center py-3" style="font-size:13px">No opportunities yet.</div>
                     }
                     else
                     {
-                        var maxVal = _topOpps.Max(o => o.Value);
+                        var maxVal = topOpps.Max(o => o.Value);
                         <div class="table-responsive">
                             <table class="table table-sm mb-0">
                                 <thead class="table-light">
@@ -179,7 +191,7 @@ else
                                 </thead>
                                 <tbody>
                                     @{ int rank = 0; }
-                                    @foreach (var o in _topOpps)
+                                    @foreach (var o in topOpps)
                                     {
                                         rank++;
                                         var w = maxVal > 0 ? (int)(o.Value * 100 / maxVal) : 0;
@@ -250,98 +262,45 @@ else
 
 @code {
     private bool _loading = true;
-
-    // Computed fields
-    private int _wonCount, _lostCount, _totalOpps, _totalQuotes;
-    private decimal _wonValue, _lostValue, _deliveredRevenue;
-    private string _winRate = "—";
-    private Dictionary<string, (int Count, decimal Value)> _stageCounts = new();
-    private Dictionary<string, decimal> _monthlyRevenue = new();
-    private List<(string Name, string Account, string Stage, decimal Value)> _topOpps = [];
-    private string _currency = "USD";
-
-    // Quote status counts
-    private int _qDraft, _qSent, _qAccepted, _qRejected, _qExpired;
+    private DashboardDto? _data;
 
     private static readonly (string Stage, string Label, string Color)[] FunnelStages =
     [
-        ("Prospecting",   "Prospect",  "linear-gradient(90deg,#6366f1,#818cf8)"),
-        ("Qualification", "Qualify",   "linear-gradient(90deg,#8b5cf6,#a78bfa)"),
-        ("Proposal",      "Proposal",  "linear-gradient(90deg,#06b6d4,#22d3ee)"),
-        ("ClosedWon",     "Closed Won","linear-gradient(90deg,#10b981,#34d399)"),
+        ("Prospecting",   "Prospect",   "linear-gradient(90deg,#6366f1,#818cf8)"),
+        ("Qualification", "Qualify",    "linear-gradient(90deg,#8b5cf6,#a78bfa)"),
+        ("Proposal",      "Proposal",   "linear-gradient(90deg,#06b6d4,#22d3ee)"),
+        ("ClosedWon",     "Closed Won", "linear-gradient(90deg,#10b981,#34d399)"),
         ("ClosedLost",    "Closed Lost","linear-gradient(90deg,#ef4444,#f87171)"),
     ];
 
-    private IEnumerable<(string Label, int Count, string Cls)> QuoteStats =>
+    private IEnumerable<(string Label, int Count, string Cls)> QuoteStats => _data is null ? [] :
     [
-        ("Draft",    _qDraft,    ""),
-        ("Sent",     _qSent,     "text-info"),
-        ("Accepted", _qAccepted, "text-success"),
-        ("Rejected", _qRejected, "text-danger"),
+        ("Draft",    _data.Quotes.DraftCount,    ""),
+        ("Sent",     _data.Quotes.SentCount,     "text-info"),
+        ("Accepted", _data.Quotes.AcceptedCount, "text-success"),
+        ("Rejected", _data.Quotes.RejectedCount, "text-danger"),
     ];
 
-    private IEnumerable<(string Label, int Count, string Color)> QuoteFunnelBars =>
+    private IEnumerable<(string Label, int Count, string Color)> QuoteFunnelBars => _data is null ? [] :
     [
-        ("Sent",     _qSent,     "#0ea5e9"),
-        ("Accepted", _qAccepted, "#10b981"),
-        ("Rejected", _qRejected, "#ef4444"),
-        ("Expired",  _qExpired,  "#9CA3AF"),
+        ("Sent",     _data.Quotes.SentCount,     "#0ea5e9"),
+        ("Accepted", _data.Quotes.AcceptedCount, "#10b981"),
+        ("Rejected", _data.Quotes.RejectedCount, "#ef4444"),
+        ("Expired",  _data.Quotes.ExpiredCount,  "#9CA3AF"),
     ];
+
+    private int _totalQuotes => _data?.Quotes.TotalCount ?? 0;
 
     protected override async Task OnInitializedAsync()
     {
-        var oppTask   = Api.GetOpportunitiesAsync();
-        var quoteTask = Api.GetQuotesAsync();
-        var orderTask = Api.GetOrdersAsync();
-
-        var opps   = await oppTask   ?? [];
-        var quotes = await quoteTask ?? [];
-        var orders = await orderTask ?? [];
-
-        _currency = orders.FirstOrDefault()?.Currency
-            ?? opps.FirstOrDefault()?.Currency
-            ?? "USD";
-
-        // Opportunities
-        _totalOpps   = opps.Count;
-        _stageCounts = opps.GroupBy(o => o.Stage)
-            .ToDictionary(g => g.Key, g => (g.Count(), g.Sum(o => o.EstimatedValue)));
-        _wonCount  = _stageCounts.TryGetValue("ClosedWon",  out var w) ? w.Count : 0;
-        _lostCount = _stageCounts.TryGetValue("ClosedLost", out var l) ? l.Count : 0;
-        _wonValue  = _stageCounts.TryGetValue("ClosedWon",  out var wv) ? wv.Value : 0;
-        _lostValue = _stageCounts.TryGetValue("ClosedLost", out var lv) ? lv.Value : 0;
-        var closed = _wonCount + _lostCount;
-        _winRate = closed > 0 ? $"{(decimal)_wonCount / closed * 100:N0}%" : "—";
-
-        // Quotes
-        _totalQuotes = quotes.Count;
-        _qDraft    = quotes.Count(q => q.Status == "Draft");
-        _qSent     = quotes.Count(q => q.Status == "Sent");
-        _qAccepted = quotes.Count(q => q.Status == "Accepted");
-        _qRejected = quotes.Count(q => q.Status == "Rejected");
-        _qExpired  = quotes.Count(q => q.Status == "Expired");
-
-        // Orders
-        var delivered = orders.Where(o => o.Status == "Delivered").ToList();
-        _deliveredRevenue = delivered.Sum(o => o.TotalAmount);
-
-        _monthlyRevenue = delivered
-            .GroupBy(o => o.CreatedAt.ToString("MMM yy"))
-            .ToDictionary(g => g.Key, g => g.Sum(o => o.TotalAmount));
-
-        // Top 5 opportunities by estimated value
-        _topOpps = opps
-            .OrderByDescending(o => o.EstimatedValue)
-            .Take(5)
-            .Select(o => (o.Name, o.AccountName, o.Stage, o.EstimatedValue))
-            .ToList();
-
+        _data = await Api.GetDashboardAsync();
         _loading = false;
     }
 
     private string FormatCurrency(decimal value)
     {
-        var sym = _currency switch { "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => _currency + " " };
+        var c = _data?.Currency ?? "USD";
+        var sym = c switch { "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => c + " " };
         return value >= 1_000_000 ? $"{sym}{value / 1_000_000:N1}M"
              : value >= 1_000     ? $"{sym}{value / 1_000:N1}K"
              : $"{sym}{value:N0}";
@@ -349,7 +308,8 @@ else
 
     private string FormatCurrencyShort(decimal value)
     {
-        var sym = _currency switch { "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => "" };
+        var c = _data?.Currency ?? "USD";
+        var sym = c switch { "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => "" };
         return value >= 1_000_000 ? $"{sym}{value / 1_000_000:N1}M"
              : value >= 1_000     ? $"{sym}{value / 1_000:N0}K"
              : $"{sym}{value:N0}";

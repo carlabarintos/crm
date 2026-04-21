@@ -1,0 +1,115 @@
+@inject CrmApiClient Api
+@inject IJSRuntime JS
+@using CrmSales.Web.Client.Services
+
+@if (Value is not null)
+{
+    <div class="cb-chip">
+        <div class="cb-avatar cb-avatar-sm">@Value.Name[0]</div>
+        <div class="cb-chip-body">
+            <div class="cb-chip-name">@Value.Name</div>
+            <div class="cb-chip-sub">@Value.AccountName · @Value.Stage</div>
+        </div>
+        <button type="button" class="cb-chip-clear" @onclick="Clear" title="Remove">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg>
+        </button>
+    </div>
+}
+else
+{
+    <div class="cb-wrap" @onclick:stopPropagation>
+        <div class="cb-input-wrap">
+            <svg class="cb-search-icon" width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#9CA3AF" stroke-width="1.5">
+                <circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5l3 3" stroke-linecap="round"/>
+            </svg>
+            <input class="form-control cb-input"
+                   placeholder="@Placeholder"
+                   value="@_search"
+                   @oninput="OnInput"
+                   @onfocus="OnFocus"
+                   @onblur="OnBlur"
+                   autocomplete="off" />
+            @if (_loading) { <span class="cb-spinner spinner-border spinner-border-sm"></span> }
+        </div>
+        @if (_open)
+        {
+            <div class="cb-dropdown" @ref="_ref" @onscroll="OnScroll">
+                @foreach (var o in _results)
+                {
+                    var item = o;
+                    <div class="cb-item" @onmousedown="() => Pick(item)">
+                        <div class="cb-avatar cb-avatar-xs">@o.Name[0]</div>
+                        <div class="cb-item-body">
+                            <div class="cb-item-name">@o.Name</div>
+                            <div class="cb-item-sub">@o.AccountName · @o.Stage</div>
+                        </div>
+                    </div>
+                }
+                @if (_loadingMore) { <div class="cb-loading-more"><span class="spinner-border spinner-border-sm text-secondary"></span></div> }
+                @if (!_results.Any() && !_loading)
+                {
+                    <div class="cb-empty">
+                        @(string.IsNullOrWhiteSpace(_search) ? "Start typing to search opportunities" : $"No opportunities match \"{_search}\"")
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public OpportunityDto? Value { get; set; }
+    [Parameter] public EventCallback<OpportunityDto?> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Search opportunities by name or account…";
+
+    private string _search = "";
+    private List<OpportunityDto> _results = [];
+    private string? _cursor;
+    private bool _hasMore, _loading, _loadingMore, _open;
+    private ElementReference _ref;
+    private System.Threading.CancellationTokenSource? _cts;
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? "";
+        _cursor = null; _results = []; _open = true;
+        _cts?.Cancel();
+        _cts = new System.Threading.CancellationTokenSource();
+        var tok = _cts.Token;
+        await Task.Delay(260);
+        if (!tok.IsCancellationRequested) await Fetch(true, tok);
+    }
+
+    private async Task OnFocus()
+    {
+        _open = true;
+        if (!_results.Any() && !_loading) await Fetch(true);
+    }
+
+    private async Task OnBlur() { await Task.Delay(180); _open = false; }
+
+    private async Task Fetch(bool reset, System.Threading.CancellationToken ct = default)
+    {
+        if (reset) { _cursor = null; _results = []; _loading = true; }
+        else _loadingMore = true;
+        try
+        {
+            var r = await Api.GetOpportunitiesAsync(
+                string.IsNullOrWhiteSpace(_search) ? null : _search,
+                limit: 5, cursor: _cursor);
+            if (ct.IsCancellationRequested) return;
+            _results.AddRange(r?.Items ?? []);
+            _cursor = r?.NextCursor; _hasMore = r?.HasMore ?? false;
+        }
+        finally { _loading = false; _loadingMore = false; StateHasChanged(); }
+    }
+
+    private async Task OnScroll()
+    {
+        if (!_hasMore || _loadingMore || _loading) return;
+        if (await JS.InvokeAsync<bool>("isScrolledNearBottom", _ref, 40)) await Fetch(false);
+    }
+
+    private async Task Pick(OpportunityDto o) { _open = false; _search = ""; await ValueChanged.InvokeAsync(o); }
+    private async Task Clear() => await ValueChanged.InvokeAsync(null);
+}

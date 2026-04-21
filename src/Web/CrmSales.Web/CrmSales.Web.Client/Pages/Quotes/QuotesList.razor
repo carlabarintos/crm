@@ -22,7 +22,7 @@
 </div>
 
 <!-- Summary cards -->
-@if (quotes is not null)
+@if (_summary is not null)
 {
     <button type="button" class="mob-section-btn @(_statsOpen ? "open" : "")" @onclick="() => _statsOpen = !_statsOpen">
         <span>Summary</span>
@@ -33,28 +33,28 @@
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Total Quotes</div>
-                <div class="stat-card-value" style="color:#111827">@quotes.Count</div>
+                <div class="stat-card-value" style="color:#111827">@_summary.TotalCount</div>
                 <div class="stat-card-sub">all time</div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Accepted Value</div>
-                <div class="stat-card-value text-success">@FormatAmount(AcceptedValue, QuoteCurrency)</div>
-                <div class="stat-card-sub">@quotes.Count(q => q.Status == "Accepted") accepted</div>
+                <div class="stat-card-value text-success">@FormatAmount(_summary.AcceptedValue, _summary.Currency)</div>
+                <div class="stat-card-sub">@_summary.AcceptedCount accepted</div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Sent (Pending)</div>
-                <div class="stat-card-value" style="color:#0EA5E9">@FormatAmount(SentValue, QuoteCurrency)</div>
-                <div class="stat-card-sub">@quotes.Count(q => q.Status == "Sent") awaiting response</div>
+                <div class="stat-card-value" style="color:#0EA5E9">@FormatAmount(_summary.SentValue, _summary.Currency)</div>
+                <div class="stat-card-sub">@_summary.SentCount awaiting response</div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="stat-card-label">Drafts</div>
-                <div class="stat-card-value" style="color:#D97706">@DraftCount</div>
+                <div class="stat-card-value" style="color:#D97706">@_summary.DraftCount</div>
                 <div class="stat-card-sub">not yet sent</div>
             </div>
         </div>
@@ -69,8 +69,8 @@
 <div class="mob-collapse @(_filtersOpen ? "open" : "")">
 <div class="mb-3 d-flex gap-2 align-items-center stagger-3">
     <input class="form-control" style="max-width:280px" placeholder="Search quotes…"
-           @bind="searchTerm" @bind:event="oninput" />
-    <select class="form-select" style="max-width:160px" @bind="statusFilter">
+           @bind="searchTerm" @onkeyup="@(async e => { if (e.Key == "Enter") await Search(); })" />
+    <select class="form-select" style="max-width:160px" @bind="statusFilter" @bind:after="Search">
         <option value="">All statuses</option>
         <option>Draft</option>
         <option>Sent</option>
@@ -81,7 +81,7 @@
 </div>
 </div>
 
-@if (quotes is null)
+@if (_loading)
 {
     <div class="table-responsive">
         <table class="table">
@@ -108,7 +108,7 @@
         </table>
     </div>
 }
-else if (!FilteredQuotes.Any())
+else if (!quotes.Any())
 {
     <div class="lst-empty stagger-4">
         <div class="lst-empty-icon">
@@ -132,7 +132,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var q in FilteredQuotes)
+                @foreach (var q in quotes)
                 {
                     <tr>
                         <td><a href="/quotes/@q.Id" class="lst-num-link">@q.QuoteNumber</a></td>
@@ -146,6 +146,16 @@ else
                 }
             </tbody>
         </table>
+    </div>
+}
+
+@if (hasMore)
+{
+    <div class="text-center py-3">
+        <button class="btn btn-outline-primary" @onclick="LoadMore" disabled="@isLoadingMore">
+            @if (isLoadingMore) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            Load More
+        </button>
     </div>
 }
 
@@ -201,25 +211,56 @@ else
     [SupplyParameterFromQuery(Name = "opportunityId")]
     public Guid? OpportunityId { get; set; }
 
-    private List<QuoteDto>? quotes;
+    private List<QuoteDto> quotes = [];
+    private QuotesSummaryDto? _summary;
     private string searchTerm = "";
     private string statusFilter = "";
+    private string? cursor;
+    private bool hasMore;
+    private bool isLoadingMore;
+    private bool _loading = true;
     private bool _statsOpen = true;
     private bool _filtersOpen = true;
 
-    private decimal AcceptedValue => (quotes ?? []).Where(q => q.Status == "Accepted").Sum(q => q.TotalAmount);
-    private decimal SentValue => (quotes ?? []).Where(q => q.Status == "Sent").Sum(q => q.TotalAmount);
-    private int DraftCount => (quotes ?? []).Count(q => q.Status == "Draft");
-    private string QuoteCurrency => quotes?.FirstOrDefault()?.Currency ?? "USD";
+    protected override async Task OnInitializedAsync()
+    {
+        var summaryTask = OpportunityId is null ? Api.GetQuotesSummaryAsync() : Task.FromResult<QuotesSummaryDto?>(null);
+        await LoadQuotes();
+        _summary = await summaryTask;
+    }
 
-    private IEnumerable<QuoteDto> FilteredQuotes => (quotes ?? []).Where(q =>
-        (string.IsNullOrWhiteSpace(statusFilter) || q.Status == statusFilter) &&
-        (string.IsNullOrWhiteSpace(searchTerm) ||
-            q.QuoteNumber.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-            q.Status.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)));
+    private async Task Search()
+    {
+        cursor = null;
+        await LoadQuotes();
+    }
 
-    protected override async Task OnInitializedAsync() =>
-        quotes = await Api.GetQuotesAsync(OpportunityId);
+    private async Task LoadQuotes()
+    {
+        _loading = cursor is null;
+        var result = await Api.GetQuotesAsync(
+            OpportunityId,
+            string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+            string.IsNullOrWhiteSpace(statusFilter) ? null : statusFilter,
+            20, cursor);
+
+        if (cursor is null)
+            quotes = result?.Items ?? [];
+        else
+            quotes.AddRange(result?.Items ?? []);
+
+        cursor = result?.NextCursor;
+        hasMore = result?.HasMore ?? false;
+        _loading = false;
+    }
+
+    private async Task LoadMore()
+    {
+        if (isLoadingMore || !hasMore) return;
+        isLoadingMore = true;
+        try { await LoadQuotes(); }
+        finally { isLoadingMore = false; }
+    }
 
     private static string GetStatusBadge(string status) => status switch
     {

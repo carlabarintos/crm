@@ -119,7 +119,7 @@
 }
 
 <!-- Summary cards -->
-@if (products is not null)
+@if (_statsLoaded)
 {
     <button type="button" class="mob-section-btn @(_statsOpen ? "open" : "")" @onclick="() => _statsOpen = !_statsOpen">
         <span>Summary</span>
@@ -131,7 +131,7 @@
             <div class="stat-card">
                 <div class="stat-card-label">Active Products</div>
                 <div class="stat-card-value text-primary">@ActiveCount</div>
-                <div class="stat-card-sub">of @products.Count total</div>
+                <div class="stat-card-sub">of @TotalCount total</div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
@@ -166,10 +166,10 @@
 <div class="mob-collapse @(_filtersOpen ? "open" : "")">
 <div class="row mb-3 stagger-3">
     <div class="col-md-4">
-        <input class="form-control" placeholder="Search by name or SKU..." @bind="searchTerm" @bind:after="LoadProducts" />
+        <input class="form-control" placeholder="Search by name or SKU..." @bind="searchTerm" @onkeyup="OnSearchKey" />
     </div>
     <div class="col-md-2">
-        <select class="form-select" @bind="activeFilter" @bind:after="LoadProducts">
+        <select class="form-select" @bind="activeFilter" @bind:after="OnFilterChanged">
             <option value="">All</option>
             <option value="true">Active</option>
             <option value="false">Inactive</option>
@@ -178,7 +178,7 @@
 </div>
 </div>
 
-@if (products is null)
+@if (_loading)
 {
     <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
 }
@@ -214,6 +214,16 @@ else
                 </div>
             </div>
         }
+    </div>
+}
+
+@if (hasMore)
+{
+    <div class="text-center py-3">
+        <button class="btn btn-outline-primary" @onclick="LoadMore" disabled="@isLoadingMore">
+            @if (isLoadingMore) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            Load More
+        </button>
     </div>
 }
 
@@ -256,35 +266,25 @@ else
 </style>
 
 @code {
-    private List<ProductDto>? products;
+    private List<ProductDto> products = [];
     private string searchTerm = "";
     private string activeFilter = "";
+    private string? cursor;
+    private bool hasMore;
+    private bool isLoadingMore;
     private bool _statsOpen = true;
     private bool _filtersOpen = true;
-
-    // Import
-    private bool _showImport;
-    private bool _importing;
-    private string? _importParseError;
-    private List<ProductImportRow> _importPreview = [];
-    private ImportResult? _importResult;
-
-    private const int MaxImportRows = 200;
-    private const long MaxFileSizeBytes = 512 * 1024; // 512 KB
-
-    private int ActiveCount => (products ?? []).Count(p => p.IsActive);
-    private int LowStockCount => (products ?? []).Count(p => p.IsActive && p.StockQuantity > 0 && p.StockQuantity <= 10);
-    private int OutOfStockCount => (products ?? []).Count(p => p.IsActive && p.StockQuantity == 0);
-    private decimal InventoryValue => (products ?? []).Where(p => p.IsActive).Sum(p => p.Price * p.StockQuantity);
+    private bool _loading = true;
+    private bool _statsLoaded;
+    private int TotalCount, ActiveCount, LowStockCount, OutOfStockCount;
+    private decimal InventoryValue;
+    private string _summaryCurrency = "USD";
 
     private record ProductImportRow(string Name, string Sku, string? Description, decimal Price, string Currency, int StockQuantity, string? CategoryName);
 
     private string FormatInventoryValue()
     {
-        var sym = products?.FirstOrDefault()?.Currency switch
-        {
-            "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", var c => (c ?? "") + " "
-        };
+        var sym = _summaryCurrency switch { "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => _summaryCurrency + " " };
         return InventoryValue >= 1_000_000 ? $"{sym}{InventoryValue / 1_000_000:N1}M"
              : InventoryValue >= 1_000     ? $"{sym}{InventoryValue / 1_000:N1}K"
              : $"{sym}{InventoryValue:N0}";
@@ -292,11 +292,78 @@ else
 
     protected override async Task OnInitializedAsync() => await LoadProducts();
 
+    private async Task Search()
+    {
+        cursor = null;
+        await LoadProducts();
+    }
+
+    private async Task OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await Search();
+    }
+
+    private async Task OnFilterChanged()
+    {
+        await Search();
+    }
+
     private async Task LoadProducts()
     {
         bool? isActive = activeFilter switch { "true" => true, "false" => false, _ => null };
-        products = await Api.GetProductsAsync(
-            string.IsNullOrEmpty(searchTerm) ? null : searchTerm, isActive);
+
+        var pageTask = Api.GetProductsAsync(
+            string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+            isActive, 20, cursor);
+
+        var summaryTask = _statsLoaded ? Task.FromResult<ProductSummaryDto?>(null) : Api.GetProductSummaryAsync();
+
+        var result = await pageTask;
+
+        if (cursor is null)
+            products = result?.Items ?? [];
+        else
+            products.AddRange(result?.Items ?? []);
+
+        cursor = result?.NextCursor;
+        hasMore = result?.HasMore ?? false;
+        _loading = false;
+
+        if (!_statsLoaded)
+        {
+            var s = await summaryTask;
+            if (s is not null)
+            {
+                TotalCount = s.TotalCount;
+                ActiveCount = s.ActiveCount;
+                LowStockCount = s.LowStockCount;
+                OutOfStockCount = s.OutOfStockCount;
+                InventoryValue = s.InventoryValue;
+                _summaryCurrency = s.Currency;
+                _statsLoaded = true;
+            }
+        }
+    }
+
+    private async Task LoadMore()
+    {
+        if (isLoadingMore || !hasMore) return;
+        isLoadingMore = true;
+        try
+        {
+            bool? isActive = activeFilter switch { "true" => true, "false" => false, _ => null };
+            var result = await Api.GetProductsAsync(
+                string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+                isActive, 20, cursor);
+
+            products.AddRange(result?.Items ?? []);
+            cursor = result?.NextCursor;
+            hasMore = result?.HasMore ?? false;
+        }
+        finally
+        {
+            isLoadingMore = false;
+        }
     }
 
     // ── CSV Import ────────────────────────────────────────────────────────────
@@ -414,7 +481,7 @@ else
             if (resp.IsSuccessStatusCode)
             {
                 _importResult = await resp.Content.ReadFromJsonAsync<ImportResult>();
-                await LoadProducts();
+                await Search();
             }
             else
             {
@@ -438,4 +505,12 @@ else
                   "\"Another Product\",SKU-002,,149.00,USD,25,Clothing";
         await JS.InvokeVoidAsync("downloadCsv", "products_template.csv", csv);
     }
+
+    private const int MaxImportRows = 200;
+    private const long MaxFileSizeBytes = 512 * 1024; // 512 KB
+    private bool _showImport;
+    private bool _importing;
+    private string? _importParseError;
+    private List<ProductImportRow> _importPreview = [];
+    private ImportResult? _importResult;
 }

@@ -5,6 +5,7 @@ using CrmSales.Products.Application.Products.Queries.GetProducts;
 using CrmSales.Products.Domain.Entities;
 using CrmSales.Products.Domain.Repositories;
 using CrmSales.SharedKernel;
+using CrmSales.SharedKernel.Application;
 using Microsoft.AspNetCore.Mvc;
 using Wolverine;
 
@@ -27,15 +28,31 @@ public static class ProductEndpoints
             .RequireAuthorization();
 
         group.MapGet("/", async (
-            [FromQuery] string? search,
-            [FromQuery] bool? isActive,
             IMessageBus bus,
-            CancellationToken ct) =>
+            CancellationToken ct,
+            [FromQuery] string? search = null,
+            [FromQuery] bool? isActive = null,
+            [FromQuery] int limit = 20,
+            [FromQuery] string? cursor = null) =>
         {
-            var result = await bus.InvokeAsync<Result<System.Collections.Generic.IReadOnlyList<
+            var result = await bus.InvokeAsync<Result<CursorPaginationResult<
                 CrmSales.Products.Application.Products.DTOs.ProductDto>>>(
-                new GetProductsQuery(search, isActive), ct);
+                new GetProductsQuery(search, isActive, limit, cursor), ct);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.Problem(result.Error.Description);
+        });
+
+        group.MapGet("/summary", async (IProductRepository repo, CancellationToken ct) =>
+        {
+            var s = await repo.GetSummaryAsync(ct);
+            return Results.Ok(new
+            {
+                totalCount     = s.Total,
+                activeCount    = s.Active,
+                lowStockCount  = s.LowStock,
+                outOfStockCount = s.OutOfStock,
+                inventoryValue = s.InventoryValue,
+                currency       = s.Currency
+            });
         });
 
         group.MapGet("/{id:guid}", async (Guid id, IMessageBus bus, CancellationToken ct) =>
@@ -72,10 +89,15 @@ public static class ProductEndpoints
     {
         var group = app.MapGroup("/api/categories").WithTags("Categories").RequireAuthorization();
 
-        group.MapGet("/", async (IProductCategoryRepository repo, CancellationToken ct) =>
+        group.MapGet("/", async (
+            IProductCategoryRepository repo,
+            CancellationToken ct,
+            [FromQuery] string? search = null,
+            [FromQuery] int limit = 20,
+            [FromQuery] string? cursor = null) =>
         {
-            var cats = await repo.GetAllAsync(ct);
-            return Results.Ok(cats.Select(c => new { c.Id, c.Name, c.Description, c.IsActive }));
+            var result = await repo.SearchAsync(search, limit, cursor, ct);
+            return Results.Ok(new { items = result.Items.Select(c => new { c.Id, c.Name, c.Description, c.IsActive }), result.NextCursor, result.HasMore });
         });
 
         group.MapPost("/", async (CreateCategoryRequest req, IProductCategoryRepository repo, CancellationToken ct) =>

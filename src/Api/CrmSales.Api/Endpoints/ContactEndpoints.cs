@@ -13,17 +13,30 @@ public static class ContactEndpoints
             .RequireAuthorization();
 
         group.MapGet("/", async (
-            [FromQuery] string? search,
             IContactRepository repo,
-            CancellationToken ct) =>
+            CancellationToken ct,
+            [FromQuery] string? search = null,
+            [FromQuery] int limit = 20,
+            [FromQuery] string? cursor = null) =>
         {
-            var contacts = await repo.SearchAsync(search, ct);
-            return Results.Ok(contacts.Select(c => new
+            var result = await repo.SearchPagedAsync(search, limit, cursor, ct);
+            return Results.Ok(new
             {
-                c.Id, c.FirstName, c.LastName, c.FullName,
-                c.Email, c.Phone, c.Company, c.JobTitle,
-                c.IsActive, c.CreatedAt
-            }));
+                items = result.Items.Select(c => new
+                {
+                    c.Id, c.FirstName, c.LastName, c.FullName,
+                    c.Email, c.Phone, c.Company, c.JobTitle,
+                    c.IsActive, c.CreatedAt
+                }),
+                result.NextCursor,
+                result.HasMore
+            });
+        });
+
+        group.MapGet("/summary", async (IContactRepository repo, CancellationToken ct) =>
+        {
+            var s = await repo.GetSummaryAsync(ct);
+            return Results.Ok(new { totalCount = s.Total, activeCount = s.Active });
         });
 
         group.MapGet("/{id:guid}", async (Guid id, IContactRepository repo, CancellationToken ct) =>

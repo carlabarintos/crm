@@ -1,3 +1,9 @@
+// Scroll detection for infinite-scroll dropdowns
+window.isScrolledNearBottom = function (element, threshold) {
+    if (!element) return false;
+    return element.scrollTop + element.clientHeight >= element.scrollHeight - threshold;
+};
+
 // CSV download helper
 window.downloadCsv = function (filename, content) {
     var blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });

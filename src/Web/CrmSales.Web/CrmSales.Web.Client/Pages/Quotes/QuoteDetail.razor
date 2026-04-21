@@ -63,23 +63,11 @@ else if (quote is not null)
                 @if (showLineItemForm && quote.Status == "Draft")
                 {
                     <div class="card-body border-bottom">
-                        @if (products is null)
-                        {
-                            <div class="text-muted small">Loading products...</div>
-                        }
-                        else
-                        {
-                            <div class="row g-2 mb-2">
-                                <div class="col-md-6">
-                                    <label class="form-label form-label-sm">Product</label>
-                                    <select class="form-select form-select-sm" @bind="liProductIdRaw" @bind:after="OnProductSelected">
-                                        <option value="">— Select product —</option>
-                                        @foreach (var p in products.Where(p => p.IsActive))
-                                        {
-                                            <option value="@p.Id">@p.Name — @p.Currency @p.Price.ToString("F2")</option>
-                                        }
-                                    </select>
-                                </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label form-label-sm">Product</label>
+                                <ProductCombobox Value="_liProduct" ValueChanged="OnProductSelected" />
+                            </div>
                                 <div class="col-md-2">
                                     <label class="form-label form-label-sm">Qty</label>
                                     <input class="form-control form-control-sm" type="number" min="1" @bind="liQuantity" />
@@ -99,11 +87,10 @@ else if (quote is not null)
                                 <div class="text-muted small mb-2">Line total: @quote.Currency @lineTotal.ToString("F2")</div>
                             }
                             @if (!string.IsNullOrEmpty(liError)) { <div class="text-danger small mb-1">@liError</div> }
-                            <button class="btn btn-sm btn-primary" @onclick="AddLineItem" disabled="@(liSaving || string.IsNullOrEmpty(liProductIdRaw))">
+                            <button class="btn btn-sm btn-primary" @onclick="AddLineItem" disabled="@(liSaving || _liProduct is null)">
                                 @if (liSaving) { <span class="spinner-border spinner-border-sm me-1"></span> }
                                 Add to Quote
                             </button>
-                        }
                     </div>
                 }
 
@@ -367,13 +354,11 @@ else if (quote is not null)
     [Parameter] public Guid Id { get; set; }
 
     private QuoteDetailDto? quote;
-    private List<ProductDto>? products;
     private string? error;
 
     // Line item form
     private bool showLineItemForm;
-    private string liProductIdRaw = "";
-    private string liProductName = "";
+    private ProductDto? _liProduct;
     private int liQuantity = 1;
     private decimal liUnitPrice;
     private decimal liDiscount;
@@ -391,44 +376,26 @@ else if (quote is not null)
 
     private async Task Load()
     {
-        try
-        {
-            quote = await Api.GetQuoteAsync(Id);
-            if (quote?.Status == "Draft" && products is null)
-                products = await Api.GetProductsAsync(isActive: true);
-        }
+        try { quote = await Api.GetQuoteAsync(Id); }
         catch { error = "Failed to load quote."; }
     }
 
-    private async Task ToggleAddItem()
+    private void ToggleAddItem()
     {
         showLineItemForm = !showLineItemForm;
-        if (showLineItemForm && products is null)
-            products = await Api.GetProductsAsync(isActive: true);
+        if (!showLineItemForm) { _liProduct = null; liQuantity = 1; liUnitPrice = 0; liDiscount = 0; }
     }
 
-    private void OnProductSelected()
+    private void OnProductSelected(ProductDto? p)
     {
-        if (Guid.TryParse(liProductIdRaw, out var pid))
-        {
-            var product = products?.FirstOrDefault(p => p.Id == pid);
-            if (product != null)
-            {
-                liProductName = product.Name;
-                liUnitPrice = product.Price;
-            }
-        }
-        else
-        {
-            liProductName = "";
-            liUnitPrice = 0;
-        }
+        _liProduct = p;
+        liUnitPrice = p?.Price ?? 0;
     }
 
     private async Task AddLineItem()
     {
         liError = null;
-        if (!Guid.TryParse(liProductIdRaw, out var prodId)) { liError = "Please select a product."; return; }
+        if (_liProduct is null) { liError = "Please select a product."; return; }
         if (liQuantity <= 0) { liError = "Quantity must be > 0."; return; }
         if (liUnitPrice <= 0) { liError = "Unit price must be > 0."; return; }
 
@@ -437,14 +404,13 @@ else if (quote is not null)
         {
             var resp = await Api.AddLineItemAsync(Id, new
             {
-                ProductId = prodId, ProductName = liProductName,
+                ProductId = _liProduct.Id, ProductName = _liProduct.Name,
                 Quantity = liQuantity, UnitPrice = liUnitPrice, DiscountPercent = liDiscount
             });
             if (resp.IsSuccessStatusCode)
             {
                 showLineItemForm = false;
-                liProductIdRaw = ""; liProductName = "";
-                liQuantity = 1; liUnitPrice = 0; liDiscount = 0;
+                _liProduct = null; liQuantity = 1; liUnitPrice = 0; liDiscount = 0;
                 await Load();
             }
             else liError = await resp.Content.ReadAsStringAsync();

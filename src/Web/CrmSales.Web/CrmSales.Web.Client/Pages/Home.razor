@@ -455,10 +455,6 @@ else
     private bool _pipelineOpen = true;
     private bool _activityOpen = true;
 
-    private List<OpportunityDto> opps = [];
-    private List<QuoteDto> quotes = [];
-    private List<OrderDto> orders = [];
-    private List<ProductDto> products = [];
     private List<AuditLogDto> recentActivity = [];
 
     private decimal pipelineValue;
@@ -482,73 +478,51 @@ else
         var auth = await AuthStateTask;
         var user = auth.User;
 
-        Console.WriteLine($"[Home] Authenticated: {user.Identity?.IsAuthenticated}");
-        Console.WriteLine($"[Home] Claims: {string.Join(", ", user.Claims.Select(c => $"{c.Type}={c.Value}"))}");
-        Console.WriteLine($"[Home] IsInRole(SuperAdmin): {user.IsInRole("SuperAdmin")}");
-
         if (user.IsInRole("SuperAdmin"))
         {
-            Console.WriteLine("[Home] SuperAdmin detected — redirecting to /companies");
             Navigation.NavigateTo("/companies", replace: true);
             return;
         }
 
-        var oppTask      = Api.GetOpportunitiesAsync();
-        var quoteTask    = Api.GetQuotesAsync();
-        var orderTask    = Api.GetOrdersAsync();
-        var prodTask     = Api.GetProductsAsync(isActive: true);
-        var activityTask = Api.GetAuditLogsAsync(page: 1, pageSize: 8);
+        var oppSummaryTask   = Api.GetOpportunitySummaryAsync();
+        var quoteSummaryTask = Api.GetQuotesSummaryAsync();
+        var orderSummaryTask = Api.GetOrdersSummaryAsync();
+        var prodSummaryTask  = Api.GetProductSummaryAsync();
+        var activityTask     = Api.GetAuditLogsAsync(page: 1, pageSize: 8);
 
-        opps     = await oppTask      ?? [];
-        quotes   = await quoteTask    ?? [];
-        orders   = await orderTask    ?? [];
-        products = await prodTask     ?? [];
-        recentActivity = (await activityTask)?.Items ?? [];
+        var oppSummary   = await oppSummaryTask;
+        var quoteSummary = await quoteSummaryTask;
+        var orderSummary = await orderSummaryTask;
+        var prodSummary  = await prodSummaryTask;
+        recentActivity   = (await activityTask)?.Items ?? [];
 
-        Compute();
-        loading = false;
-    }
+        if (oppSummary is not null)
+        {
+            openOppCount   = oppSummary.OpenCount;
+            pipelineValue  = oppSummary.PipelineValue;
+            forecast       = oppSummary.WeightedValue;
+            wonCount       = oppSummary.WonCount;
+            lostCount      = oppSummary.LostCount;
+            winRate        = decimal.TryParse(oppSummary.WinRate.TrimEnd('%'), out var wr) ? wr : 0;
+            avgDaysToClose = oppSummary.AvgDaysToClose;
+            pipelineCurrency = oppSummary.Currency;
 
-    private void Compute()
-    {
-        stageCounts = opps
-            .GroupBy(o => o.Stage)
-            .ToDictionary(g => g.Key, g => (g.Count(), g.Sum(o => o.EstimatedValue)));
+            stageCounts = oppSummary.ByStage.ToDictionary(
+                s => s.Stage, s => (s.Count, s.Value));
+        }
 
-        var openOpps = opps.Where(o => o.Stage is not ("ClosedWon" or "ClosedLost")).ToList();
-        openOppCount  = openOpps.Count;
-        pipelineValue = openOpps.Sum(o => o.EstimatedValue);
-        forecast      = openOpps.Sum(o => o.EstimatedValue * o.Probability / 100m);
-
-        var barStages = PipelineStages.Select(p => p.Stage);
-        maxStageValue = barStages
-            .Select(s => stageCounts.TryGetValue(s, out var v) ? v.Value : 0m)
-            .DefaultIfEmpty(1m)
-            .Max();
+        maxStageValue = PipelineStages
+            .Select(p => stageCounts.TryGetValue(p.Stage, out var v) ? v.Value : 0m)
+            .DefaultIfEmpty(1m).Max();
         if (maxStageValue <= 0) maxStageValue = 1;
 
-        wonCount  = stageCounts.TryGetValue("ClosedWon",  out var wv) ? wv.Count : 0;
-        lostCount = stageCounts.TryGetValue("ClosedLost", out var lv) ? lv.Count : 0;
-        winRate   = (wonCount + lostCount) > 0
-            ? Math.Round((decimal)wonCount / (wonCount + lostCount) * 100, 1)
-            : 0;
+        totalQuoteCount  = quoteSummary?.TotalCount ?? 0;
+        activeQuoteCount = (quoteSummary?.DraftCount ?? 0) + (quoteSummary?.SentCount ?? 0);
+        totalOrderCount  = orderSummary?.TotalCount ?? 0;
+        activeOrderCount = orderSummary?.ActiveCount ?? 0;
+        activeProductCount = prodSummary?.ActiveCount ?? 0;
 
-        var wonOpps = opps.Where(o => o.Stage == "ClosedWon").ToList();
-        avgDaysToClose = wonOpps.Count > 0
-            ? Math.Round(wonOpps.Average(o => (o.UpdatedAt - o.CreatedAt).TotalDays), 0)
-            : 0;
-
-        pipelineCurrency = openOpps
-            .GroupBy(o => o.Currency)
-            .OrderByDescending(g => g.Count())
-            .Select(g => g.Key)
-            .FirstOrDefault() ?? "PHP";
-
-        totalQuoteCount  = quotes.Count;
-        activeQuoteCount = quotes.Count(q => q.Status is "Draft" or "Sent");
-        totalOrderCount  = orders.Count;
-        activeOrderCount = orders.Count(o => o.Status is "Confirmed" or "Processing" or "Shipped");
-        activeProductCount = products.Count;
+        loading = false;
     }
 
     private double GetBarWidth(string stage)
