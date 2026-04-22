@@ -52,6 +52,8 @@ services:
     ports:
       - "8080:8080"
       - "8443:8443"
+    volumes:
+      - ./keycloak-themes/crm:/opt/keycloak/themes/crm:ro
     depends_on:
       postgres:
         condition: service_healthy

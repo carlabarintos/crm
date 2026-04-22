@@ -14,8 +14,18 @@ var rabbitmq = builder.AddRabbitMQ("rabbitmq")
     .WithDataVolume("crm-rabbitmq-data")
     .WithManagementPlugin();
 
-// Keycloak — identity provider (start-dev mode, admin:admin)
-var keycloak = builder.AddContainer("keycloak", "quay.io/keycloak/keycloak", "latest")
+// Keycloak — identity provider (start-dev mode, embedded H2 storage)
+//
+// Theme:
+//   Dev  — bind-mount keycloak-themes/ so CSS edits apply on KC restart.
+//   Prod — build a custom image (see keycloak-themes/Dockerfile) and set KEYCLOAK_IMAGE.
+var keycloakImage = builder.Configuration["KEYCLOAK_IMAGE"] ?? "quay.io/keycloak/keycloak";
+var keycloakTag   = builder.Configuration["KEYCLOAK_TAG"]   ?? "latest";
+
+var keycloakThemesPath = Path.GetFullPath(
+    Path.Combine(builder.AppHostDirectory, "keycloak-themes"));
+
+var keycloak = builder.AddContainer("keycloak", keycloakImage, keycloakTag)
     .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "http")
     .WithEnvironment("KEYCLOAK_ADMIN", "admin")
     .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", "admin")
@@ -23,6 +33,10 @@ var keycloak = builder.AddContainer("keycloak", "quay.io/keycloak/keycloak", "la
     .WithEnvironment("KC_HOSTNAME_STRICT", "false")
     .WithArgs("start-dev")
     .WithVolume("crm-keycloak-data", "/opt/keycloak/data");
+
+// Theme: bind-mount in dev, baked into custom image in prod
+if (keycloakImage == "quay.io/keycloak/keycloak")
+    keycloak.WithBindMount(keycloakThemesPath, "/opt/keycloak/themes", isReadOnly: true);
 
 var keycloakEndpoint = keycloak.GetEndpoint("http");
 

@@ -57,12 +57,15 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
             token = await GetAdminTokenAsync();
         }
 
-        // ── Set access token lifetime to 8 hours ───────────────────────────
+        // ── Configure realm settings (token lifetime + custom theme) ──────
         var updateRealm = new HttpRequestMessage(HttpMethod.Put, $"{_adminUrl}/admin/realms/{_realm}");
         updateRealm.Headers.Authorization = Bearer(token);
         updateRealm.Content = JsonContent.Create(new
         {
             realm = _realm,
+            displayName = "CRM Sales",
+            displayNameHtml = "CRM Sales",
+            loginTheme = "crm",
             accessTokenLifespan = 28800
         });
         (await httpClient.SendAsync(updateRealm)).EnsureSuccessStatusCode();

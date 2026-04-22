@@ -82,6 +82,7 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     volumes:
       - crm-keycloak-data:/opt/keycloak/data
+      - ./keycloak-themes/crm:/opt/keycloak/themes/crm:ro
     depends_on:
       postgres:
         condition: service_healthy
