@@ -1,0 +1,643 @@
+@page "/help"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+
+<PageTitle>Help — CRM Sales</PageTitle>
+
+<!-- Page header -->
+<div class="page-header">
+    <div>
+        <p class="page-header-meta">Documentation</p>
+        <h1>Help &amp; User Guide</h1>
+        <p>Everything you need to know about using CRM Sales</p>
+    </div>
+</div>
+
+<!-- Quick nav -->
+<div class="card mb-4">
+    <div class="card-body">
+        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9CA3AF;margin-bottom:.75rem">Jump to section</p>
+        <div class="d-flex flex-wrap gap-2">
+            @foreach (var (label, anchor) in Sections)
+            {
+                <a href="#@anchor" class="help-chip">@label</a>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- What is CRM Sales -->
+<div id="overview" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 12L6 7L9.5 10L13 5" stroke="#6366f1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="13" cy="5" r="1.5" fill="#6366f1"/>
+            </svg>
+        </div>
+        <span>What is CRM Sales?</span>
+    </div>
+    <div class="card-body help-body">
+        <p>CRM Sales is a sales pipeline management tool that helps your team track every deal from first contact to fulfilled order. It organises your work around a simple, linear sales journey:</p>
+        <div class="help-journey">
+            <div class="help-journey-step" style="--accent:#6366f1">
+                <div class="hjs-badge">1</div>
+                <div class="hjs-content">
+                    <strong>Opportunity</strong>
+                    <span>A potential deal you are actively pursuing</span>
+                </div>
+            </div>
+            <div class="help-journey-arrow">→</div>
+            <div class="help-journey-step" style="--accent:#3b82f6">
+                <div class="hjs-badge" style="background:#eff6ff;color:#3b82f6">2</div>
+                <div class="hjs-content">
+                    <strong>Quote</strong>
+                    <span>A formal price proposal sent to the prospect</span>
+                </div>
+            </div>
+            <div class="help-journey-arrow">→</div>
+            <div class="help-journey-step" style="--accent:#10b981">
+                <div class="hjs-badge" style="background:#ecfdf5;color:#10b981">3</div>
+                <div class="hjs-content">
+                    <strong>Accepted</strong>
+                    <span>The prospect agrees to the terms</span>
+                </div>
+            </div>
+            <div class="help-journey-arrow">→</div>
+            <div class="help-journey-step" style="--accent:#f59e0b">
+                <div class="hjs-badge" style="background:#fffbeb;color:#f59e0b">4</div>
+                <div class="hjs-content">
+                    <strong>Order</strong>
+                    <span>A confirmed purchase in fulfilment</span>
+                </div>
+            </div>
+            <div class="help-journey-arrow">→</div>
+            <div class="help-journey-step" style="--accent:#10b981">
+                <div class="hjs-badge" style="background:#ecfdf5;color:#10b981">5</div>
+                <div class="hjs-content">
+                    <strong>Delivered</strong>
+                    <span>Deal complete, revenue realised</span>
+                </div>
+            </div>
+        </div>
+        <div class="help-tip">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" stroke-width="1.5"><circle cx="7" cy="7" r="6"/><path d="M7 5v3M7 10v.5" stroke-linecap="round"/></svg>
+            <span>Every action you take is recorded in the <strong>Event Log</strong>, so your team always has a full audit trail.</span>
+        </div>
+    </div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color:#22c55e">
+                <path d="M7.5 1.5L1 6v8h4v-4h5v4h4V6L7.5 1.5z"/>
+            </svg>
+        </div>
+        <span>Dashboard</span>
+    </div>
+    <div class="card-body help-body">
+        <p>The Dashboard is your at-a-glance view of the business. It opens automatically when you log in.</p>
+        <div class="help-grid">
+            <div class="help-grid-item">
+                <strong>KPI Cards</strong>
+                <p>Shows total pipeline value, active quotes, active orders, and product count. Click any card to go directly to that section.</p>
+            </div>
+            <div class="help-grid-item">
+                <strong>Sales Pipeline Chart</strong>
+                <p>A bar chart of your open opportunities broken down by stage, with their combined value. Also shows win rate, average days to close, and weighted forecast.</p>
+            </div>
+            <div class="help-grid-item">
+                <strong>Quick Actions</strong>
+                <p>One-click shortcuts to create a new Opportunity, Quote, Contact, or Product without navigating through the menu.</p>
+            </div>
+            <div class="help-grid-item">
+                <strong>Recent Activity</strong>
+                <p>A live feed of the latest actions taken by any user on the account — creates, updates, status changes, and more.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Opportunities -->
+<div id="opportunities" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#6366f1" stroke-width="1.6">
+                <path d="M1 12l4-5 3.5 3 3.5-4.5L14 3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </div>
+        <span>Opportunities</span>
+    </div>
+    <div class="card-body help-body">
+        <p>An <strong>Opportunity</strong> represents a potential sale. Create one as soon as you identify a prospect worth pursuing.</p>
+
+        <h4 class="help-h4">Pipeline stages</h4>
+        <div class="help-stages">
+            <div class="help-stage-row">
+                <span class="badge badge-soft-primary" style="min-width:110px">Prospecting</span>
+                <span>Initial contact or lead identified. You are researching whether there is a genuine fit.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-info" style="min-width:110px">Qualification</span>
+                <span>You have confirmed budget, authority, need, and timeline (BANT). Worth investing effort.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-warning" style="min-width:110px">Proposal</span>
+                <span>A formal quote or proposal has been presented to the prospect.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-success" style="min-width:110px">Closed Won</span>
+                <span>The deal was won. Move to creating an Order.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-danger" style="min-width:110px">Closed Lost</span>
+                <span>The deal did not progress. Record the reason in the notes for future learning.</span>
+            </div>
+        </div>
+
+        <h4 class="help-h4">Key fields</h4>
+        <div class="help-field-table">
+            <div class="help-field-row"><span>Account Name</span><span>Company or organisation you are selling to</span></div>
+            <div class="help-field-row"><span>Estimated Value</span><span>Expected deal size in your chosen currency</span></div>
+            <div class="help-field-row"><span>Probability</span><span>Your confidence level (%) that the deal will close — auto-suggested by stage</span></div>
+            <div class="help-field-row"><span>Expected Close Date</span><span>Your target date for the deal to reach Closed Won</span></div>
+            <div class="help-field-row"><span>Contact</span><span>The person at the account you are dealing with (optional)</span></div>
+            <div class="help-field-row"><span>Owner</span><span>The team member responsible for this deal</span></div>
+        </div>
+
+        <h4 class="help-h4">Activities</h4>
+        <p>Inside an opportunity's detail page you can log <strong>activities</strong> (calls, meetings, emails, notes) to build a history of every interaction. This keeps the whole team informed.</p>
+
+        <div class="help-tip">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" stroke-width="1.5"><circle cx="7" cy="7" r="6"/><path d="M7 5v3M7 10v.5" stroke-linecap="round"/></svg>
+            <span>Create a Quote directly from an Opportunity's detail page to automatically link the two records.</span>
+        </div>
+    </div>
+</div>
+
+<!-- Quotes -->
+<div id="quotes" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#eff6ff,#dbeafe)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#3b82f6" stroke-width="1.6">
+                <rect x="2" y="2" width="12" height="13" rx="1.5"/>
+                <path d="M5 6h6M5 8.5h6M5 11h4" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <span>Quotes</span>
+    </div>
+    <div class="card-body help-body">
+        <p>A <strong>Quote</strong> is a formal price proposal. Add products as line items, apply discounts, then send it to the prospect for acceptance.</p>
+
+        <h4 class="help-h4">Quote statuses</h4>
+        <div class="help-stages">
+            <div class="help-stage-row">
+                <span class="badge badge-soft-neutral" style="min-width:80px">Draft</span>
+                <span>Editable. You can add/remove line items and adjust prices. Not yet visible to the prospect.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-info" style="min-width:80px">Sent</span>
+                <span>Quote has been shared with the prospect. No further edits are allowed — create a new version if changes are needed.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-success" style="min-width:80px">Accepted</span>
+                <span>Prospect agreed. You can now create an Order from this quote.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-danger" style="min-width:80px">Rejected</span>
+                <span>Prospect declined. Consider revising and sending a new quote.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-warning" style="min-width:80px">Expired</span>
+                <span>The expiry date passed before a decision was made.</span>
+            </div>
+        </div>
+
+        <h4 class="help-h4">Line items &amp; pricing</h4>
+        <p>Each line item selects a product from your catalogue, specifies a quantity, and allows an optional <strong>discount percentage</strong> per line. Totals are calculated automatically:</p>
+        <div class="help-field-table">
+            <div class="help-field-row"><span>Sub-total</span><span>Sum of all line items at full price</span></div>
+            <div class="help-field-row"><span>Discount total</span><span>Combined value of all discounts applied</span></div>
+            <div class="help-field-row"><span>Total amount</span><span>Final figure after discounts</span></div>
+        </div>
+
+        <div class="help-tip">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" stroke-width="1.5"><circle cx="7" cy="7" r="6"/><path d="M7 5v3M7 10v.5" stroke-linecap="round"/></svg>
+            <span>A quote must have at least one line item before it can be marked as <strong>Sent</strong>.</span>
+        </div>
+    </div>
+</div>
+
+<!-- Orders -->
+<div id="orders" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#fdf4ff,#fae8ff)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#a855f7" stroke-width="1.6">
+                <path d="M1 1h2l1.5 8h7.5L14 5H4" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="6" cy="14" r="1"/><circle cx="12" cy="14" r="1"/>
+            </svg>
+        </div>
+        <span>Orders</span>
+    </div>
+    <div class="card-body help-body">
+        <p>An <strong>Order</strong> is created from an accepted quote and represents a confirmed purchase in fulfilment. Orders have auto-generated reference numbers in the format <code>ORD-YYYYMM-XXXXXXXX</code>.</p>
+
+        <h4 class="help-h4">Order lifecycle</h4>
+        <div class="help-stages">
+            <div class="help-stage-row">
+                <span class="badge badge-soft-neutral" style="min-width:110px">Pending</span>
+                <span>Just created. Awaiting internal confirmation that stock and resources are available.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-info" style="min-width:110px">Confirmed</span>
+                <span>Resources confirmed. Order is being prepared for dispatch.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-warning" style="min-width:110px">Processing</span>
+                <span>Order is being packed or assembled.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-primary" style="min-width:110px">Shipped</span>
+                <span>Dispatched to the customer. The shipped timestamp is recorded.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-success" style="min-width:110px">Delivered</span>
+                <span>Customer received the order. Deal is complete and the delivered timestamp is recorded.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-danger" style="min-width:110px">Cancelled</span>
+                <span>Only Pending or Confirmed orders can be cancelled.</span>
+            </div>
+        </div>
+
+        <div class="help-tip">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" stroke-width="1.5"><circle cx="7" cy="7" r="6"/><path d="M7 5v3M7 10v.5" stroke-linecap="round"/></svg>
+            <span>Line items and pricing are copied from the accepted quote and cannot be changed on the order itself.</span>
+        </div>
+    </div>
+</div>
+
+<!-- Contacts -->
+<div id="contacts" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#ecfdf5,#d1fae5)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#10b981" stroke-width="1.6">
+                <path d="M11 10c2.5.6 4.5 2.2 4.5 3.8V15H.5v-1.2c0-1.6 2-3.2 4.5-3.8" stroke-linecap="round"/>
+                <circle cx="8" cy="5.5" r="3"/>
+            </svg>
+        </div>
+        <span>Contacts</span>
+    </div>
+    <div class="card-body help-body">
+        <p><strong>Contacts</strong> are the people you do business with — decision-makers, champions, and influencers at your prospect accounts. Linking a contact to an opportunity keeps your team informed about who to call.</p>
+        <div class="help-field-table">
+            <div class="help-field-row"><span>Name</span><span>First and last name</span></div>
+            <div class="help-field-row"><span>Company</span><span>Organisation the contact works for</span></div>
+            <div class="help-field-row"><span>Job Title</span><span>Their role, useful for routing conversations</span></div>
+            <div class="help-field-row"><span>Email &amp; Phone</span><span>Primary communication channels</span></div>
+            <div class="help-field-row"><span>Notes</span><span>Anything relevant that does not fit elsewhere</span></div>
+            <div class="help-field-row"><span>Active</span><span>Inactive contacts are hidden from opportunity dropdowns but kept for historical records</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- Products & Categories -->
+<div id="products" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#fff7ed,#ffedd5)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#f97316" stroke-width="1.6">
+                <path d="M8 1L14 4.5v7L8 15 2 11.5v-7L8 1z" stroke-linejoin="round"/>
+                <path d="M8 1v14M2 4.5l6 4 6-4" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <span>Products &amp; Categories</span>
+    </div>
+    <div class="card-body help-body">
+        <p>The <strong>Product Catalogue</strong> is the source of truth for everything your team sells. Products are referenced when building quote line items.</p>
+
+        <h4 class="help-h4">Product fields</h4>
+        <div class="help-field-table">
+            <div class="help-field-row"><span>SKU</span><span>Unique stock-keeping unit code — must be distinct across the catalogue</span></div>
+            <div class="help-field-row"><span>Price</span><span>Standard unit price in a chosen currency</span></div>
+            <div class="help-field-row"><span>Category</span><span>Group products together for easier browsing</span></div>
+            <div class="help-field-row"><span>Stock Quantity</span><span>Current inventory level — decrements are validated to prevent negative stock</span></div>
+            <div class="help-field-row"><span>Active</span><span>Inactive products cannot be added to new quotes</span></div>
+        </div>
+
+        <h4 class="help-h4">Categories</h4>
+        <p>Create categories (e.g. <em>Hardware</em>, <em>Software Licences</em>, <em>Services</em>) before adding products. Categories are managed separately under <strong>Catalog → Categories</strong> in the sidebar.</p>
+
+        <div class="help-tip">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" stroke-width="1.5"><circle cx="7" cy="7" r="6"/><path d="M7 5v3M7 10v.5" stroke-linecap="round"/></svg>
+            <span>Admins can bulk-import products and categories from a CSV file using the <strong>Import</strong> button on the list pages.</span>
+        </div>
+    </div>
+</div>
+
+<!-- Users & Roles -->
+<div id="users" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#f5f3ff,#ede9fe)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#8b5cf6" stroke-width="1.6">
+                <circle cx="10.5" cy="5.5" r="2.5"/><circle cx="5.5" cy="7" r="2.5"/>
+                <path d="M1 15c0-2.2 2-3.8 4.5-3.8s4.5 1.6 4.5 3.8" stroke-linecap="round"/>
+                <path d="M12 10.5c2 .4 3.5 1.8 3.5 3.5" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <span>Users &amp; Roles</span>
+    </div>
+    <div class="card-body help-body">
+        <p>Access is controlled by roles. Your role determines which sections you can see and what actions you can perform.</p>
+        <div class="help-roles">
+            <div class="help-role-card">
+                <div class="help-role-name">Admin</div>
+                <p>Full access to all modules including Products, Categories, Users, and Reports. Can manage other users' roles and view all records regardless of owner.</p>
+            </div>
+            <div class="help-role-card">
+                <div class="help-role-name">Sales Manager</div>
+                <p>Access to all sales records (Opportunities, Quotes, Orders, Contacts), can view Reports, but cannot manage products or users.</p>
+            </div>
+            <div class="help-role-card">
+                <div class="help-role-name">Sales Rep</div>
+                <p>Can create and manage their own Opportunities, Quotes, Orders, and Contacts. Does not have access to Products or Reports.</p>
+            </div>
+            <div class="help-role-card">
+                <div class="help-role-name">Account Manager</div>
+                <p>Similar access to Sales Rep. Focused on managing existing customer relationships and coordinating orders.</p>
+            </div>
+        </div>
+        <div class="help-tip">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" stroke-width="1.5"><circle cx="7" cy="7" r="6"/><path d="M7 5v3M7 10v.5" stroke-linecap="round"/></svg>
+            <span>User accounts are provisioned through <strong>Keycloak</strong>. Contact your Admin to create or deactivate users.</span>
+        </div>
+    </div>
+</div>
+
+<!-- Event Log -->
+<div id="eventlog" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#0ea5e9" stroke-width="1.6">
+                <path d="M2 3h12M2 6.5h9M2 10h6M2 13.5h7" stroke-linecap="round"/>
+                <circle cx="13" cy="11.5" r="2.5"/>
+                <path d="M15 13.5l1.5 1.5" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <span>Event Log</span>
+    </div>
+    <div class="card-body help-body">
+        <p>The <strong>Event Log</strong> (Audit) records every significant action in the system — who did what, when, and to which record. It cannot be edited or deleted.</p>
+        <p>Use it to:</p>
+        <ul class="help-list">
+            <li>Track who changed the stage of an opportunity</li>
+            <li>See when a quote was sent or accepted</li>
+            <li>Investigate unexpected changes to orders or products</li>
+            <li>Demonstrate compliance to customers or auditors</li>
+        </ul>
+        <p>Events are colour-coded: <span class="badge badge-soft-success">green</span> for creates, <span class="badge badge-soft-primary">indigo</span> for updates, <span class="badge badge-soft-warning">amber</span> for status changes, and <span class="badge badge-soft-danger">red</span> for deletes.</p>
+    </div>
+</div>
+
+<!-- Reports -->
+<div id="reports" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#fdf2f8,#fce7f3)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ec4899" stroke-width="1.6">
+                <path d="M2 13V8M5.5 13V5M9 13V7M12.5 13V3" stroke-linecap="round"/>
+                <path d="M1 14h14" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <span>Reports</span>
+    </div>
+    <div class="card-body help-body">
+        <p>The <strong>Reports</strong> page (visible to Admins and Sales Managers) provides aggregated analytics across your entire sales operation.</p>
+        <div class="help-grid">
+            <div class="help-grid-item">
+                <strong>Pipeline Health</strong>
+                <p>Value and deal count broken down by stage, with weighted forecast based on each stage's probability.</p>
+            </div>
+            <div class="help-grid-item">
+                <strong>Win / Loss Analysis</strong>
+                <p>Win rate trends and a breakdown of why deals were lost to help coaching conversations.</p>
+            </div>
+            <div class="help-grid-item">
+                <strong>Revenue Tracking</strong>
+                <p>Orders confirmed and delivered over a selected time range, with comparison to prior periods.</p>
+            </div>
+            <div class="help-grid-item">
+                <strong>Team Performance</strong>
+                <p>Per-user breakdown of opportunities created, deals won, and revenue generated.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tips -->
+<div id="tips" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#fffbeb,#fef3c7)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#f59e0b" stroke-width="1.6">
+                <path d="M8 1.5a4.5 4.5 0 0 1 1.5 8.74V11.5a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1.26A4.5 4.5 0 0 1 8 1.5z" stroke-linejoin="round"/>
+                <path d="M6.5 13.5h3M7 15h2" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <span>Tips &amp; Best Practices</span>
+    </div>
+    <div class="card-body help-body">
+        <ul class="help-list">
+            <li><strong>Keep opportunities up to date.</strong> Move stages promptly — the pipeline chart and forecasts rely on accurate stage data.</li>
+            <li><strong>Log every interaction.</strong> Add an activity note each time you call, email, or meet with a prospect. Future-you will thank you.</li>
+            <li><strong>Set realistic close dates.</strong> The average days-to-close metric is only useful if your close dates reflect genuine expectations.</li>
+            <li><strong>Use contacts.</strong> Link a contact to every opportunity so your colleagues know who to reach out to when you are unavailable.</li>
+            <li><strong>Don't skip the Quote step.</strong> Going straight to an order without a quote removes the accepted pricing record and audit trail.</li>
+            <li><strong>Deactivate, don't delete.</strong> Marking a product or contact as inactive preserves history while removing it from active workflows.</li>
+        </ul>
+    </div>
+</div>
+
+<style>
+    .help-chip {
+        display: inline-block;
+        padding: 4px 12px;
+        background: #F3F4F6;
+        border: 1px solid #E5E7EB;
+        border-radius: 99px;
+        font-size: 12px;
+        font-weight: 500;
+        color: #374151;
+        text-decoration: none;
+        transition: background .15s, border-color .15s, color .15s;
+    }
+    .help-chip:hover {
+        background: #EEF2FF;
+        border-color: #C7D2FE;
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .help-section { scroll-margin-top: 1.5rem; }
+
+    .help-card-header {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        font-size: 15px;
+        font-weight: 700;
+        color: #111827;
+    }
+    .help-section-icon {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .help-body p { font-size: 13.5px; color: #374151; line-height: 1.65; margin-bottom: .75rem; }
+    .help-body p:last-child { margin-bottom: 0; }
+
+    .help-h4 {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: #9CA3AF;
+        margin: 1.25rem 0 .6rem;
+    }
+
+    .help-journey {
+        display: flex;
+        align-items: stretch;
+        gap: .5rem;
+        flex-wrap: wrap;
+        margin: 1rem 0;
+    }
+    .help-journey-step {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .6rem .875rem;
+        background: #FAFAFA;
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+        flex: 1;
+        min-width: 140px;
+    }
+    .hjs-badge {
+        width: 22px; height: 22px;
+        border-radius: 50%;
+        background: #EEF2FF;
+        color: #6366f1;
+        font-size: 11px;
+        font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .hjs-content strong { display: block; font-size: 13px; font-weight: 600; color: #111827; }
+    .hjs-content span { display: block; font-size: 11px; color: #9CA3AF; margin-top: 1px; }
+    .help-journey-arrow { display: flex; align-items: center; color: #D1D5DB; font-size: 16px; font-weight: 300; }
+
+    .help-tip {
+        display: flex;
+        align-items: flex-start;
+        gap: .5rem;
+        padding: .6rem .875rem;
+        background: #EEF2FF;
+        border: 1px solid #C7D2FE;
+        border-radius: 8px;
+        margin-top: 1rem;
+        font-size: 12.5px;
+        color: #374151;
+        line-height: 1.5;
+    }
+    .help-tip svg { flex-shrink: 0; margin-top: 1px; }
+
+    .help-stages { display: flex; flex-direction: column; gap: .5rem; margin-bottom: .75rem; }
+    .help-stage-row {
+        display: flex;
+        align-items: center;
+        gap: .875rem;
+        padding: .45rem 0;
+        border-bottom: 1px solid #F9FAFB;
+        font-size: 13px;
+        color: #374151;
+    }
+    .help-stage-row:last-child { border-bottom: none; }
+
+    .help-field-table { display: flex; flex-direction: column; gap: 0; margin-bottom: .75rem; }
+    .help-field-row {
+        display: flex;
+        gap: 1rem;
+        padding: .4rem 0;
+        border-bottom: 1px solid #F3F4F6;
+        font-size: 13px;
+    }
+    .help-field-row:last-child { border-bottom: none; }
+    .help-field-row span:first-child { min-width: 130px; font-weight: 600; color: #111827; flex-shrink: 0; }
+    .help-field-row span:last-child { color: #6B7280; }
+
+    .help-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: .75rem;
+    }
+    .help-grid-item {
+        padding: .875rem 1rem;
+        background: #F9FAFB;
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+    }
+    .help-grid-item strong { display: block; font-size: 13px; font-weight: 600; color: #111827; margin-bottom: .25rem; }
+    .help-grid-item p { font-size: 12.5px; color: #6B7280; margin: 0; line-height: 1.55; }
+
+    .help-roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: .75rem; }
+    .help-role-card {
+        padding: .875rem 1rem;
+        background: #F9FAFB;
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+    }
+    .help-role-name { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: .3rem; }
+    .help-role-card p { font-size: 12.5px; color: #6B7280; margin: 0; line-height: 1.55; }
+
+    .help-list { padding-left: 1.25rem; margin: 0; }
+    .help-list li { font-size: 13.5px; color: #374151; line-height: 1.65; margin-bottom: .5rem; }
+    .help-list li:last-child { margin-bottom: 0; }
+
+    .badge-soft-danger { background: #FEF2F2; color: #DC2626; }
+    .badge-soft-neutral { background: #F3F4F6; color: #374151; }
+
+    code {
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 12px;
+        background: #F3F4F6;
+        padding: 1px 5px;
+        border-radius: 4px;
+        color: #374151;
+    }
+
+    @@media (max-width: 640px) {
+        .help-journey { flex-direction: column; }
+        .help-journey-arrow { display: none; }
+        .help-field-row { flex-direction: column; gap: .15rem; }
+        .help-field-row span:first-child { min-width: unset; }
+    }
+</style>
+
+@code {
+    private static readonly (string Label, string Anchor)[] Sections =
+    [
+        ("Overview",         "overview"),
+        ("Dashboard",        "dashboard"),
+        ("Opportunities",    "opportunities"),
+        ("Quotes",           "quotes"),
+        ("Orders",           "orders"),
+        ("Contacts",         "contacts"),
+        ("Products",         "products"),
+        ("Users & Roles",    "users"),
+        ("Event Log",        "eventlog"),
+        ("Reports",          "reports"),
+        ("Tips",             "tips"),
+    ];
+}
