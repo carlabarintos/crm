@@ -267,11 +267,28 @@
                             }
                         </tbody>
                         <tfoot>
+                            @{
+                                var _net = lineItems.Sum(i => i.Quantity * i.UnitPrice * (1 - i.DiscountPercent / 100m));
+                                var _tax = _defaultTaxRate is not null ? Math.Round(_net * (_defaultTaxRate.Rate / 100m), 2) : 0m;
+                            }
                             <tr class="border-top">
-                                <td colspan="4" class="text-end fw-semibold" style="font-size:13px">Total:</td>
-                                <td class="text-end fw-bold" style="font-size:13px">
-                                    @lineItems.Sum(i => i.Quantity * i.UnitPrice * (1 - i.DiscountPercent / 100m)).ToString("N2")
-                                </td>
+                                <td colspan="4" class="text-end text-muted" style="font-size:13px">Net Total:</td>
+                                <td class="text-end" style="font-size:13px">@_net.ToString("N2")</td>
+                                <td></td>
+                            </tr>
+                            @if (_defaultTaxRate is not null)
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-end text-muted" style="font-size:13px">
+                                        @_defaultTaxRate.Name (@_defaultTaxRate.Rate.ToString("0.##")%):
+                                    </td>
+                                    <td class="text-end text-muted" style="font-size:13px">+@_tax.ToString("N2")</td>
+                                    <td></td>
+                                </tr>
+                            }
+                            <tr>
+                                <td colspan="4" class="text-end fw-semibold" style="font-size:13px">Grand Total:</td>
+                                <td class="text-end fw-bold" style="font-size:13px">@((_net + _tax).ToString("N2"))</td>
                                 <td></td>
                             </tr>
                         </tfoot>
@@ -314,6 +331,9 @@
     private DateTime? newOppCloseDate;
     private string newOppOwnerIdRaw = "";
 
+    // Default tax rate (fetched on init, auto-applied server-side on create)
+    private TaxRateDto? _defaultTaxRate;
+
     // Line items
     private List<LineItemDraft> lineItems = new();
     private int newItemQty = 1;
@@ -341,6 +361,9 @@
                     opp.Currency, opp.Probability, opp.ExpectedCloseDate, opp.OwnerId,
                     opp.CreatedAt, opp.UpdatedAt);
         }
+
+        var taxRates = await Api.GetTaxRatesAsync(isActive: true);
+        _defaultTaxRate = taxRates?.FirstOrDefault(t => t.IsDefault) ?? taxRates?.FirstOrDefault();
 
         if (isSalesRep)
         {

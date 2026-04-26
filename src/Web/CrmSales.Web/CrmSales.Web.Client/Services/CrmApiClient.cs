@@ -146,6 +146,9 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> RejectQuoteAsync(Guid id, string? reason)
         => _http.PostAsJsonAsync($"/api/quotes/{id}/reject", new { Reason = reason });
 
+    public Task<HttpResponseMessage> RemoveQuoteTaxAsync(Guid id)
+        => _http.DeleteAsync($"/api/quotes/{id}/tax-rate");
+
     // ── Orders ─────────────────────────────────────────────────────────────
     public Task<OrdersSummaryDto?> GetOrdersSummaryAsync()
         => _http.GetFromJsonAsync<OrdersSummaryDto>("/api/orders/summary");
@@ -226,6 +229,29 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> CreateCompanyAdminAsync(Guid companyId, object body)
         => _http.PostAsJsonAsync($"/api/companies/{companyId}/admin", body);
 
+    // ── Settings / Tax Rates ──────────────────────────────────────────────
+    public Task<List<TaxRateDto>?> GetTaxRatesAsync(bool? isActive = null)
+    {
+        var url = "/api/settings/tax-rates";
+        if (isActive.HasValue) url += $"?isActive={isActive}";
+        return _http.GetFromJsonAsync<List<TaxRateDto>>(url);
+    }
+
+    public Task<TaxRateDto?> GetTaxRateAsync(Guid id)
+        => _http.GetFromJsonAsync<TaxRateDto>($"/api/settings/tax-rates/{id}");
+
+    public Task<HttpResponseMessage> CreateTaxRateAsync(object body)
+        => _http.PostAsJsonAsync("/api/settings/tax-rates", body);
+
+    public Task<HttpResponseMessage> UpdateTaxRateAsync(Guid id, object body)
+        => _http.PutAsJsonAsync($"/api/settings/tax-rates/{id}", body);
+
+    public Task<HttpResponseMessage> DeleteTaxRateAsync(Guid id)
+        => _http.DeleteAsync($"/api/settings/tax-rates/{id}");
+
+    public Task<HttpResponseMessage> SetDefaultTaxRateAsync(Guid id)
+        => _http.PostAsync($"/api/settings/tax-rates/{id}/set-default", null);
+
     // ── Users ──────────────────────────────────────────────────────────────
     public Task<List<UserDto>?> GetUsersAsync()
         => _http.GetFromJsonAsync<List<UserDto>>("/api/users");
@@ -276,8 +302,9 @@ public record QuoteDto(Guid Id, string QuoteNumber, Guid OpportunityId, string S
     decimal TotalAmount, string Currency, DateTime? ExpiryDate, DateTime CreatedAt);
 
 public record QuoteDetailDto(Guid Id, string QuoteNumber, Guid OpportunityId, string Status,
-    decimal SubTotal, decimal DiscountTotal, decimal TotalAmount, string Currency,
-    DateTime? ExpiryDate, string? Notes, List<QuoteLineItemDto> LineItems,
+    decimal SubTotal, decimal DiscountTotal, decimal TotalAmount,
+    string? TaxRateName, decimal TaxRatePercent, decimal TaxAmount, decimal GrandTotal,
+    string Currency, DateTime? ExpiryDate, string? Notes, List<QuoteLineItemDto> LineItems,
     DateTime CreatedAt, DateTime UpdatedAt);
 
 public record QuoteLineItemDto(Guid Id, Guid ProductId, string ProductName,
@@ -288,7 +315,9 @@ public record OrderDto(Guid Id, string OrderNumber, Guid QuoteId, string Status,
     DateTime? ShippedAt, DateTime? DeliveredAt);
 
 public record OrderDetailDto(Guid Id, string OrderNumber, Guid QuoteId, string Status,
-    decimal TotalAmount, string Currency, string? ShippingAddress, string? Notes,
+    decimal TotalAmount, string? TaxRateName, decimal TaxRatePercent,
+    decimal TaxAmount, decimal GrandTotal, string Currency,
+    string? ShippingAddress, string? Notes,
     List<OrderLineItemDto> LineItems, DateTime CreatedAt,
     DateTime? ShippedAt, DateTime? DeliveredAt);
 
@@ -298,6 +327,10 @@ public record OrderLineItemDto(Guid Id, Guid ProductId, string ProductName,
 public record UserDto(Guid Id, string Email, string FirstName, string LastName, string FullName, string Role, bool IsActive);
 
 public record CompanyDto(Guid Id, string Name, string Slug, bool IsActive, DateTime CreatedAt);
+
+public record TaxRateDto(
+    Guid Id, string Name, decimal Rate, string? Description, string? Region,
+    bool IsDefault, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);
 
 public record NotificationEventDto(
     string Type, string Title, string Message,

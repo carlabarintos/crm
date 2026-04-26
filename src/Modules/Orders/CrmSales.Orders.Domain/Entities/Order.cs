@@ -23,7 +23,12 @@ public sealed class Order : AggregateRoot<Guid>
     private readonly List<OrderLineItem> _lineItems = [];
     public IReadOnlyCollection<OrderLineItem> LineItems => _lineItems.AsReadOnly();
 
+    public string? TaxRateName { get; private set; }
+    public decimal TaxRatePercent { get; private set; }
+
     public decimal TotalAmount => _lineItems.Sum(l => l.LineTotal);
+    public decimal TaxAmount => Math.Round(TotalAmount * (TaxRatePercent / 100m), 4);
+    public decimal GrandTotal => TotalAmount + TaxAmount;
     public bool CanBeCancelled => Status is OrderStatus.Pending or OrderStatus.Confirmed;
 
     private Order() { OrderNumber = string.Empty; Currency = string.Empty; }
@@ -31,7 +36,8 @@ public sealed class Order : AggregateRoot<Guid>
     public static Order CreateFromQuote(
         Guid quoteId, Guid opportunityId, Guid customerId,
         string currency, IEnumerable<(Guid ProductId, string ProductName, int Qty, decimal UnitPrice)> items,
-        string? shippingAddress = null, string? notes = null)
+        string? shippingAddress = null, string? notes = null,
+        string? taxRateName = null, decimal taxRatePercent = 0)
     {
         var order = new Order
         {
@@ -44,6 +50,8 @@ public sealed class Order : AggregateRoot<Guid>
             Currency = currency,
             ShippingAddress = shippingAddress?.Trim(),
             Notes = notes?.Trim(),
+            TaxRateName = taxRateName,
+            TaxRatePercent = taxRatePercent,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };

@@ -20,10 +20,15 @@ internal sealed class QuoteConfiguration : IEntityTypeConfiguration<Quote>
                .HasForeignKey(l => l.QuoteId)
                .OnDelete(DeleteBehavior.Cascade);
 
+        builder.Property(q => q.TaxRateName).HasMaxLength(100);
+        builder.Property(q => q.TaxRatePercent).HasPrecision(5, 2);
+
         builder.Ignore(q => q.DomainEvents);
         builder.Ignore(q => q.SubTotal);
         builder.Ignore(q => q.DiscountTotal);
         builder.Ignore(q => q.TotalAmount);
+        builder.Ignore(q => q.TaxAmount);
+        builder.Ignore(q => q.GrandTotal);
 
         builder.HasIndex(q => q.QuoteNumber).IsUnique();
         builder.HasIndex(q => q.OpportunityId);

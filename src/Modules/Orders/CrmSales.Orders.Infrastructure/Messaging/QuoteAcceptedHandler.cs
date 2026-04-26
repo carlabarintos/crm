@@ -39,7 +39,9 @@ public static class QuoteAcceptedHandler
             message.OpportunityId,
             message.OwnerId,
             message.Currency,
-            items);
+            items,
+            taxRateName: message.TaxRateName,
+            taxRatePercent: message.TaxRatePercent);
 
         if (message.AutoComplete)
             order.Complete();

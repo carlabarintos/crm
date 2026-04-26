@@ -3,6 +3,7 @@ using CrmSales.Opportunities.Infrastructure.Persistence;
 using CrmSales.Orders.Infrastructure.Persistence;
 using CrmSales.Products.Infrastructure.Persistence;
 using CrmSales.Quotes.Infrastructure.Persistence;
+using CrmSales.Settings.Infrastructure.Persistence;
 using CrmSales.Users.Infrastructure.Persistence;
 using CrmSales.SharedKernel.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
@@ -47,6 +48,7 @@ public class TenantProvisioner(IServiceProvider serviceProvider, ILogger<TenantP
         await CreateTablesAsync(scope.ServiceProvider.GetRequiredService<OpportunitiesDbContext>());
         await CreateTablesAsync(scope.ServiceProvider.GetRequiredService<QuotesDbContext>());
         await CreateTablesAsync(scope.ServiceProvider.GetRequiredService<OrdersDbContext>());
+        await CreateTablesAsync(scope.ServiceProvider.GetRequiredService<SettingsDbContext>());
     }
 
     private static Task CreateTablesAsync(DbContext ctx)

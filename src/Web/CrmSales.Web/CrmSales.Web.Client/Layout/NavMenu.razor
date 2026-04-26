@@ -113,6 +113,22 @@
         </div>
         </AuthorizeView>
 
+        <AuthorizeView Roles="Admin" Context="adminCtx3">
+        <span class="nav-section-label">Configuration</span>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="settings/taxes">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M7.5 1L13 4v7L7.5 14 2 11V4L7.5 1z" stroke-linejoin="round" />
+                        <path d="M5 7.5h5M7.5 5v5" stroke-linecap="round" />
+                    </svg>
+                </span>
+                Tax Rates
+            </NavLink>
+        </div>
+        </AuthorizeView>
+
         <span class="nav-section-label">People</span>
 
         <div class="nav-item">

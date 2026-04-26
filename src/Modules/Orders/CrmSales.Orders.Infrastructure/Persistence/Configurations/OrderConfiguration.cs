@@ -21,8 +21,13 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
                .HasForeignKey(l => l.OrderId)
                .OnDelete(DeleteBehavior.Cascade);
 
+        builder.Property(o => o.TaxRateName).HasMaxLength(100);
+        builder.Property(o => o.TaxRatePercent).HasPrecision(5, 2);
+
         builder.Ignore(o => o.DomainEvents);
         builder.Ignore(o => o.TotalAmount);
+        builder.Ignore(o => o.TaxAmount);
+        builder.Ignore(o => o.GrandTotal);
         builder.Ignore(o => o.CanBeCancelled);
 
         builder.HasIndex(o => o.OrderNumber).IsUnique();

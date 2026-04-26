@@ -37,6 +37,11 @@
     <Project Path="src/Modules/Users/CrmSales.Users.Domain/CrmSales.Users.Domain.csproj" />
     <Project Path="src/Modules/Users/CrmSales.Users.Infrastructure/CrmSales.Users.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Settings/">
+    <Project Path="src/Modules/Settings/CrmSales.Settings.Application/CrmSales.Settings.Application.csproj" />
+    <Project Path="src/Modules/Settings/CrmSales.Settings.Domain/CrmSales.Settings.Domain.csproj" />
+    <Project Path="src/Modules/Settings/CrmSales.Settings.Infrastructure/CrmSales.Settings.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/ServiceDefaults/">
     <Project Path="src/ServiceDefaults/CrmSales.ServiceDefaults/CrmSales.ServiceDefaults.csproj" />
   </Folder>

@@ -64,7 +64,8 @@ public static class OrderEndpoints
             {
                 order.Id, order.OrderNumber, order.QuoteId,
                 Status = order.Status.ToString(),
-                order.TotalAmount, order.Currency,
+                order.TotalAmount, order.TaxRateName, order.TaxRatePercent,
+                order.TaxAmount, order.GrandTotal, order.Currency,
                 order.ShippingAddress, order.Notes,
                 LineItems = order.LineItems.Select(l => new
                 {

@@ -36,8 +36,17 @@ else if (order is not null)
                         <dt class="col-sm-4">Quote</dt>
                         <dd class="col-sm-8"><a href="/quotes/@order.QuoteId">@order.QuoteId.ToString()[..8]…</a></dd>
 
-                        <dt class="col-sm-4">Total</dt>
-                        <dd class="col-sm-8 fw-bold text-primary fs-5">@order.TotalAmount.ToString("F2") @order.Currency</dd>
+                        <dt class="col-sm-4">Net Total</dt>
+                        <dd class="col-sm-8">@order.TotalAmount.ToString("F2") @order.Currency</dd>
+
+                        @if (order.TaxRatePercent > 0)
+                        {
+                            <dt class="col-sm-4">@order.TaxRateName (@order.TaxRatePercent.ToString("0.##")%)</dt>
+                            <dd class="col-sm-8 text-muted">+@order.TaxAmount.ToString("F2") @order.Currency</dd>
+                        }
+
+                        <dt class="col-sm-4">Grand Total</dt>
+                        <dd class="col-sm-8 fw-bold text-primary fs-5">@order.GrandTotal.ToString("F2") @order.Currency</dd>
 
                         <dt class="col-sm-4">Shipping Address</dt>
                         <dd class="col-sm-8">@(order.ShippingAddress ?? "-")</dd>

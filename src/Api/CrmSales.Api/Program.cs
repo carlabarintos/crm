@@ -13,8 +13,11 @@ using CrmSales.Opportunities.Application;
 using CrmSales.Opportunities.Infrastructure;
 using CrmSales.Orders.Application;
 using CrmSales.Orders.Infrastructure;
+using CrmSales.Settings.Application;
+using CrmSales.Settings.Infrastructure;
 using CrmSales.Products.Application;
 using CrmSales.Products.Infrastructure;
+using CrmSales.Products.Infrastructure.Persistence;
 using CrmSales.Quotes.Application;
 using CrmSales.Quotes.Infrastructure;
 using CrmSales.SharedKernel.Messaging;
@@ -129,7 +132,9 @@ builder.Services
     .AddQuotesApplication()
     .AddQuotesInfrastructure(connectionString)
     .AddOrdersApplication()
-    .AddOrdersInfrastructure(connectionString);
+    .AddOrdersInfrastructure(connectionString)
+    .AddSettingsApplication()
+    .AddSettingsInfrastructure(connectionString);
 
 // ── Wolverine ─────────────────────────────────────────────────────────────
 var rabbitUri = builder.Configuration.GetConnectionString("rabbitmq")
@@ -145,7 +150,8 @@ builder.Host.UseWolverine(opts =>
         .IncludeAssembly(typeof(CrmSales.Quotes.Application.DependencyInjection).Assembly)
         .IncludeAssembly(typeof(CrmSales.Orders.Application.DependencyInjection).Assembly)
         // Infrastructure handlers (RabbitMQ consumers)
-        .IncludeAssembly(typeof(CrmSales.Orders.Infrastructure.DependencyInjection).Assembly);
+        .IncludeAssembly(typeof(CrmSales.Orders.Infrastructure.DependencyInjection).Assembly)
+        .IncludeAssembly(typeof(CrmSales.Settings.Application.DependencyInjection).Assembly);
 
     // ── RabbitMQ transport ─────────────────────────────────────────────
     opts.UseRabbitMq(new Uri(rabbitUri))
@@ -273,6 +279,96 @@ using (var scope = app.Services.CreateScope())
 }
 
 
+// ── Ensure TaxRates table exists in every provisioned tenant schema ───────────
+{
+    using var scope = app.Services.CreateScope();
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var companySlugs = await masterCtx.Companies.Select(c => c.Slug).ToListAsync();
+
+    if (companySlugs.Count > 0)
+    {
+        // Grab any module's connection — they all share the same connection string
+        var conn = scope.ServiceProvider.GetRequiredService<ProductsDbContext>().Database.GetDbConnection();
+        await conn.OpenAsync();
+        try
+        {
+            foreach (var slug in companySlugs)
+            {
+                await using var checkCmd = conn.CreateCommand();
+                checkCmd.CommandText = $"""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_schema = '{slug}' AND table_name = 'TaxRates'
+                    )
+                    """;
+                var exists = (bool)(await checkCmd.ExecuteScalarAsync())!;
+                if (!exists)
+                {
+                    app.Logger.LogInformation("Creating TaxRates table in tenant schema '{Slug}'.", slug);
+                    await using var createCmd = conn.CreateCommand();
+                    createCmd.CommandText = $"""
+                        CREATE TABLE IF NOT EXISTS "{slug}"."TaxRates" (
+                            "Id"          uuid         NOT NULL,
+                            "Version"     integer      NOT NULL DEFAULT 0,
+                            "Name"        varchar(100) NOT NULL,
+                            "Rate"        numeric(5,2) NOT NULL,
+                            "Description" varchar(500) NULL,
+                            "Region"      varchar(100) NULL,
+                            "IsDefault"   boolean      NOT NULL DEFAULT false,
+                            "IsActive"    boolean      NOT NULL DEFAULT true,
+                            "CreatedAt"   timestamp    NOT NULL,
+                            "UpdatedAt"   timestamp    NOT NULL,
+                            CONSTRAINT "PK_TaxRates_{slug}" PRIMARY KEY ("Id")
+                        );
+                        CREATE UNIQUE INDEX IF NOT EXISTS "IX_TaxRates_Name_{slug}"
+                            ON "{slug}"."TaxRates" ("Name");
+                        """;
+                    await createCmd.ExecuteNonQueryAsync();
+                }
+            }
+        }
+        finally
+        {
+            if (conn.State == System.Data.ConnectionState.Open)
+                await conn.CloseAsync();
+        }
+    }
+}
+
+// ── Ensure TaxRateName/TaxRatePercent columns exist on Quotes and Orders ─────
+{
+    using var scope = app.Services.CreateScope();
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var companySlugs = await masterCtx.Companies.Select(c => c.Slug).ToListAsync();
+
+    if (companySlugs.Count > 0)
+    {
+        var conn = scope.ServiceProvider.GetRequiredService<ProductsDbContext>().Database.GetDbConnection();
+        await conn.OpenAsync();
+        try
+        {
+            foreach (var slug in companySlugs)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    ALTER TABLE IF EXISTS "{slug}"."Quotes"
+                        ADD COLUMN IF NOT EXISTS "TaxRateName"    varchar(100) NULL,
+                        ADD COLUMN IF NOT EXISTS "TaxRatePercent" numeric(5,2) NOT NULL DEFAULT 0;
+                    ALTER TABLE IF EXISTS "{slug}"."Orders"
+                        ADD COLUMN IF NOT EXISTS "TaxRateName"    varchar(100) NULL,
+                        ADD COLUMN IF NOT EXISTS "TaxRatePercent" numeric(5,2) NOT NULL DEFAULT 0;
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+        finally
+        {
+            if (conn.State == System.Data.ConnectionState.Open)
+                await conn.CloseAsync();
+        }
+    }
+}
+
 // ── Ensure Keycloak realm & OIDC client exist (blocks startup until ready) ───
 {
     using var scope = app.Services.CreateScope();
@@ -324,5 +420,6 @@ api.MapOrderEndpoints();
 api.MapNotificationEndpoints();
 api.MapAuditEndpoints();
 api.MapDashboardEndpoints();
+api.MapSettingsEndpoints();
 
 app.Run();

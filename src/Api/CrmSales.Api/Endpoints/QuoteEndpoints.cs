@@ -5,6 +5,7 @@ using CrmSales.Opportunities.Domain.Entities;
 using CrmSales.Opportunities.Domain.Repositories;
 using CrmSales.Quotes.Domain.Entities;
 using CrmSales.Quotes.Domain.Repositories;
+using CrmSales.Settings.Domain.Repositories;
 using CrmSales.SharedKernel.Messaging;
 using Microsoft.AspNetCore.Mvc;
 using Wolverine;
@@ -85,6 +86,7 @@ public static class QuoteEndpoints
                 quote.Id, quote.QuoteNumber, quote.OpportunityId,
                 Status = quote.Status.ToString(),
                 quote.SubTotal, quote.DiscountTotal, quote.TotalAmount,
+                quote.TaxRateName, quote.TaxRatePercent, quote.TaxAmount, quote.GrandTotal,
                 quote.Currency, quote.ExpiryDate, quote.Notes,
                 LineItems = quote.LineItems.Select(l => new
                 {
@@ -99,6 +101,7 @@ public static class QuoteEndpoints
             CreateQuoteRequest req,
             HttpContext http,
             IQuoteRepository repo,
+            ITaxRateRepository taxRateRepo,
             INotificationBroadcaster broadcaster,
             IAuditService audit,
             ITenantContext tenant,
@@ -106,6 +109,11 @@ public static class QuoteEndpoints
         {
             var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var quote = Quote.Create(req.OpportunityId, req.OwnerId, req.Currency, req.ExpiryDate, req.Notes);
+
+            var defaultTax = await taxRateRepo.GetDefaultAsync(ct);
+            if (defaultTax is not null && defaultTax.IsActive)
+                quote.ApplyTax(defaultTax.Name, defaultTax.Rate);
+
             await repo.AddAsync(quote, ct);
 
             var msg = $"Quote {quote.QuoteNumber} created by {actor}";
@@ -127,7 +135,7 @@ public static class QuoteEndpoints
             if (quote is null) return Results.NotFound();
             quote.AddLineItem(req.ProductId, req.ProductName, req.Quantity, req.UnitPrice, req.DiscountPercent);
             await repo.UpdateAsync(quote, ct);
-            return Results.Ok(new { quote.TotalAmount });
+            return Results.Ok(new { quote.TotalAmount, quote.TaxAmount, quote.GrandTotal });
         });
 
         group.MapPost("/{id:guid}/send", async (
@@ -184,11 +192,13 @@ public static class QuoteEndpoints
 
             await bus.PublishAsync(new QuoteAcceptedMessage(
                 quote.Id, quote.QuoteNumber, quote.OpportunityId,
-                quote.TotalAmount, quote.Currency, quote.OwnerId,
+                quote.GrandTotal, quote.Currency, quote.OwnerId,
                 quote.LineItems
                     .Select(l => new QuoteLineItemMessage(l.ProductId, l.ProductName, l.Quantity, l.UnitPrice))
                     .ToList(),
-                TenantId: tenantId));
+                TenantId: tenantId,
+                TaxRateName: quote.TaxRateName,
+                TaxRatePercent: quote.TaxRatePercent));
 
             var msg = $"Quote {quote.QuoteNumber} accepted by {actor}";
             await broadcaster.BroadcastAsync(new NotificationEvent(
@@ -234,6 +244,18 @@ public static class QuoteEndpoints
 
             return Results.Ok(new { quote.Id, Status = quote.Status.ToString() });
         }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager"));
+
+        group.MapDelete("/{id:guid}/tax-rate", async (
+            Guid id, IQuoteRepository repo, CancellationToken ct) =>
+        {
+            var quote = await repo.GetByIdAsync(id, ct);
+            if (quote is null) return Results.NotFound();
+            if (quote.Status != QuoteStatus.Draft)
+                return Results.Problem("Can only modify tax on draft quotes.", statusCode: StatusCodes.Status400BadRequest);
+            quote.RemoveTax();
+            await repo.UpdateAsync(quote, ct);
+            return Results.Ok(new { quote.TaxRateName, quote.TaxRatePercent, quote.TaxAmount, quote.GrandTotal });
+        });
 
         return app;
     }

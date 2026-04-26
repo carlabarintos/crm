@@ -1,0 +1,260 @@
+@page "/settings/taxes"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@attribute [Authorize(Roles = "Admin")]
+@inject CrmApiClient Api
+
+<PageTitle>Tax Rates</PageTitle>
+
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Configuration</p>
+        <h1>Tax Rates</h1>
+    </div>
+    <button class="btn btn-primary btn-sm" @onclick="OpenCreate">+ New Tax Rate</button>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+}
+else if (!_taxRates.Any())
+{
+    <div class="alert alert-info stagger-2">No tax rates configured yet.</div>
+}
+else
+{
+    <div class="card stagger-2">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Rate (%)</th>
+                        <th>Region</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in _taxRates)
+                    {
+                        <tr>
+                            <td>
+                                @t.Name
+                                @if (t.IsDefault)
+                                {
+                                    <span class="badge bg-primary ms-2">Default</span>
+                                }
+                            </td>
+                            <td>@t.Rate.ToString("0.##")%</td>
+                            <td>@(t.Region ?? "—")</td>
+                            <td class="text-muted small">@(t.Description ?? "—")</td>
+                            <td>
+                                <span class="badge @(t.IsActive ? "bg-success" : "bg-secondary")">
+                                    @(t.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <div class="d-flex gap-2 justify-content-end">
+                                    @if (!t.IsDefault && t.IsActive)
+                                    {
+                                        <button class="btn btn-outline-secondary btn-sm"
+                                                @onclick="() => SetDefault(t.Id)">
+                                            Set Default
+                                        </button>
+                                    }
+                                    <button class="btn btn-outline-primary btn-sm"
+                                            @onclick="() => OpenEdit(t)">Edit</button>
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            @onclick="() => ConfirmDelete(t)">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_showForm)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editId.HasValue ? "Edit Tax Rate" : "New Tax Rate")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseForm"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(_formError))
+                    {
+                        <div class="alert alert-danger">@_formError</div>
+                    }
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_formName" placeholder="e.g. VAT, GST, Sales Tax" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rate (%) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" @bind="_formRate"
+                               min="0" max="100" step="0.01" placeholder="e.g. 20" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Region</label>
+                        <input class="form-control" @bind="_formRegion" placeholder="e.g. US, EU, UK (optional)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" rows="2" @bind="_formDescription"
+                                  placeholder="Optional description"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseForm">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveForm" disabled="@_saving">
+                        @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        @(_editId.HasValue ? "Save Changes" : "Create")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete Tax Rate</h5>
+                    <button type="button" class="btn-close" @onclick="() => _deleteTarget = null"></button>
+                </div>
+                <div class="modal-body">
+                    Are you sure you want to delete <strong>@_deleteTarget.Name</strong>?
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+                    <button class="btn btn-danger" @onclick="ExecuteDelete" disabled="@_saving">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TaxRateDto> _taxRates = [];
+    private bool _loading = true;
+
+    private bool _showForm;
+    private Guid? _editId;
+    private string _formName = "";
+    private decimal _formRate;
+    private string _formRegion = "";
+    private string _formDescription = "";
+    private string _formError = "";
+    private bool _saving;
+
+    private TaxRateDto? _deleteTarget;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _taxRates = await Api.GetTaxRatesAsync() ?? [];
+        _loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        _editId = null;
+        _formName = "";
+        _formRate = 0;
+        _formRegion = "";
+        _formDescription = "";
+        _formError = "";
+        _showForm = true;
+    }
+
+    private void OpenEdit(TaxRateDto t)
+    {
+        _editId = t.Id;
+        _formName = t.Name;
+        _formRate = t.Rate;
+        _formRegion = t.Region ?? "";
+        _formDescription = t.Description ?? "";
+        _formError = "";
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        _showForm = false;
+        _formError = "";
+    }
+
+    private async Task SaveForm()
+    {
+        if (string.IsNullOrWhiteSpace(_formName)) { _formError = "Name is required."; return; }
+        if (_formRate < 0 || _formRate > 100) { _formError = "Rate must be between 0 and 100."; return; }
+
+        _saving = true;
+        _formError = "";
+        try
+        {
+            var body = new
+            {
+                Id = _editId ?? Guid.Empty,
+                Name = _formName.Trim(),
+                Rate = _formRate,
+                Description = string.IsNullOrWhiteSpace(_formDescription) ? null : _formDescription.Trim(),
+                Region = string.IsNullOrWhiteSpace(_formRegion) ? null : _formRegion.Trim()
+            };
+
+            HttpResponseMessage res;
+            if (_editId.HasValue)
+                res = await Api.UpdateTaxRateAsync(_editId.Value, body);
+            else
+                res = await Api.CreateTaxRateAsync(body);
+
+            if (res.IsSuccessStatusCode)
+            {
+                _showForm = false;
+                await LoadAsync();
+            }
+            else
+            {
+                _formError = await res.Content.ReadAsStringAsync();
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task SetDefault(Guid id)
+    {
+        var res = await Api.SetDefaultTaxRateAsync(id);
+        if (res.IsSuccessStatusCode) await LoadAsync();
+    }
+
+    private void ConfirmDelete(TaxRateDto t) => _deleteTarget = t;
+
+    private async Task ExecuteDelete()
+    {
+        if (_deleteTarget is null) return;
+        _saving = true;
+        try
+        {
+            var res = await Api.DeleteTaxRateAsync(_deleteTarget.Id);
+            if (res.IsSuccessStatusCode)
+            {
+                _deleteTarget = null;
+                await LoadAsync();
+            }
+        }
+        finally { _saving = false; }
+    }
+}

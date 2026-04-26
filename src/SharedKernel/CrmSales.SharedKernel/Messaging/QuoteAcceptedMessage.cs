@@ -14,7 +14,9 @@ public record QuoteAcceptedMessage(
     Guid OwnerId,
     IReadOnlyList<QuoteLineItemMessage> LineItems,
     string TenantId = "master",
-    bool AutoComplete = false);
+    bool AutoComplete = false,
+    string? TaxRateName = null,
+    decimal TaxRatePercent = 0);
 
 public record QuoteLineItemMessage(
     Guid ProductId,

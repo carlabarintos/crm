@@ -20,9 +20,14 @@ public sealed class Quote : AggregateRoot<Guid>
     private readonly List<QuoteLineItem> _lineItems = [];
     public IReadOnlyCollection<QuoteLineItem> LineItems => _lineItems.AsReadOnly();
 
+    public string? TaxRateName { get; private set; }
+    public decimal TaxRatePercent { get; private set; }
+
     public decimal SubTotal => _lineItems.Sum(l => l.LineTotal);
     public decimal DiscountTotal => _lineItems.Sum(l => l.DiscountAmount);
     public decimal TotalAmount => SubTotal - DiscountTotal;
+    public decimal TaxAmount => Math.Round(TotalAmount * (TaxRatePercent / 100m), 4);
+    public decimal GrandTotal => TotalAmount + TaxAmount;
 
     private Quote() { QuoteNumber = string.Empty; Currency = string.Empty; }
 
@@ -96,6 +101,24 @@ public sealed class Quote : AggregateRoot<Guid>
             throw new InvalidOperationException("Only sent quotes can be rejected.");
         Status = QuoteStatus.Rejected;
         Notes = reason ?? Notes;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ApplyTax(string taxRateName, decimal taxRatePercent)
+    {
+        if (Status != QuoteStatus.Draft)
+            throw new InvalidOperationException("Can only modify tax on draft quotes.");
+        TaxRateName = taxRateName;
+        TaxRatePercent = taxRatePercent;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void RemoveTax()
+    {
+        if (Status != QuoteStatus.Draft)
+            throw new InvalidOperationException("Can only modify tax on draft quotes.");
+        TaxRateName = null;
+        TaxRatePercent = 0;
         UpdatedAt = DateTime.UtcNow;
     }
 

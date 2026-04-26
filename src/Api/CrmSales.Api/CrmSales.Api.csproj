@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\Modules\Opportunities\CrmSales.Opportunities.Infrastructure\CrmSales.Opportunities.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Quotes\CrmSales.Quotes.Infrastructure\CrmSales.Quotes.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Orders\CrmSales.Orders.Infrastructure\CrmSales.Orders.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Settings\CrmSales.Settings.Infrastructure\CrmSales.Settings.Infrastructure.csproj" />
     <ProjectReference Include="..\..\ServiceDefaults\CrmSales.ServiceDefaults\CrmSales.ServiceDefaults.csproj" />
   </ItemGroup>
 
