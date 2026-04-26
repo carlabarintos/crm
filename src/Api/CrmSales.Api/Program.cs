@@ -369,6 +369,36 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// ── Ensure ReorderPoint column exists on Products ───────────────────────────
+{
+    using var scope = app.Services.CreateScope();
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var companySlugs = await masterCtx.Companies.Select(c => c.Slug).ToListAsync();
+
+    if (companySlugs.Count > 0)
+    {
+        var conn = scope.ServiceProvider.GetRequiredService<ProductsDbContext>().Database.GetDbConnection();
+        await conn.OpenAsync();
+        try
+        {
+            foreach (var slug in companySlugs)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    ALTER TABLE IF EXISTS "{slug}"."Products"
+                        ADD COLUMN IF NOT EXISTS "ReorderPoint" integer NOT NULL DEFAULT 10;
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+        finally
+        {
+            if (conn.State == System.Data.ConnectionState.Open)
+                await conn.CloseAsync();
+        }
+    }
+}
+
 // ── Ensure Keycloak realm & OIDC client exist (blocks startup until ready) ───
 {
     using var scope = app.Services.CreateScope();

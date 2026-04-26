@@ -21,7 +21,7 @@ public static class GetProductByIdHandler
         return Result.Success(new ProductDto(
             product.Id, product.Name, product.Description,
             product.Sku.Value, product.Price.Amount, product.Price.Currency,
-            product.CategoryId, null, product.IsActive, product.StockQuantity,
+            product.CategoryId, null, product.IsActive, product.StockQuantity, product.ReorderPoint,
             product.CreatedAt, product.UpdatedAt));
     }
 }

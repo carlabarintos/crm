@@ -10,4 +10,5 @@ public record CreateProductCommand(
     decimal Price,
     string Currency,
     Guid CategoryId,
-    int StockQuantity = 0) : ICommand<Guid>;
+    int StockQuantity = 0,
+    int ReorderPoint = 10) : ICommand<Guid>;

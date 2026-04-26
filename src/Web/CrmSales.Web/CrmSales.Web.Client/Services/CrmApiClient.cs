@@ -32,12 +32,13 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<ProductSummaryDto?> GetProductSummaryAsync()
         => _http.GetFromJsonAsync<ProductSummaryDto>("/api/products/summary");
 
-    public Task<PaginatedResult<ProductDto>?> GetProductsAsync(string? search = null, bool? isActive = null, int limit = 20, string? cursor = null)
+    public Task<PaginatedResult<ProductDto>?> GetProductsAsync(string? search = null, bool? isActive = null, bool lowInventory = false, int limit = 20, string? cursor = null)
     {
         var url = "/api/products";
         var query = new List<string>();
         if (!string.IsNullOrEmpty(search)) query.Add($"search={Uri.EscapeDataString(search)}");
         if (isActive.HasValue) query.Add($"isActive={isActive}");
+        if (lowInventory) query.Add($"lowInventory=true");
         if (limit != 20) query.Add($"limit={limit}");
         if (!string.IsNullOrEmpty(cursor)) query.Add($"cursor={cursor}");
         if (query.Count > 0) url += "?" + string.Join("&", query);
@@ -290,7 +291,7 @@ public record PaginatedResult<T>(List<T> Items, string? NextCursor, bool HasMore
 
 public record ProductDto(Guid Id, string Name, string? Description, string Sku,
     decimal Price, string Currency, Guid CategoryId, string? CategoryName,
-    bool IsActive, int StockQuantity, DateTime CreatedAt, DateTime UpdatedAt);
+    bool IsActive, int StockQuantity, int ReorderPoint, DateTime CreatedAt, DateTime UpdatedAt);
 
 public record ContactDto(Guid Id, string FirstName, string LastName, string FullName,
     string? Email, string? Phone, string? Company, string? JobTitle, bool IsActive, DateTime CreatedAt);

@@ -297,6 +297,61 @@ else
 </div>
 </div>
 
+<!-- Stock Alerts -->
+@if (lowStockProducts.Count > 0)
+{
+    <button type="button" class="mob-section-btn @(_stockOpen ? "open" : "")" @onclick="() => _stockOpen = !_stockOpen">
+        <span>Stock Alerts</span>
+        <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+    </button>
+    <div class="mob-collapse @(_stockOpen ? "open" : "")">
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <span style="font-size:14px;font-weight:700;color:#111827">Low &amp; Out of Stock</span>
+                <span class="badge badge-urgency-red" style="font-size:10px">@lowStockProducts.Count item@(lowStockProducts.Count == 1 ? "" : "s")</span>
+            </div>
+            <a href="/products?lowInventory=true" class="btn btn-sm btn-outline-secondary" style="font-size:11px">View all</a>
+        </div>
+        <div class="card-body p-0">
+            <div class="stock-list">
+                @foreach (var p in lowStockProducts)
+                {
+                    var isOut = p.StockQuantity == 0;
+                    <a href="/products/@p.Id" class="stock-row">
+                        <div class="stock-icon">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                <path d="M7 1L12 3.5v7L7 13 2 10.5v-7L7 1z" stroke="@(isOut ? "#ef4444" : "#f59e0b")" stroke-width="1.6" stroke-linejoin="round"/>
+                                <path d="M7 1v12M2 3.5l5 3.5 5-3.5" stroke="@(isOut ? "#ef4444" : "#f59e0b")" stroke-width="1.4" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="stock-info">
+                            <div class="stock-name">@p.Name</div>
+                            <div class="stock-sku">SKU: @p.Sku</div>
+                        </div>
+                        <div class="stock-meter">
+                            <div class="stock-bar-track">
+                                @if (!isOut)
+                                {
+                                    var pct = p.ReorderPoint > 0 ? Math.Min((double)p.StockQuantity / p.ReorderPoint * 100, 100) : 100;
+                                    <div class="stock-bar-fill stock-bar-low" style="width:@(pct.ToString("F0"))%"></div>
+                                }
+                            </div>
+                        </div>
+                        <div class="stock-right">
+                            <span class="stock-qty @(isOut ? "stock-qty-out" : "stock-qty-low")">@p.StockQuantity</span>
+                            <span class="badge @(isOut ? "badge-urgency-red" : "badge-urgency-amber")" style="font-size:10px">
+                                @(isOut ? "Out of Stock" : "Low Stock")
+                            </span>
+                        </div>
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+    </div>
+}
+
 <!-- Expiring Soon -->
 @if (expiringOpportunities.Count > 0 || expiringQuotes.Count > 0)
 {
@@ -539,6 +594,33 @@ else
     .badge-urgency-red { background: #FEF2F2; color: #DC2626; }
     .badge-urgency-amber { background: #FFFBEB; color: #D97706; }
     .badge-urgency-yellow { background: #FEFCE8; color: #CA8A04; }
+
+    .stock-list { display: flex; flex-direction: column; }
+    .stock-row {
+        display: flex;
+        align-items: center;
+        gap: .875rem;
+        padding: .65rem 1.25rem;
+        border-bottom: 1px solid #F9FAFB;
+        text-decoration: none !important;
+        color: inherit;
+        transition: background .15s;
+    }
+    .stock-row:last-child { border-bottom: none; }
+    .stock-row:hover { background: #F9FAFB; color: inherit; }
+    .stock-icon { width: 28px; height: 28px; border-radius: 8px; background: #F9FAFB; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .stock-info { flex: 1; min-width: 0; }
+    .stock-name { font-size: 13px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stock-sku { font-size: 11px; color: #9CA3AF; margin-top: 1px; }
+    .stock-meter { width: 80px; flex-shrink: 0; }
+    .stock-bar-track { height: 6px; background: #F3F4F6; border-radius: 99px; overflow: hidden; }
+    .stock-bar-fill { height: 100%; border-radius: 99px; transition: width .6s cubic-bezier(.16,1,.3,1); }
+    .stock-bar-low { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .stock-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
+    .stock-qty { font-size: 14px; font-weight: 700; line-height: 1; }
+    .stock-qty-out { color: #DC2626; }
+    .stock-qty-low { color: #D97706; }
+    @@media (max-width: 576px) { .stock-meter { display: none; } }
 </style>
 
 @code {
@@ -557,7 +639,9 @@ else
     private bool _pipelineOpen = true;
     private bool _expiringOpen = true;
     private bool _activityOpen = true;
+    private bool _stockOpen = true;
 
+    private List<ProductDto> lowStockProducts = [];
     private List<ExpiringOpportunityDto> expiringOpportunities = [];
     private List<ExpiringQuoteDto> expiringQuotes = [];
     private List<AuditLogDto> recentActivity = [];
@@ -594,8 +678,9 @@ else
         var orderSummaryTask    = Api.GetOrdersSummaryAsync();
         var prodSummaryTask     = Api.GetProductSummaryAsync();
         var activityTask        = Api.GetAuditLogsAsync(page: 1, pageSize: 8);
-        var expiringOppTask      = Api.GetExpiringOpportunitiesAsync();
+        var expiringOppTask     = Api.GetExpiringOpportunitiesAsync();
         var expiringQuoteTask   = Api.GetExpiringQuotesAsync();
+        var lowStockTask        = Api.GetProductsAsync(lowInventory: true, limit: 8);
 
         var oppSummary        = await oppSummaryTask;
         var quoteSummary      = await quoteSummaryTask;
@@ -604,6 +689,7 @@ else
         recentActivity        = (await activityTask)?.Items ?? [];
         expiringOpportunities = (await expiringOppTask) ?? [];
         expiringQuotes        = (await expiringQuoteTask) ?? [];
+        lowStockProducts      = (await lowStockTask)?.Items ?? [];
 
         if (oppSummary is not null)
         {

@@ -28,7 +28,7 @@ internal sealed class ProductRepository(ProductsDbContext dbContext) : IProductR
             .AnyAsync(ct);
     }
 
-    public async Task<CursorPaginationResult<Product>> SearchAsync(string? term, bool? isActive, int limit, string? cursor, CancellationToken ct = default)
+    public async Task<CursorPaginationResult<Product>> SearchAsync(string? term, bool? isActive, bool lowInventory, int limit, string? cursor, CancellationToken ct = default)
     {
         var query = dbContext.Products.AsQueryable();
 
@@ -39,6 +39,8 @@ internal sealed class ProductRepository(ProductsDbContext dbContext) : IProductR
         }
         if (isActive.HasValue)
             query = query.Where(p => p.IsActive == isActive.Value);
+        if (lowInventory)
+            query = query.Where(p => p.StockQuantity <= p.ReorderPoint);
 
         // Apply cursor if provided
         if (!string.IsNullOrEmpty(cursor) && Guid.TryParse(cursor, out var cursorId))
@@ -67,7 +69,7 @@ internal sealed class ProductRepository(ProductsDbContext dbContext) : IProductR
             {
                 Total      = g.Count(),
                 Active     = g.Count(p => p.IsActive),
-                LowStock   = g.Count(p => p.IsActive && p.StockQuantity > 0 && p.StockQuantity <= 10),
+                LowStock   = g.Count(p => p.IsActive && p.StockQuantity > 0 && p.StockQuantity <= p.ReorderPoint),
                 OutOfStock = g.Count(p => p.IsActive && p.StockQuantity == 0),
             })
             .FirstOrDefaultAsync(ct);

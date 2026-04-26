@@ -10,7 +10,8 @@ public record UpdateProductCommand(
     string? Description,
     decimal Price,
     string Currency,
-    Guid CategoryId) : ICommand;
+    Guid CategoryId,
+    int ReorderPoint = 10) : ICommand;
 
 public static class UpdateProductHandler
 {
@@ -25,6 +26,7 @@ public static class UpdateProductHandler
 
         product.UpdateDetails(command.Name, command.Description, command.CategoryId);
         product.ChangePrice(command.Price, command.Currency);
+        product.SetReorderPoint(command.ReorderPoint);
         await productRepository.UpdateAsync(product, ct);
         return Result.Success();
     }

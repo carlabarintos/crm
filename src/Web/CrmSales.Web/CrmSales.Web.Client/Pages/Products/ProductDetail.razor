@@ -46,9 +46,10 @@ else
 
                         <dt class="col-sm-3">Stock</dt>
                         <dd class="col-sm-9">
-                            <span class="badge @(product.StockQuantity > 10 ? "bg-success" : product.StockQuantity > 0 ? "bg-warning text-dark" : "bg-danger")">
+                            <span class="badge @(product.StockQuantity > product.ReorderPoint ? "bg-success" : product.StockQuantity > 0 ? "bg-warning text-dark" : "bg-danger")">
                                 @product.StockQuantity units
                             </span>
+                            <span class="text-muted small ms-2">(Reorder at @product.ReorderPoint)</span>
                         </dd>
 
                         <dt class="col-sm-3">Category</dt>

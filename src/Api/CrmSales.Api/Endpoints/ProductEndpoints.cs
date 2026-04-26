@@ -32,12 +32,13 @@ public static class ProductEndpoints
             CancellationToken ct,
             [FromQuery] string? search = null,
             [FromQuery] bool? isActive = null,
+            [FromQuery] bool lowInventory = false,
             [FromQuery] int limit = 20,
             [FromQuery] string? cursor = null) =>
         {
             var result = await bus.InvokeAsync<Result<CursorPaginationResult<
                 CrmSales.Products.Application.Products.DTOs.ProductDto>>>(
-                new GetProductsQuery(search, isActive, limit, cursor), ct);
+                new GetProductsQuery(search, isActive, lowInventory, limit, cursor), ct);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.Problem(result.Error.Description);
         });
 

@@ -26,7 +26,7 @@ public static class CreateProductHandler
 
         var product = Product.Create(
             command.Name, command.Description, command.Sku,
-            command.Price, command.Currency, command.CategoryId, command.StockQuantity);
+            command.Price, command.Currency, command.CategoryId, command.StockQuantity, command.ReorderPoint);
 
         await productRepository.AddAsync(product, ct);
         return Result.Success(product.Id);

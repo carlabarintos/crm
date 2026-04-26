@@ -13,6 +13,7 @@ public sealed class Product : AggregateRoot<Guid>
     public Guid CategoryId { get; private set; }
     public bool IsActive { get; private set; }
     public int StockQuantity { get; private set; }
+    public int ReorderPoint { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
@@ -30,7 +31,8 @@ public sealed class Product : AggregateRoot<Guid>
         decimal price,
         string currency,
         Guid categoryId,
-        int stockQuantity = 0)
+        int stockQuantity = 0,
+        int reorderPoint = 10)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Product name is required.", nameof(name));
@@ -44,6 +46,7 @@ public sealed class Product : AggregateRoot<Guid>
             Price = Money.Of(price, currency),
             CategoryId = categoryId,
             StockQuantity = stockQuantity,
+            ReorderPoint = reorderPoint,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -74,6 +77,14 @@ public sealed class Product : AggregateRoot<Guid>
     }
 
     public void AdjustStock(int quantity) => StockQuantity = Math.Max(0, StockQuantity + quantity);
+
+    public bool IsLowStock() => StockQuantity <= ReorderPoint;
+
+    public void SetReorderPoint(int reorderPoint)
+    {
+        ReorderPoint = Math.Max(0, reorderPoint);
+        UpdatedAt = DateTime.UtcNow;
+    }
 
     public void Activate()
     {

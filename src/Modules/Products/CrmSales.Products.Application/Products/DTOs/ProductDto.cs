@@ -11,6 +11,7 @@ public record ProductDto(
     string? CategoryName,
     bool IsActive,
     int StockQuantity,
+    int ReorderPoint,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
