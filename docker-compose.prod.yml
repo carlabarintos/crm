@@ -80,9 +80,10 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_SPI_THEME_STATIC_MAX_AGE: "3600"
     volumes:
       - crm-keycloak-data:/opt/keycloak/data
-      - ./keycloak-themes/crm:/opt/keycloak/themes/crm:ro
+      - ./src/AppHost/CrmSales.AppHost/keycloak-themes/crm:/opt/keycloak/themes/crm:ro
     depends_on:
       postgres:
         condition: service_healthy
