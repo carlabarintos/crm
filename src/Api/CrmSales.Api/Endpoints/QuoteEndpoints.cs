@@ -64,7 +64,7 @@ public static class QuoteEndpoints
 
         group.MapGet("/summary", async (IQuoteRepository repo, CancellationToken ct) =>
         {
-            var s = await repo.GetSummaryAsync(ct);
+            var s = await repo.GetSummaryAsync(ct: ct);
             return Results.Ok(new
             {
                 totalCount    = s.Total,
@@ -234,7 +234,8 @@ public static class QuoteEndpoints
                     .ToList(),
                 TenantId: tenantId,
                 TaxRateName: quote.TaxRateName,
-                TaxRatePercent: quote.TaxRatePercent));
+                TaxRatePercent: quote.TaxRatePercent,
+                ContactId: opp?.ContactId));
 
             var msg = $"Quote {quote.QuoteNumber} accepted by {actor}";
             await broadcaster.BroadcastAsync(new NotificationEvent(

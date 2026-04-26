@@ -25,7 +25,8 @@ internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderReposit
             .FirstOrDefaultAsync(o => o.QuoteId == quoteId, ct);
 
     public async Task<IReadOnlyList<Order>> GetByCustomerAsync(Guid customerId, CancellationToken ct = default) =>
-        await dbContext.Orders.Where(o => o.CustomerId == customerId)
+        await dbContext.Orders.Include(o => o.LineItems)
+            .Where(o => o.CustomerId == customerId)
             .OrderByDescending(o => o.CreatedAt).ToListAsync(ct);
 
     public async Task<IReadOnlyList<Order>> GetByStatusAsync(OrderStatus status, CancellationToken ct = default) =>
@@ -59,9 +60,13 @@ internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderReposit
         return CursorPaginationResult<Order>.Create(items, nextCursor);
     }
 
-    public async Task<OrderSummaryData> GetSummaryAsync(CancellationToken ct = default)
+    public async Task<OrderSummaryData> GetSummaryAsync(int? year = null, int? month = null, CancellationToken ct = default)
     {
-        var counts = await dbContext.Orders
+        var filtered = dbContext.Orders.AsQueryable();
+        if (year.HasValue)  filtered = filtered.Where(o => o.CreatedAt.Year  == year.Value);
+        if (month.HasValue) filtered = filtered.Where(o => o.CreatedAt.Month == month.Value);
+
+        var counts = await filtered
             .GroupBy(_ => 1)
             .Select(g => new
             {
@@ -75,12 +80,13 @@ internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderReposit
             })
             .FirstOrDefaultAsync(ct);
 
-        var deliveredRevenue = await dbContext.Orders
+        var deliveredRevenue = await filtered
             .Where(o => o.Status == OrderStatus.Delivered)
             .Join(dbContext.LineItems, o => o.Id, l => l.OrderId,
                 (_, l) => l.UnitPrice * l.Quantity)
             .SumAsync(ct);
 
+        // Monthly revenue is always all-time so the endpoint can derive yearly totals and slices
         var monthlyRaw = await dbContext.Orders
             .Where(o => o.Status == OrderStatus.Delivered)
             .Join(dbContext.LineItems, o => o.Id, l => l.OrderId,

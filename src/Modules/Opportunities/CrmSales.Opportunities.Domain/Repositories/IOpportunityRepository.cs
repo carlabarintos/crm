@@ -19,7 +19,7 @@ public interface IOpportunityRepository : IRepository<Opportunity, Guid>
     Task<IReadOnlyList<Opportunity>> GetByOwnerAsync(Guid ownerId, CancellationToken ct = default);
     Task<IReadOnlyList<Opportunity>> GetByStageAsync(OpportunityStage stage, CancellationToken ct = default);
     Task<CursorPaginationResult<Opportunity>> SearchAsync(string? term, OpportunityStage? stage, Guid? ownerId, int limit, string? cursor, CancellationToken ct = default);
-    Task<OpportunitySummaryData> GetSummaryAsync(CancellationToken ct = default);
+    Task<OpportunitySummaryData> GetSummaryAsync(int? year = null, int? month = null, CancellationToken ct = default);
     Task<List<TopOpportunityData>> GetTopOpportunitiesAsync(int count, CancellationToken ct = default);
     Task<List<Opportunity>> GetExpiringSoonAsync(int days, int limit, Guid? ownerId = null, CancellationToken ct = default);
 }

@@ -6,58 +6,167 @@
 
 <PageTitle>Reports — CRM Sales</PageTitle>
 
-<div class="page-header stagger-1">
+<!-- Header + Filters -->
+<div class="rpt-page-header stagger-1">
     <div>
         <p class="page-header-meta">Analytics</p>
-        <h1>Reports</h1>
+        <h1>Reports &amp; Analytics</h1>
+    </div>
+    <div class="rpt-filters">
+        <select class="rpt-filter-select" value="@(_filterYear?.ToString() ?? "")" @onchange="OnYearChanged" disabled="@_filtering">
+            <option value="">All Time</option>
+            @foreach (var y in AvailableYears)
+            {
+                <option value="@y">@y</option>
+            }
+        </select>
+        <select class="rpt-filter-select" value="@(_filterMonth?.ToString() ?? "")" @onchange="OnMonthChanged" disabled="@(!_filterYear.HasValue || _filtering)">
+            <option value="">All Months</option>
+            @for (int m = 1; m <= 12; m++)
+            {
+                var mn = m;
+                <option value="@mn">@(new DateTime(2000, mn, 1).ToString("MMMM"))</option>
+            }
+        </select>
+        @if (_filterYear.HasValue || _filterMonth.HasValue)
+        {
+            <button class="rpt-clear-btn" @onclick="ClearFilters" disabled="@_filtering">
+                Clear
+            </button>
+        }
+        @if (_filtering)
+        {
+            <div class="rpt-filter-spinner">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            </div>
+        }
     </div>
 </div>
 
 @if (_loading)
 {
-    <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <div class="mt-2 text-muted" style="font-size:13px">Loading analytics…</div>
+    </div>
 }
 else
 {
-    <!-- Win/Loss Summary -->
+    <!-- Period label -->
+    @if (_filterYear.HasValue)
+    {
+        <div class="rpt-period-badge stagger-1">
+            <span>
+                Showing data for
+                @if (_filterMonth.HasValue)
+                {
+                    <strong>@(new DateTime(2000, _filterMonth.Value, 1).ToString("MMMM")) @_filterYear</strong>
+                }
+                else
+                {
+                    <strong>@_filterYear</strong>
+                }
+            </span>
+        </div>
+    }
+
+    <!-- KPI Row -->
     <div class="row g-3 mb-4 stagger-2">
         <div class="col-6 col-lg-3">
-            <div class="stat-card">
-                <div class="stat-card-label">Closed Won</div>
-                <div class="stat-card-value text-success">@(_data?.Opportunities.WonCount ?? 0)</div>
-                <div class="stat-card-sub">@FormatCurrency(_data?.Opportunities.PipelineValue ?? 0)</div>
+            <div class="kpi-card kpi-green">
+                <div class="kpi-icon">✓</div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Closed Won</div>
+                    <div class="kpi-value text-success">@(_data?.Opportunities.WonCount ?? 0)</div>
+                    <div class="kpi-sub">@FormatCurrency(_data?.Opportunities.PipelineValue ?? 0) pipeline</div>
+                </div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
-            <div class="stat-card">
-                <div class="stat-card-label">Closed Lost</div>
-                <div class="stat-card-value text-danger">@(_data?.Opportunities.LostCount ?? 0)</div>
-                <div class="stat-card-sub">&nbsp;</div>
+            <div class="kpi-card kpi-red">
+                <div class="kpi-icon">✕</div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Closed Lost</div>
+                    <div class="kpi-value text-danger">@(_data?.Opportunities.LostCount ?? 0)</div>
+                    <div class="kpi-sub">@((_data?.Opportunities.WonCount ?? 0) + (_data?.Opportunities.LostCount ?? 0)) total closed</div>
+                </div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
-            <div class="stat-card">
-                <div class="stat-card-label">Win Rate</div>
-                <div class="stat-card-value text-primary">@(_data?.Opportunities.WinRate ?? "—")</div>
-                <div class="stat-card-sub">@((_data?.Opportunities.WonCount ?? 0) + (_data?.Opportunities.LostCount ?? 0)) closed total</div>
+            <div class="kpi-card kpi-indigo">
+                <div class="kpi-icon">%</div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Win Rate</div>
+                    <div class="kpi-value text-primary">@(_data?.Opportunities.WinRate ?? "—")</div>
+                    <div class="kpi-sub">@FormatCurrency(_data?.Opportunities.WeightedValue ?? 0) weighted</div>
+                </div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
-            <div class="stat-card">
-                <div class="stat-card-label">Total Revenue</div>
-                <div class="stat-card-value text-success">@FormatCurrency(_data?.Orders.DeliveredRevenue ?? 0)</div>
-                <div class="stat-card-sub">from delivered orders</div>
+            <div class="kpi-card kpi-emerald">
+                <div class="kpi-icon">$</div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Revenue</div>
+                    <div class="kpi-value" style="color:#059669">@FormatCurrency(_data?.Orders.DeliveredRevenue ?? 0)</div>
+                    <div class="kpi-sub">@(_data?.Orders.DeliveredCount ?? 0) delivered orders</div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Quote Conversion -->
+    <!-- Monthly Revenue + Quote Conversion -->
     <div class="row g-3 mb-4 stagger-3">
-        <div class="col-12 col-md-6">
+        <div class="col-12 col-lg-7">
             <div class="card h-100">
-                <div class="card-header rpt-card-header">Quote Conversion</div>
+                <div class="card-header rpt-section-header">
+                    <div>
+                        <span class="rpt-section-title">Monthly Revenue</span>
+                        <span class="rpt-section-sub">Delivered orders</span>
+                    </div>
+                    @if (!_filterYear.HasValue)
+                    {
+                        <span class="rpt-badge-neutral">Last 12 months</span>
+                    }
+                </div>
+                <div class="card-body pb-2">
+                    @{
+                        var monthly = _data?.MonthlyRevenue ?? new Dictionary<string, decimal>();
+                    }
+                    @if (monthly.Count == 0)
+                    {
+                        <div class="rpt-empty">No delivered orders for this period.</div>
+                    }
+                    else
+                    {
+                        var maxRev = monthly.Values.DefaultIfEmpty(1m).Max();
+                        <div class="rpt-bar-chart">
+                            @foreach (var (lbl, rev) in monthly.OrderBy(kv => kv.Key))
+                            {
+                                var h = maxRev > 0 ? (double)(rev / maxRev * 130) : 0;
+                                var isSelected = _filterMonth.HasValue && lbl.StartsWith(new DateTime(2000, _filterMonth.Value, 1).ToString("MMM"));
+                                <div class="rpt-bar-col @(isSelected ? "rpt-bar-col--active" : "")">
+                                    <div class="rpt-bar-value">@FormatCurrencyShort(rev)</div>
+                                    <div class="rpt-bar @(isSelected ? "rpt-bar--active" : "")" style="height:@(Math.Max(h, rev > 0 ? 6 : 2).ToString("F0"))px"></div>
+                                    <div class="rpt-bar-label">@lbl</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-5">
+            <div class="card h-100">
+                <div class="card-header rpt-section-header">
+                    <span class="rpt-section-title">Quote Conversion</span>
+                    @if (_data?.Quotes.TotalCount > 0)
+                    {
+                        <span class="rpt-badge-neutral">@_data.Quotes.TotalCount total</span>
+                    }
+                </div>
                 <div class="card-body">
-                    <div class="row g-2">
+                    <div class="row g-2 mb-3">
                         @foreach (var (label, count, cls) in QuoteStats)
                         {
                             <div class="col-6">
@@ -74,7 +183,7 @@ else
                     </div>
                     @if (_totalQuotes > 0)
                     {
-                        <div class="rpt-funnel mt-3">
+                        <div class="rpt-funnel">
                             @foreach (var (label, count, color) in QuoteFunnelBars)
                             {
                                 var w = count * 100 / _totalQuotes;
@@ -82,8 +191,9 @@ else
                                     <div class="rpt-funnel-label">@label</div>
                                     <div class="rpt-funnel-track">
                                         <div class="rpt-funnel-fill" style="width:@w%;background:@color">
-                                            @if (w > 10) { <span>@count</span> }
+                                            @if (w > 8) { <span>@count</span> }
                                         </div>
+                                        <span class="rpt-funnel-pct">@(w)%</span>
                                     </div>
                                 </div>
                             }
@@ -92,35 +202,40 @@ else
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Sales Funnel -->
-        <div class="col-12 col-md-6">
+    <!-- Sales Funnel + Yearly Revenue -->
+    <div class="row g-3 mb-4 stagger-4">
+        <div class="col-12 col-lg-5">
             <div class="card h-100">
-                <div class="card-header rpt-card-header">Sales Funnel (Opportunities)</div>
+                <div class="card-header rpt-section-header">
+                    <span class="rpt-section-title">Sales Funnel</span>
+                    <span class="rpt-section-sub">by stage</span>
+                </div>
                 <div class="card-body">
                     @{
                         var stageLookup = _data?.Opportunities.ByStage
                             .ToDictionary(s => s.Stage, s => (s.Count, s.Value))
                             ?? new Dictionary<string, (int, decimal)>();
                         var totalOpps = _data?.Opportunities.TotalCount ?? 0;
-                        var maxCount = stageLookup.Values.DefaultIfEmpty((0, 0m)).Max(s => s.Item1);
+                        var maxCount  = stageLookup.Values.DefaultIfEmpty((0, 0m)).Max(s => s.Item1);
                     }
                     @if (stageLookup.Count == 0)
                     {
-                        <div class="text-muted text-center py-3" style="font-size:13px">No opportunities yet.</div>
+                        <div class="rpt-empty">No opportunities for this period.</div>
                     }
                     else
                     {
                         @foreach (var (stage, label, color) in FunnelStages)
                         {
-                            var data = stageLookup.TryGetValue(stage, out var d) ? d : (Count: 0, Value: 0m);
-                            var w = maxCount > 0 ? data.Count * 100 / maxCount : 0;
-                            var pct = totalOpps > 0 ? (data.Count * 100m / totalOpps).ToString("N0") + "%" : "";
+                            var d = stageLookup.TryGetValue(stage, out var v) ? v : (Count: 0, Value: 0m);
+                            var w = maxCount > 0 ? d.Count * 100 / maxCount : 0;
+                            var pct = totalOpps > 0 ? (d.Count * 100m / totalOpps).ToString("N0") + "%" : "";
                             <div class="rpt-funnel-row">
                                 <div class="rpt-funnel-label">@label</div>
                                 <div class="rpt-funnel-track">
-                                    <div class="rpt-funnel-fill" style="width:@(Math.Max(w, data.Count > 0 ? 5 : 0))%;background:@color">
-                                        @if (data.Count > 0) { <span>@data.Count</span> }
+                                    <div class="rpt-funnel-fill" style="width:@(Math.Max(w, d.Count > 0 ? 5 : 0))%;background:@color">
+                                        @if (d.Count > 0) { <span>@d.Count</span> }
                                     </div>
                                     @if (!string.IsNullOrEmpty(pct))
                                     {
@@ -133,32 +248,36 @@ else
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Monthly Revenue -->
-    <div class="row g-3 mb-4 stagger-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header rpt-card-header">Monthly Revenue (Delivered Orders)</div>
+        <!-- Yearly Revenue Report -->
+        <div class="col-12 col-lg-7">
+            <div class="card h-100">
+                <div class="card-header rpt-section-header">
+                    <span class="rpt-section-title">Yearly Revenue</span>
+                    <span class="rpt-section-sub">year-over-year</span>
+                </div>
                 <div class="card-body">
                     @{
-                        var monthly = _data?.MonthlyRevenue ?? new Dictionary<string, decimal>();
+                        var yearly = _data?.YearlyRevenue ?? new Dictionary<string, decimal>();
                     }
-                    @if (monthly.Count == 0)
+                    @if (yearly.Count == 0)
                     {
-                        <div class="text-muted text-center py-3" style="font-size:13px">No delivered orders yet.</div>
+                        <div class="rpt-empty">No revenue data yet.</div>
                     }
                     else
                     {
-                        var maxRev = monthly.Values.Max();
-                        <div class="rpt-bar-chart">
-                            @foreach (var (month, rev) in monthly.OrderBy(kv => kv.Key))
+                        var maxYearRev = yearly.Values.DefaultIfEmpty(1m).Max();
+                        <div class="rpt-yearly-list">
+                            @foreach (var (yr, rev) in yearly.OrderByDescending(kv => kv.Key))
                             {
-                                var h = maxRev > 0 ? (double)(rev / maxRev * 140) : 0;
-                                <div class="rpt-bar-col">
-                                    <div class="rpt-bar-value">@FormatCurrencyShort(rev)</div>
-                                    <div class="rpt-bar" style="height:@(h.ToString("F0"))px"></div>
-                                    <div class="rpt-bar-label">@month</div>
+                                var w = maxYearRev > 0 ? (int)(rev / maxYearRev * 100) : 0;
+                                var isActive = _filterYear.HasValue && yr == _filterYear.Value.ToString();
+                                <div class="rpt-yearly-row @(isActive ? "rpt-yearly-row--active" : "")">
+                                    <div class="rpt-yearly-year">@yr</div>
+                                    <div class="rpt-yearly-track">
+                                        <div class="rpt-yearly-fill @(isActive ? "rpt-yearly-fill--active" : "")" style="width:@(Math.Max(w,2))%"></div>
+                                    </div>
+                                    <div class="rpt-yearly-val">@FormatCurrency(rev)</div>
                                 </div>
                             }
                         </div>
@@ -168,26 +287,35 @@ else
         </div>
     </div>
 
-    <!-- Top Opportunities by Value -->
+    <!-- Top Opportunities -->
     <div class="row g-3 mb-4 stagger-5">
         <div class="col-12">
             <div class="card">
-                <div class="card-header rpt-card-header">Top 5 Opportunities by Value</div>
+                <div class="card-header rpt-section-header">
+                    <span class="rpt-section-title">Top 5 Opportunities</span>
+                    <span class="rpt-section-sub">by value (all time)</span>
+                </div>
                 <div class="card-body p-0">
                     @{
                         var topOpps = _data?.TopOpportunities ?? [];
                     }
                     @if (!topOpps.Any())
                     {
-                        <div class="text-muted text-center py-3" style="font-size:13px">No opportunities yet.</div>
+                        <div class="rpt-empty" style="padding:1rem 1.25rem">No opportunities yet.</div>
                     }
                     else
                     {
                         var maxVal = topOpps.Max(o => o.Value);
                         <div class="table-responsive">
-                            <table class="table table-sm mb-0">
-                                <thead class="table-light">
-                                    <tr><th>#</th><th>Opportunity</th><th>Account</th><th>Stage</th><th>Value</th></tr>
+                            <table class="table table-sm mb-0 rpt-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:32px">#</th>
+                                        <th>Opportunity</th>
+                                        <th>Account</th>
+                                        <th>Stage</th>
+                                        <th style="text-align:right">Value</th>
+                                    </tr>
                                 </thead>
                                 <tbody>
                                     @{ int rank = 0; }
@@ -196,16 +324,18 @@ else
                                         rank++;
                                         var w = maxVal > 0 ? (int)(o.Value * 100 / maxVal) : 0;
                                         <tr>
-                                            <td style="color:#9CA3AF;font-size:12px;width:24px">@rank</td>
                                             <td>
-                                                <div style="font-weight:600;color:#111827;font-size:13px">@o.Name</div>
-                                                <div style="flex:1;height:4px;background:#F3F4F6;border-radius:2px;max-width:160px;margin-top:4px">
-                                                    <div style="height:100%;border-radius:2px;background:#6366f1;width:@(w)%"></div>
+                                                <div class="rpt-rank @(rank == 1 ? "rpt-rank--gold" : rank == 2 ? "rpt-rank--silver" : rank == 3 ? "rpt-rank--bronze" : "")">@rank</div>
+                                            </td>
+                                            <td>
+                                                <div class="rpt-opp-name">@o.Name</div>
+                                                <div class="rpt-opp-bar">
+                                                    <div class="rpt-opp-bar-fill" style="width:@(w)%"></div>
                                                 </div>
                                             </td>
-                                            <td style="color:#6B7280;font-size:12.5px">@o.Account</td>
-                                            <td><span class="badge badge-soft-neutral" style="font-size:10.5px">@o.Stage</span></td>
-                                            <td style="font-weight:600;color:#111827">@FormatCurrency(o.Value)</td>
+                                            <td class="rpt-muted">@o.Account</td>
+                                            <td><span class="rpt-stage-badge">@o.Stage</span></td>
+                                            <td style="text-align:right;font-weight:700;color:#111827">@FormatCurrency(o.Value)</td>
                                         </tr>
                                     }
                                 </tbody>
@@ -219,58 +349,189 @@ else
 }
 
 <style>
-    .stat-card {
+    /* ─── Page Header ──────────────────────────────────────────────── */
+    .rpt-page-header {
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: .75rem; margin-bottom: 1.25rem;
+    }
+    .rpt-filters { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .rpt-filter-select {
+        appearance: none; -webkit-appearance: none;
+        background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236B7280'/%3E%3C/svg%3E") no-repeat right 10px center;
+        border: 1.5px solid #E5E7EB; border-radius: 8px;
+        padding: .375rem 2rem .375rem .75rem;
+        font-size: 12.5px; font-weight: 500; color: #374151;
+        cursor: pointer; transition: border-color .15s;
+    }
+    .rpt-filter-select:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+    .rpt-filter-select:disabled { opacity: .45; cursor: not-allowed; }
+    .rpt-clear-btn {
+        background: none; border: 1.5px solid #E5E7EB; border-radius: 8px;
+        padding: .375rem .75rem; font-size: 12px; color: #6B7280; cursor: pointer;
+        transition: all .15s;
+    }
+    .rpt-clear-btn:hover { background: #F9FAFB; color: #111827; }
+    .rpt-filter-spinner { display: flex; align-items: center; }
+
+    /* ─── Period Badge ─────────────────────────────────────────────── */
+    .rpt-period-badge {
+        display: inline-flex; align-items: center; gap: .4rem;
+        background: #EEF2FF; color: #4338CA; border-radius: 8px;
+        padding: .3rem .75rem; font-size: 12.5px; margin-bottom: 1rem;
+    }
+
+    /* ─── KPI Cards ────────────────────────────────────────────────── */
+    .kpi-card {
         background: #fff; border: 1px solid #E5E7EB; border-radius: 12px;
-        padding: 1rem 1.25rem;
+        padding: 1rem 1.1rem; display: flex; align-items: flex-start; gap: .75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,.05); position: relative; overflow: hidden;
     }
-    .stat-card-label {
-        font-size: 11.5px; font-weight: 600; text-transform: uppercase;
-        letter-spacing: .05em; color: #9CA3AF; margin-bottom: .3rem;
+    .kpi-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        border-radius: 12px 12px 0 0;
     }
-    .stat-card-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; margin-bottom: .2rem; }
-    .stat-card-sub { font-size: 11.5px; color: #9CA3AF; }
+    .kpi-green::before  { background: linear-gradient(90deg, #10b981, #34d399); }
+    .kpi-red::before    { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .kpi-indigo::before { background: linear-gradient(90deg, #6366f1, #818cf8); }
+    .kpi-emerald::before{ background: linear-gradient(90deg, #059669, #10b981); }
 
-    .rpt-card-header { font-size: 13px; font-weight: 700; color: #111827; }
-
-    .rpt-mini-stat { background:#F9FAFB; border-radius:8px; padding:.625rem .75rem; }
-    .rpt-mini-label { font-size:10.5px; color:#9CA3AF; text-transform:uppercase; letter-spacing:.05em; }
-    .rpt-mini-value { font-size:1.4rem; font-weight:700; font-variant-numeric:tabular-nums; }
-    .rpt-mini-pct { font-size:10.5px; color:#9CA3AF; }
-
-    .rpt-funnel { display:flex; flex-direction:column; gap:.4rem; }
-    .rpt-funnel-row { display:flex; align-items:center; gap:.75rem; }
-    .rpt-funnel-label { width:80px; font-size:11.5px; color:#374151; font-weight:500; flex-shrink:0; }
-    .rpt-funnel-track { flex:1; height:22px; background:#F3F4F6; border-radius:6px; overflow:visible; display:flex; align-items:center; position:relative; }
-    .rpt-funnel-fill {
-        height:100%; border-radius:6px;
-        display:flex; align-items:center; padding:0 8px;
-        font-size:11px; font-weight:600; color:rgba(255,255,255,.9);
-        white-space:nowrap; min-width:0;
-        transition: width .6s cubic-bezier(.16,1,.3,1);
+    .kpi-icon {
+        width: 36px; height: 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 14px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
     }
-    .rpt-funnel-pct { font-size:10.5px; color:#9CA3AF; margin-left:.5rem; white-space:nowrap; }
+    .kpi-green  .kpi-icon { background: #D1FAE5; color: #059669; }
+    .kpi-red    .kpi-icon { background: #FEE2E2; color: #DC2626; }
+    .kpi-indigo .kpi-icon { background: #E0E7FF; color: #4F46E5; }
+    .kpi-emerald .kpi-icon{ background: #D1FAE5; color: #047857; }
 
+    .kpi-body { flex: 1; }
+    .kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #9CA3AF; margin-bottom: .2rem; }
+    .kpi-value { font-size: 1.65rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .kpi-sub   { font-size: 11px; color: #9CA3AF; margin-top: .2rem; }
+
+    /* ─── Card Headers ─────────────────────────────────────────────── */
+    .rpt-section-header {
+        display: flex; align-items: center; gap: .5rem;
+        background: transparent; border-bottom: 1px solid #F3F4F6; padding: .75rem 1rem;
+    }
+    .rpt-section-title { font-size: 13px; font-weight: 700; color: #111827; }
+    .rpt-section-sub   { font-size: 11.5px; color: #9CA3AF; }
+    .rpt-badge-neutral {
+        margin-left: auto; background: #F3F4F6; color: #6B7280;
+        border-radius: 20px; padding: .15rem .6rem; font-size: 11px; font-weight: 600;
+    }
+
+    /* ─── Empty state ──────────────────────────────────────────────── */
+    .rpt-empty { color: #9CA3AF; font-size: 13px; text-align: center; padding: 2rem 0; }
+
+    /* ─── Monthly Bar Chart ────────────────────────────────────────── */
     .rpt-bar-chart {
-        display: flex; align-items: flex-end; gap: .75rem;
-        height: 180px; padding-bottom: 2rem; overflow-x: auto;
+        display: flex; align-items: flex-end; gap: .5rem;
+        height: 170px; padding-bottom: 1.8rem; overflow-x: auto;
     }
-    .rpt-bar-col { display:flex; flex-direction:column; align-items:center; gap:.25rem; min-width:48px; flex:1; max-width:80px; }
-    .rpt-bar-value { font-size:10px; color:#9CA3AF; font-weight:600; white-space:nowrap; }
-    .rpt-bar { background:linear-gradient(180deg,#6366f1,#818cf8); border-radius:4px 4px 0 0; width:100%; min-height:4px; transition:height .6s cubic-bezier(.16,1,.3,1); }
-    .rpt-bar-label { font-size:10px; color:#6B7280; white-space:nowrap; }
+    .rpt-bar-col {
+        display: flex; flex-direction: column; align-items: center; gap: .25rem;
+        min-width: 44px; flex: 1; max-width: 72px;
+    }
+    .rpt-bar-col--active .rpt-bar-label { color: #4F46E5; font-weight: 700; }
+    .rpt-bar-value { font-size: 9.5px; color: #9CA3AF; font-weight: 600; white-space: nowrap; }
+    .rpt-bar {
+        background: linear-gradient(180deg, #6366f1 0%, #818cf8 100%);
+        border-radius: 5px 5px 0 0; width: 100%; min-height: 3px;
+        transition: height .5s cubic-bezier(.16,1,.3,1);
+    }
+    .rpt-bar--active { background: linear-gradient(180deg, #4F46E5 0%, #6366f1 100%); box-shadow: 0 0 0 2px rgba(99,102,241,.3); }
+    .rpt-bar-label { font-size: 9.5px; color: #6B7280; white-space: nowrap; }
+
+    /* ─── Quote Mini Stats ─────────────────────────────────────────── */
+    .rpt-mini-stat { background: #F9FAFB; border-radius: 8px; padding: .6rem .75rem; }
+    .rpt-mini-label { font-size: 10px; color: #9CA3AF; text-transform: uppercase; letter-spacing: .06em; }
+    .rpt-mini-value { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .rpt-mini-pct   { font-size: 10px; color: #9CA3AF; }
+
+    /* ─── Funnel Bars ──────────────────────────────────────────────── */
+    .rpt-funnel { display: flex; flex-direction: column; gap: .45rem; }
+    .rpt-funnel-row { display: flex; align-items: center; gap: .6rem; }
+    .rpt-funnel-label { width: 76px; font-size: 11.5px; color: #374151; font-weight: 500; flex-shrink: 0; }
+    .rpt-funnel-track {
+        flex: 1; height: 22px; background: #F3F4F6; border-radius: 6px;
+        display: flex; align-items: center; position: relative; overflow: visible;
+    }
+    .rpt-funnel-fill {
+        height: 100%; border-radius: 6px; display: flex; align-items: center;
+        padding: 0 8px; font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,.95);
+        white-space: nowrap; min-width: 0; transition: width .55s cubic-bezier(.16,1,.3,1);
+    }
+    .rpt-funnel-pct { font-size: 10px; color: #9CA3AF; margin-left: .4rem; white-space: nowrap; }
+
+    /* ─── Yearly Revenue ───────────────────────────────────────────── */
+    .rpt-yearly-list { display: flex; flex-direction: column; gap: .65rem; }
+    .rpt-yearly-row {
+        display: flex; align-items: center; gap: .75rem;
+        padding: .45rem .6rem; border-radius: 8px; transition: background .15s;
+    }
+    .rpt-yearly-row--active { background: #EEF2FF; }
+    .rpt-yearly-year { width: 40px; font-size: 12.5px; font-weight: 700; color: #374151; flex-shrink: 0; }
+    .rpt-yearly-row--active .rpt-yearly-year { color: #4338CA; }
+    .rpt-yearly-track {
+        flex: 1; height: 18px; background: #F3F4F6; border-radius: 5px; overflow: hidden;
+    }
+    .rpt-yearly-fill {
+        height: 100%; border-radius: 5px;
+        background: linear-gradient(90deg, #6366f1, #818cf8);
+        transition: width .55s cubic-bezier(.16,1,.3,1);
+    }
+    .rpt-yearly-fill--active { background: linear-gradient(90deg, #4338CA, #6366f1); }
+    .rpt-yearly-val { width: 80px; text-align: right; font-size: 12.5px; font-weight: 700; color: #111827; flex-shrink: 0; }
+
+    /* ─── Top Opportunities Table ──────────────────────────────────── */
+    .rpt-table thead th {
+        font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+        color: #9CA3AF; border-bottom: 1px solid #F3F4F6; padding: .6rem 1rem;
+        background: #FAFAFA;
+    }
+    .rpt-table tbody td { padding: .65rem 1rem; vertical-align: middle; border-bottom: 1px solid #F9FAFB; }
+    .rpt-table tbody tr:last-child td { border-bottom: none; }
+
+    .rpt-rank {
+        width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center;
+        justify-content: center; font-size: 11px; font-weight: 700;
+        background: #F3F4F6; color: #9CA3AF;
+    }
+    .rpt-rank--gold   { background: #FEF3C7; color: #D97706; }
+    .rpt-rank--silver { background: #F1F5F9; color: #64748B; }
+    .rpt-rank--bronze { background: #FEF3C7; color: #B45309; }
+
+    .rpt-opp-name { font-weight: 600; color: #111827; font-size: 13px; }
+    .rpt-opp-bar  { height: 3px; background: #F3F4F6; border-radius: 2px; max-width: 180px; margin-top: 5px; }
+    .rpt-opp-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg,#6366f1,#818cf8); }
+
+    .rpt-muted { color: #6B7280; font-size: 12.5px; }
+    .rpt-stage-badge {
+        display: inline-block; background: #F3F4F6; color: #374151;
+        border-radius: 6px; padding: .15rem .55rem; font-size: 10.5px; font-weight: 600;
+    }
 </style>
 
 @code {
-    private bool _loading = true;
+    private bool _loading   = true;
+    private bool _filtering = false;
     private DashboardDto? _data;
+
+    private int? _filterYear;
+    private int? _filterMonth;
+
+    private List<int> AvailableYears =>
+        _data?.AvailableYears ?? [];
 
     private static readonly (string Stage, string Label, string Color)[] FunnelStages =
     [
         ("Prospecting",   "Prospect",   "linear-gradient(90deg,#6366f1,#818cf8)"),
         ("Qualification", "Qualify",    "linear-gradient(90deg,#8b5cf6,#a78bfa)"),
         ("Proposal",      "Proposal",   "linear-gradient(90deg,#06b6d4,#22d3ee)"),
-        ("ClosedWon",     "Closed Won", "linear-gradient(90deg,#10b981,#34d399)"),
-        ("ClosedLost",    "Closed Lost","linear-gradient(90deg,#ef4444,#f87171)"),
+        ("ClosedWon",     "Won",        "linear-gradient(90deg,#10b981,#34d399)"),
+        ("ClosedLost",    "Lost",       "linear-gradient(90deg,#ef4444,#f87171)"),
     ];
 
     private IEnumerable<(string Label, int Count, string Cls)> QuoteStats => _data is null ? [] :
@@ -293,13 +554,40 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _data = await Api.GetDashboardAsync();
+        _data    = await Api.GetDashboardAsync();
         _loading = false;
+    }
+
+    private async Task LoadData()
+    {
+        _filtering = true;
+        _data      = await Api.GetDashboardAsync(_filterYear, _filterMonth);
+        _filtering = false;
+    }
+
+    private async Task OnYearChanged(ChangeEventArgs e)
+    {
+        _filterYear  = int.TryParse(e.Value?.ToString(), out var y) ? y : null;
+        _filterMonth = null;
+        await LoadData();
+    }
+
+    private async Task OnMonthChanged(ChangeEventArgs e)
+    {
+        _filterMonth = int.TryParse(e.Value?.ToString(), out var m) ? m : null;
+        await LoadData();
+    }
+
+    private async Task ClearFilters()
+    {
+        _filterYear  = null;
+        _filterMonth = null;
+        await LoadData();
     }
 
     private string FormatCurrency(decimal value)
     {
-        var c = _data?.Currency ?? "USD";
+        var c   = _data?.Currency ?? "USD";
         var sym = c switch { "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => c + " " };
         return value >= 1_000_000 ? $"{sym}{value / 1_000_000:N1}M"
              : value >= 1_000     ? $"{sym}{value / 1_000:N1}K"
@@ -308,7 +596,7 @@ else
 
     private string FormatCurrencyShort(decimal value)
     {
-        var c = _data?.Currency ?? "USD";
+        var c   = _data?.Currency ?? "USD";
         var sym = c switch { "PHP" => "₱", "USD" => "$", "EUR" => "€", "GBP" => "£", _ => "" };
         return value >= 1_000_000 ? $"{sym}{value / 1_000_000:N1}M"
              : value >= 1_000     ? $"{sym}{value / 1_000:N0}K"

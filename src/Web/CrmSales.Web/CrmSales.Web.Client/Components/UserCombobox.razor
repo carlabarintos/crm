@@ -1,0 +1,99 @@
+@inject CrmApiClient Api
+@using CrmSales.Web.Client.Services
+
+@if (Value is not null)
+{
+    <div class="cb-chip">
+        <div class="cb-avatar cb-avatar-sm">@Initials(Value)</div>
+        <div class="cb-chip-body">
+            <div class="cb-chip-name">@Value.FullName</div>
+            <div class="cb-chip-sub">@Value.Role</div>
+        </div>
+        <button type="button" class="cb-chip-clear" @onclick="Clear" title="Remove">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg>
+        </button>
+    </div>
+}
+else
+{
+    <div class="cb-wrap" @onclick:stopPropagation>
+        <div class="cb-input-wrap">
+            <svg class="cb-search-icon" width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#9CA3AF" stroke-width="1.5">
+                <circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5l3 3" stroke-linecap="round"/>
+            </svg>
+            <input class="form-control cb-input"
+                   placeholder="@Placeholder"
+                   value="@_search"
+                   @oninput="OnInput"
+                   @onfocus="OnFocus"
+                   @onblur="OnBlur"
+                   autocomplete="off" />
+            @if (_loading) { <span class="cb-spinner spinner-border spinner-border-sm"></span> }
+        </div>
+        @if (_open)
+        {
+            <div class="cb-dropdown">
+                @foreach (var u in Filtered())
+                {
+                    var user = u;
+                    <div class="cb-item" @onmousedown="() => Pick(user)">
+                        <div class="cb-avatar cb-avatar-xs">@Initials(u)</div>
+                        <div class="cb-item-body">
+                            <div class="cb-item-name">@u.FullName</div>
+                            <div class="cb-item-sub">@u.Role</div>
+                        </div>
+                    </div>
+                }
+                @if (!Filtered().Any() && !_loading)
+                {
+                    <div class="cb-empty">
+                        @(string.IsNullOrWhiteSpace(_search) ? "Start typing to search users" : $"No users match \"{_search}\"")
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public UserDto? Value { get; set; }
+    [Parameter] public EventCallback<UserDto?> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Search users…";
+
+    private string _search = "";
+    private List<UserDto> _allUsers = [];
+    private bool _loading, _open;
+
+    private IEnumerable<UserDto> Filtered() =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _allUsers
+            : _allUsers.Where(u =>
+                u.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                u.Role.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                u.Email.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private void OnInput(ChangeEventArgs e) { _search = e.Value?.ToString() ?? ""; _open = true; }
+
+    private async Task OnFocus()
+    {
+        _open = true;
+        if (!_allUsers.Any() && !_loading) await LoadUsers();
+    }
+
+    private async Task OnBlur() { await Task.Delay(180); _open = false; }
+
+    private async Task LoadUsers()
+    {
+        _loading = true;
+        try { _allUsers = await Api.GetUsersAsync() ?? []; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private async Task Pick(UserDto u) { _open = false; _search = ""; await ValueChanged.InvokeAsync(u); }
+    private async Task Clear() => await ValueChanged.InvokeAsync(null);
+
+    private static string Initials(UserDto u) =>
+        (!string.IsNullOrEmpty(u.FirstName) && !string.IsNullOrEmpty(u.LastName))
+            ? $"{u.FirstName[0]}{u.LastName[0]}"
+            : u.FullName.Length > 0 ? u.FullName[0].ToString() : "?";
+}

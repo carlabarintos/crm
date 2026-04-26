@@ -42,25 +42,11 @@
                     <label class="form-label">Owner <span class="text-danger">*</span></label>
                     @if (isSalesRep)
                     {
-                        <input class="form-control" value="@(users?.FirstOrDefault(u => u.Id.ToString() == ownerIdRaw)?.FullName ?? "You")" disabled />
-                    }
-                    else if (users is null)
-                    {
-                        <div class="text-muted small">Loading users...</div>
-                    }
-                    else if (!users.Any())
-                    {
-                        <input class="form-control" @bind="ownerIdRaw" placeholder="No users yet — paste a User ID" />
+                        <input class="form-control" value="You" disabled />
                     }
                     else
                     {
-                        <select class="form-select" @bind="ownerIdRaw">
-                            <option value="">— Select owner —</option>
-                            @foreach (var u in users)
-                            {
-                                <option value="@u.Id">@u.FullName (@u.Role)</option>
-                            }
-                        </select>
+                        <UserCombobox Value="selectedOwner" ValueChanged="u => selectedOwner = u" />
                     }
                 </div>
                 <div class="mb-3">
@@ -156,21 +142,11 @@
                         <label class="form-label form-label-sm">Owner <span class="text-danger">*</span></label>
                         @if (isSalesRep)
                         {
-                            <input class="form-control form-control-sm" value="@(users?.FirstOrDefault(u => u.Id.ToString() == newOppOwnerIdRaw)?.FullName ?? "You")" disabled />
-                        }
-                        else if (users is null || !users.Any())
-                        {
-                            <input class="form-control form-control-sm" @bind="newOppOwnerIdRaw" placeholder="Paste a User ID" />
+                            <input class="form-control form-control-sm" value="You" disabled />
                         }
                         else
                         {
-                            <select class="form-select form-select-sm" @bind="newOppOwnerIdRaw">
-                                <option value="">— Select owner —</option>
-                                @foreach (var u in users)
-                                {
-                                    <option value="@u.Id">@u.FullName (@u.Role)</option>
-                                }
-                            </select>
+                            <UserCombobox Value="newOppSelectedOwner" ValueChanged="u => newOppSelectedOwner = u" Placeholder="Search users…" />
                         }
                     </div>
                     @if (!string.IsNullOrEmpty(oppCreateError))
@@ -310,13 +286,13 @@
     public Guid? OpportunityId { get; set; }
 
     // Quote fields
-    private string ownerIdRaw = "";
+    private UserDto? selectedOwner;
+    private string _salesRepId = "";
     private string currency = "PHP";
     private DateTime? expiryDate = DateTime.Today.AddDays(2);
     private string? notes;
 
     private OpportunityDto? selectedOpportunity;
-    private List<UserDto>? users;
     private bool isSalesRep;
     private bool saving;
     private string? error;
@@ -329,7 +305,7 @@
     private decimal newOppValue;
     private string newOppCurrency = "PHP";
     private DateTime? newOppCloseDate;
-    private string newOppOwnerIdRaw = "";
+    private UserDto? newOppSelectedOwner;
 
     // Default tax rate (fetched on init, auto-applied server-side on create)
     private TaxRateDto? _defaultTaxRate;
@@ -367,18 +343,17 @@
 
         if (isSalesRep)
         {
-            ownerIdRaw = auth.User.FindFirst("sub")?.Value
+            _salesRepId = auth.User.FindFirst("sub")?.Value
                 ?? auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                 ?? "";
-            newOppOwnerIdRaw = ownerIdRaw;
         }
         else
         {
-            users = await Api.GetUsersAsync();
-            var match = users?.FirstOrDefault(u =>
-                string.Equals(u.Email, currentEmail, StringComparison.OrdinalIgnoreCase));
-            if (match is not null) { ownerIdRaw = match.Id.ToString(); newOppOwnerIdRaw = match.Id.ToString(); }
-            else if (users?.Count == 1) { ownerIdRaw = users[0].Id.ToString(); newOppOwnerIdRaw = users[0].Id.ToString(); }
+            var users = await Api.GetUsersAsync();
+            selectedOwner = users?.FirstOrDefault(u =>
+                string.Equals(u.Email, currentEmail, StringComparison.OrdinalIgnoreCase))
+                ?? users?.FirstOrDefault();
+            newOppSelectedOwner = selectedOwner;
         }
     }
 
@@ -435,7 +410,17 @@
         if (string.IsNullOrWhiteSpace(newOppAccount)) { oppCreateError = "Account name is required."; return; }
         if (string.IsNullOrWhiteSpace(newOppContact)) { oppCreateError = "Contact name is required."; return; }
         if (newOppValue <= 0) { oppCreateError = "Estimated value must be greater than 0."; return; }
-        if (!Guid.TryParse(newOppOwnerIdRaw, out var ownerGuid)) { oppCreateError = "Please select an owner."; return; }
+
+        Guid ownerGuid;
+        if (isSalesRep)
+        {
+            if (!Guid.TryParse(_salesRepId, out ownerGuid)) { oppCreateError = "Owner not resolved."; return; }
+        }
+        else
+        {
+            if (newOppSelectedOwner is null) { oppCreateError = "Please select an owner."; return; }
+            ownerGuid = newOppSelectedOwner.Id;
+        }
 
         creatingOppSaving = true;
         try
@@ -475,7 +460,18 @@
     {
         error = null;
         if (selectedOpportunity is null) { error = "Please select or create an opportunity."; return; }
-        if (!Guid.TryParse(ownerIdRaw, out var ownerGuid)) { error = "Please select an owner."; return; }
+
+        Guid ownerGuid;
+        if (isSalesRep)
+        {
+            if (!Guid.TryParse(_salesRepId, out ownerGuid)) { error = "Owner not resolved."; return; }
+        }
+        else
+        {
+            if (selectedOwner is null) { error = "Please select an owner."; return; }
+            ownerGuid = selectedOwner.Id;
+        }
+
         var oppId = selectedOpportunity.Id;
 
         saving = true;

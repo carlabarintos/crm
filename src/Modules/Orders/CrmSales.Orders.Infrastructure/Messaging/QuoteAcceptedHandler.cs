@@ -34,10 +34,11 @@ public static class QuoteAcceptedHandler
         var items = message.LineItems.Select(l =>
             (l.ProductId, l.ProductName, l.Quantity, l.UnitPrice));
 
+        var customerId = message.ContactId ?? Guid.Empty;
         var order = Order.CreateFromQuote(
             message.QuoteId,
             message.OpportunityId,
-            message.OwnerId,
+            customerId,
             message.Currency,
             items,
             taxRateName: message.TaxRateName,

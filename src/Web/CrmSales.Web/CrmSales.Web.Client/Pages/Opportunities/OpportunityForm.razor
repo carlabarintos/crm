@@ -58,25 +58,11 @@
                     <label class="form-label">Owner <span class="text-danger">*</span></label>
                     @if (isSalesRep)
                     {
-                        <input class="form-control" value="@(users?.FirstOrDefault(u => u.Id.ToString() == ownerIdRaw)?.FullName ?? "You")" disabled />
-                    }
-                    else if (users is null)
-                    {
-                        <div class="text-muted small">Loading users...</div>
-                    }
-                    else if (!users.Any())
-                    {
-                        <input class="form-control" @bind="ownerIdRaw" placeholder="No users yet — paste a User ID" />
+                        <input class="form-control" value="You" disabled />
                     }
                     else
                     {
-                        <select class="form-select" @bind="ownerIdRaw">
-                            <option value="">— Select owner —</option>
-                            @foreach (var u in users)
-                            {
-                                <option value="@u.Id">@u.FullName (@u.Role)</option>
-                            }
-                        </select>
+                        <UserCombobox Value="selectedOwner" ValueChanged="u => selectedOwner = u" />
                     }
                 </div>
 
@@ -319,7 +305,8 @@
     private string currency = "PHP";
     private DateTime? expectedCloseDate = DateTime.Today.AddDays(2);
     private string? description;
-    private string ownerIdRaw = "";
+    private UserDto? selectedOwner;
+    private string _salesRepId = "";
 
     // Contact combobox state
     private string _contactSearch = "";
@@ -340,7 +327,6 @@
     private string newContactFirst = "", newContactLast = "";
     private string? newContactEmail, newContactPhone, newContactCompany, newContactJobTitle;
 
-    private List<UserDto>? users;
     private bool isSalesRep;
     private bool saving;
     private string? error;
@@ -351,25 +337,20 @@
 
         isSalesRep = auth.User.IsInRole("SalesRep");
 
-        var currentEmail = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
-            ?? auth.User.FindFirst("email")?.Value;
-
         if (isSalesRep)
         {
-            ownerIdRaw = auth.User.FindFirst("sub")?.Value
+            _salesRepId = auth.User.FindFirst("sub")?.Value
                 ?? auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                 ?? "";
         }
         else
         {
-            users = await Api.GetUsersAsync();
-            var match = users?.FirstOrDefault(u =>
-                string.Equals(u.Email, currentEmail, StringComparison.OrdinalIgnoreCase));
-
-            if (match is not null)
-                ownerIdRaw = match.Id.ToString();
-            else if (users?.Count == 1)
-                ownerIdRaw = users[0].Id.ToString();
+            var currentEmail = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? auth.User.FindFirst("email")?.Value;
+            var users = await Api.GetUsersAsync();
+            selectedOwner = users?.FirstOrDefault(u =>
+                string.Equals(u.Email, currentEmail, StringComparison.OrdinalIgnoreCase))
+                ?? users?.FirstOrDefault();
         }
     }
 
@@ -529,8 +510,17 @@
         error = null;
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(accountName) || estimatedValue <= 0)
         { error = "Name, Account Name and a positive Estimated Value are required."; return; }
-        if (!Guid.TryParse(ownerIdRaw, out var ownerGuid))
-        { error = "Please select an owner."; return; }
+
+        Guid ownerGuid;
+        if (isSalesRep)
+        {
+            if (!Guid.TryParse(_salesRepId, out ownerGuid)) { error = "Owner not resolved."; return; }
+        }
+        else
+        {
+            if (selectedOwner is null) { error = "Please select an owner."; return; }
+            ownerGuid = selectedOwner.Id;
+        }
 
         var resolvedContactName = selectedContact?.FullName ?? contactName;
         if (string.IsNullOrWhiteSpace(resolvedContactName))

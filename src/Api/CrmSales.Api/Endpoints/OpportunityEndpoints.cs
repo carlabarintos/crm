@@ -43,7 +43,7 @@ public static class OpportunityEndpoints
 
         group.MapGet("/summary", async (IOpportunityRepository repo, CancellationToken ct) =>
         {
-            var s = await repo.GetSummaryAsync(ct);
+            var s = await repo.GetSummaryAsync(ct: ct);
             var closed = s.Won + s.Lost;
             var winRate = closed > 0 ? $"{(decimal)s.Won / closed * 100:N0}%" : "—";
             return Results.Ok(new

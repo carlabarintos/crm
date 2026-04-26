@@ -60,9 +60,13 @@ internal sealed class QuoteRepository(QuotesDbContext dbContext) : IQuoteReposit
         return CursorPaginationResult<Quote>.Create(items, nextCursor);
     }
 
-    public async Task<QuoteSummaryData> GetSummaryAsync(CancellationToken ct = default)
+    public async Task<QuoteSummaryData> GetSummaryAsync(int? year = null, int? month = null, CancellationToken ct = default)
     {
-        var counts = await dbContext.Quotes
+        var query = dbContext.Quotes.AsQueryable();
+        if (year.HasValue)  query = query.Where(q => q.CreatedAt.Year  == year.Value);
+        if (month.HasValue) query = query.Where(q => q.CreatedAt.Month == month.Value);
+
+        var counts = await query
             .GroupBy(_ => 1)
             .Select(g => new
             {
@@ -75,13 +79,13 @@ internal sealed class QuoteRepository(QuotesDbContext dbContext) : IQuoteReposit
             })
             .FirstOrDefaultAsync(ct);
 
-        var sentValue = await dbContext.Quotes
+        var sentValue = await query
             .Where(q => q.Status == QuoteStatus.Sent)
             .Join(dbContext.LineItems, q => q.Id, l => l.QuoteId,
                 (_, l) => l.UnitPrice * l.Quantity * (1 - l.DiscountPercent / 100m))
             .SumAsync(ct);
 
-        var acceptedValue = await dbContext.Quotes
+        var acceptedValue = await query
             .Where(q => q.Status == QuoteStatus.Accepted)
             .Join(dbContext.LineItems, q => q.Id, l => l.QuoteId,
                 (_, l) => l.UnitPrice * l.Quantity * (1 - l.DiscountPercent / 100m))

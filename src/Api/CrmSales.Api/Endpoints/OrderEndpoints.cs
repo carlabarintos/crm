@@ -41,7 +41,7 @@ public static class OrderEndpoints
 
         group.MapGet("/summary", async (IOrderRepository repo, CancellationToken ct) =>
         {
-            var s = await repo.GetSummaryAsync(ct);
+            var s = await repo.GetSummaryAsync(ct: ct);
             var monthly = s.MonthlyRevenue
                 .ToDictionary(m => new DateTime(m.Year, m.Month, 1).ToString("MMM yy"), m => m.Revenue);
             return Results.Ok(new
@@ -55,6 +55,22 @@ public static class OrderEndpoints
                 currency        = s.Currency,
                 monthlyRevenue  = monthly
             });
+        });
+
+        group.MapGet("/customer/{customerId:guid}", async (Guid customerId, IOrderRepository repo, CancellationToken ct) =>
+        {
+            var orders = await repo.GetByCustomerAsync(customerId, ct);
+            return Results.Ok(orders.Select(o => new
+            {
+                o.Id, o.OrderNumber, o.QuoteId,
+                Status = o.Status.ToString(), o.TotalAmount, o.TaxAmount, o.GrandTotal,
+                o.Currency, o.Notes, o.ShippingAddress,
+                LineItems = o.LineItems.Select(l => new
+                {
+                    l.Id, l.ProductName, l.Quantity, l.UnitPrice, l.LineTotal
+                }),
+                o.CreatedAt, o.ShippedAt, o.DeliveredAt
+            }));
         });
 
         group.MapGet("/{id:guid}", async (Guid id, IOrderRepository repo, CancellationToken ct) =>

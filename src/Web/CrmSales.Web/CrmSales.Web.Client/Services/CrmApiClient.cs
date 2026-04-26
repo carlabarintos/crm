@@ -166,8 +166,15 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<OrdersSummaryDto?> GetOrdersSummaryAsync()
         => _http.GetFromJsonAsync<OrdersSummaryDto>("/api/orders/summary");
 
-    public Task<DashboardDto?> GetDashboardAsync()
-        => _http.GetFromJsonAsync<DashboardDto>("/api/dashboard");
+    public Task<DashboardDto?> GetDashboardAsync(int? year = null, int? month = null)
+    {
+        var url = "/api/dashboard";
+        var q = new List<string>();
+        if (year.HasValue)  q.Add($"year={year.Value}");
+        if (month.HasValue) q.Add($"month={month.Value}");
+        if (q.Count > 0) url += "?" + string.Join("&", q);
+        return _http.GetFromJsonAsync<DashboardDto>(url);
+    }
 
     public Task<PaginatedResult<OrderDto>?> GetOrdersAsync(string? search = null, string? status = null, int limit = 20, string? cursor = null)
     {
@@ -207,6 +214,9 @@ public class CrmApiClient(HttpClient httpClient)
 
     public Task<HttpResponseMessage> DeleteOrderLineItemAsync(Guid id, Guid lineItemId)
         => _http.DeleteAsync($"/api/orders/{id}/line-items/{lineItemId}");
+
+    public Task<List<ContactOrderDto>?> GetContactOrdersAsync(Guid contactId)
+        => _http.GetFromJsonAsync<List<ContactOrderDto>>($"/api/orders/customer/{contactId}");
 
     // ── Notifications ─────────────────────────────────────────────────────
     public Task<HttpResponseMessage> GetNotificationStreamAsync(CancellationToken ct)
@@ -337,6 +347,15 @@ public record OrderDetailDto(Guid Id, string OrderNumber, Guid QuoteId, string S
 public record OrderLineItemDto(Guid Id, Guid ProductId, string ProductName,
     int Quantity, decimal UnitPrice, decimal LineTotal);
 
+public record ContactOrderDto(
+    Guid Id, string OrderNumber, Guid QuoteId, string Status,
+    decimal TotalAmount, decimal TaxAmount, decimal GrandTotal, string Currency,
+    string? Notes, string? ShippingAddress,
+    List<ContactOrderLineItemDto> LineItems,
+    DateTime CreatedAt, DateTime? ShippedAt, DateTime? DeliveredAt);
+
+public record ContactOrderLineItemDto(Guid Id, string ProductName, int Quantity, decimal UnitPrice, decimal LineTotal);
+
 public record UserDto(Guid Id, string Email, string FirstName, string LastName, string FullName, string Role, bool IsActive);
 
 public record CompanyDto(Guid Id, string Name, string Slug, bool IsActive, DateTime CreatedAt);
@@ -388,8 +407,10 @@ public record DashboardDto(
     QuotesSummaryDto Quotes,
     OrdersSummaryDto Orders,
     Dictionary<string, decimal> MonthlyRevenue,
+    Dictionary<string, decimal>? YearlyRevenue,
     List<TopOpportunityItemDto> TopOpportunities,
-    string Currency);
+    string Currency,
+    List<int>? AvailableYears);
 
 public record ExpiringOpportunityDto(
     Guid Id, string Name, string AccountName, string Stage,

@@ -17,5 +17,5 @@ public interface IOrderRepository : IRepository<Order, Guid>
     Task<IReadOnlyList<Order>> GetByCustomerAsync(Guid customerId, CancellationToken ct = default);
     Task<IReadOnlyList<Order>> GetByStatusAsync(OrderStatus status, CancellationToken ct = default);
     Task<CursorPaginationResult<Order>> SearchAsync(string? term, OrderStatus? status, int limit, string? cursor, CancellationToken ct = default);
-    Task<OrderSummaryData> GetSummaryAsync(CancellationToken ct = default);
+    Task<OrderSummaryData> GetSummaryAsync(int? year = null, int? month = null, CancellationToken ct = default);
 }

@@ -52,18 +52,22 @@ internal sealed class OpportunityRepository(OpportunitiesDbContext dbContext) : 
         return CursorPaginationResult<Opportunity>.Create(items, nextCursor);
     }
 
-    public async Task<OpportunitySummaryData> GetSummaryAsync(CancellationToken ct = default)
+    public async Task<OpportunitySummaryData> GetSummaryAsync(int? year = null, int? month = null, CancellationToken ct = default)
     {
-        var byStage = await dbContext.Opportunities
+        var query = dbContext.Opportunities.AsQueryable();
+        if (year.HasValue) query = query.Where(o => o.CreatedAt.Year == year.Value);
+        if (month.HasValue) query = query.Where(o => o.CreatedAt.Month == month.Value);
+
+        var byStage = await query
             .GroupBy(o => o.Stage)
             .Select(g => new { Stage = g.Key, Count = g.Count(), Value = g.Sum(o => o.EstimatedValue) })
             .ToListAsync(ct);
 
-        var pipelineValue = await dbContext.Opportunities
+        var pipelineValue = await query
             .Where(o => o.Stage != OpportunityStage.ClosedWon && o.Stage != OpportunityStage.ClosedLost)
             .SumAsync(o => o.EstimatedValue, ct);
 
-        var weightedValue = await dbContext.Opportunities
+        var weightedValue = await query
             .Where(o => o.Stage != OpportunityStage.ClosedWon && o.Stage != OpportunityStage.ClosedLost)
             .SumAsync(o => o.EstimatedValue * o.Probability / 100m, ct);
 
@@ -75,10 +79,10 @@ internal sealed class OpportunityRepository(OpportunitiesDbContext dbContext) : 
             .ToList();
 
         var total = byStage.Sum(s => s.Count);
-        var won  = byStage.FirstOrDefault(s => s.Stage == OpportunityStage.ClosedWon)?.Count ?? 0;
+        var won = byStage.FirstOrDefault(s => s.Stage == OpportunityStage.ClosedWon)?.Count ?? 0;
         var lost = byStage.FirstOrDefault(s => s.Stage == OpportunityStage.ClosedLost)?.Count ?? 0;
 
-        var wonDates = await dbContext.Opportunities
+        var wonDates = await query
             .Where(o => o.Stage == OpportunityStage.ClosedWon)
             .Select(o => new { o.CreatedAt, o.UpdatedAt })
             .ToListAsync(ct);
