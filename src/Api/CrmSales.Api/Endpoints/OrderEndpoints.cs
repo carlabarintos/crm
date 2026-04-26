@@ -73,6 +73,24 @@ public static class OrderEndpoints
             }));
         });
 
+        group.MapGet("/by-quote/{quoteId:guid}", async (Guid quoteId, IOrderRepository repo, CancellationToken ct) =>
+        {
+            var order = await repo.GetByQuoteIdAsync(quoteId, ct);
+            return order is null ? Results.NotFound() : Results.Ok(new
+            {
+                order.Id, order.OrderNumber, order.QuoteId,
+                Status = order.Status.ToString(),
+                order.TotalAmount, order.TaxRateName, order.TaxRatePercent,
+                order.TaxAmount, order.GrandTotal, order.Currency,
+                order.ShippingAddress, order.Notes,
+                LineItems = order.LineItems.Select(l => new
+                {
+                    l.Id, l.ProductId, l.ProductName, l.Quantity, l.UnitPrice, l.LineTotal
+                }),
+                order.CreatedAt, order.ShippedAt, order.DeliveredAt
+            });
+        });
+
         group.MapGet("/{id:guid}", async (Guid id, IOrderRepository repo, CancellationToken ct) =>
         {
             var order = await repo.GetByIdAsync(id, ct);

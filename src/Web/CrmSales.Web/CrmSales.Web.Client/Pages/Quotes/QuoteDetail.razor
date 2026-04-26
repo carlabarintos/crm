@@ -188,7 +188,7 @@ else if (quote is not null)
                     @if (quote.Status == "Accepted")
                     {
                         <div class="alert alert-success py-2 mb-0 small">
-                            Quote accepted. <a href="/orders">View Orders</a>
+                            Quote accepted. <a href="@(order != null ? $"/orders/{order.Id}" : "/orders")">View Order</a>
                         </div>
                     }
 
@@ -387,6 +387,7 @@ else if (quote is not null)
     [Parameter] public Guid Id { get; set; }
 
     private QuoteDetailDto? quote;
+    private OrderDetailDto? order;
     private string? error;
 
     // Line item form
@@ -412,6 +413,11 @@ else if (quote is not null)
     {
         try { quote = await Api.GetQuoteAsync(Id); }
         catch { error = "Failed to load quote."; }
+
+        if (quote?.Status == "Accepted")
+        {
+            order = await Api.GetOrderByQuoteAsync(Id);
+        }
     }
 
     private void ToggleAddItem()

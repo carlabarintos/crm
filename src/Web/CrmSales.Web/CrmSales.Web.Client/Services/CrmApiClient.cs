@@ -191,6 +191,12 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<OrderDetailDto?> GetOrderAsync(Guid id)
         => _http.GetFromJsonAsync<OrderDetailDto>($"/api/orders/{id}");
 
+    public async Task<OrderDetailDto?> GetOrderByQuoteAsync(Guid quoteId)
+    {
+        try { return await _http.GetFromJsonAsync<OrderDetailDto>($"/api/orders/by-quote/{quoteId}"); }
+        catch { return null; }
+    }
+
     public Task<HttpResponseMessage> ConfirmOrderAsync(Guid id)
         => _http.PostAsync($"/api/orders/{id}/confirm", null);
 
