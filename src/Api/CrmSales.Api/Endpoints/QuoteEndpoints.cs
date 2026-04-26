@@ -6,6 +6,7 @@ using CrmSales.Opportunities.Domain.Repositories;
 using CrmSales.Quotes.Domain.Entities;
 using CrmSales.Quotes.Domain.Repositories;
 using CrmSales.Settings.Domain.Repositories;
+using CrmSales.Users.Domain.Repositories;
 using CrmSales.SharedKernel.Messaging;
 using Microsoft.AspNetCore.Mvc;
 using Wolverine;
@@ -76,6 +77,41 @@ public static class QuoteEndpoints
                 acceptedValue = s.AcceptedValue,
                 currency      = s.Currency
             });
+        });
+
+        group.MapGet("/expiring-soon", async (
+            IQuoteRepository repo,
+            IUserRepository userRepo,
+            HttpContext http,
+            CancellationToken ct,
+            [FromQuery] int days = 14,
+            [FromQuery] int limit = 5) =>
+        {
+            var isSales = http.User.IsInRole("SalesRep") && !http.User.IsInRole("SalesManager") && !http.User.IsInRole("Admin");
+            Guid? ownerId = null;
+            if (isSales)
+            {
+                var keycloakId = http.User.FindFirst("sub")?.Value;
+                if (!string.IsNullOrEmpty(keycloakId))
+                {
+                    var user = await userRepo.GetByKeycloakIdAsync(keycloakId, ct);
+                    if (user is not null) ownerId = user.Id;
+                }
+            }
+            var items = await repo.GetExpiringSoonAsync(days, limit, ownerId, ct);
+            return Results.Ok(items.Select(q => new
+            {
+                q.Id,
+                q.QuoteNumber,
+                q.OpportunityId,
+                Status = q.Status.ToString(),
+                q.TotalAmount,
+                q.Currency,
+                q.ExpiryDate,
+                DaysLeft = q.ExpiryDate.HasValue
+                    ? (int?)(q.ExpiryDate.Value - DateTime.UtcNow).TotalDays
+                    : null
+            }));
         });
 
         group.MapGet("/{id:guid}", async (Guid id, IQuoteRepository repo, CancellationToken ct) =>

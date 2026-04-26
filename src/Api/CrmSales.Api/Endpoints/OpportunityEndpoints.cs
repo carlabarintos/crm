@@ -3,6 +3,7 @@ using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
 using CrmSales.Opportunities.Domain.Entities;
 using CrmSales.Opportunities.Domain.Repositories;
+using CrmSales.Users.Domain.Repositories;
 using CrmSales.SharedKernel.Application;
 using Microsoft.AspNetCore.Mvc;
 
@@ -58,6 +59,41 @@ public static class OpportunityEndpoints
                 currency       = s.Currency,
                 byStage        = s.ByStage.Select(st => new { stage = st.Stage, count = st.Count, value = st.Value })
             });
+        });
+
+        group.MapGet("/expiring-soon", async (
+            IOpportunityRepository repo,
+            IUserRepository userRepo,
+            HttpContext http,
+            CancellationToken ct,
+            [FromQuery] int days = 14,
+            [FromQuery] int limit = 5) =>
+        {
+            var isSales = http.User.IsInRole("SalesRep") && !http.User.IsInRole("SalesManager") && !http.User.IsInRole("Admin");
+            Guid? ownerId = null;
+            if (isSales)
+            {
+                var keycloakId = http.User.FindFirst("sub")?.Value;
+                if (!string.IsNullOrEmpty(keycloakId))
+                {
+                    var user = await userRepo.GetByKeycloakIdAsync(keycloakId, ct);
+                    if (user is not null) ownerId = user.Id;
+                }
+            }
+            var items = await repo.GetExpiringSoonAsync(days, limit, ownerId, ct);
+            return Results.Ok(items.Select(o => new
+            {
+                o.Id,
+                o.Name,
+                o.AccountName,
+                Stage = o.Stage.ToString(),
+                o.EstimatedValue,
+                o.Currency,
+                o.ExpectedCloseDate,
+                DaysLeft = o.ExpectedCloseDate.HasValue
+                    ? (int?)(o.ExpectedCloseDate.Value - DateTime.UtcNow).TotalDays
+                    : null
+            }));
         });
 
         group.MapGet("/{id:guid}", async (Guid id, IOpportunityRepository repo, CancellationToken ct) =>

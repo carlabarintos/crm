@@ -87,6 +87,12 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<OpportunitySummaryDto?> GetOpportunitySummaryAsync()
         => _http.GetFromJsonAsync<OpportunitySummaryDto>("/api/opportunities/summary");
 
+    public Task<List<ExpiringOpportunityDto>?> GetExpiringOpportunitiesAsync(int days = 14, int limit = 5)
+    {
+        var url = $"/api/opportunities/expiring-soon?days={days}&limit={limit}";
+        return _http.GetFromJsonAsync<List<ExpiringOpportunityDto>>(url);
+    }
+
     public Task<PaginatedResult<OpportunityDto>?> GetOpportunitiesAsync(string? search = null, string? stage = null, int limit = 20, string? cursor = null)
     {
         var url = "/api/opportunities";
@@ -114,6 +120,12 @@ public class CrmApiClient(HttpClient httpClient)
     // ── Quotes ─────────────────────────────────────────────────────────────
     public Task<QuotesSummaryDto?> GetQuotesSummaryAsync()
         => _http.GetFromJsonAsync<QuotesSummaryDto>("/api/quotes/summary");
+
+    public Task<List<ExpiringQuoteDto>?> GetExpiringQuotesAsync(int days = 14, int limit = 5)
+    {
+        var url = $"/api/quotes/expiring-soon?days={days}&limit={limit}";
+        return _http.GetFromJsonAsync<List<ExpiringQuoteDto>>(url);
+    }
 
     public Task<PaginatedResult<QuoteDto>?> GetQuotesAsync(Guid? opportunityId = null, string? search = null, string? status = null, int limit = 20, string? cursor = null)
     {
@@ -377,3 +389,11 @@ public record DashboardDto(
     Dictionary<string, decimal> MonthlyRevenue,
     List<TopOpportunityItemDto> TopOpportunities,
     string Currency);
+
+public record ExpiringOpportunityDto(
+    Guid Id, string Name, string AccountName, string Stage,
+    decimal EstimatedValue, string Currency, DateTime? ExpectedCloseDate, int? DaysLeft);
+
+public record ExpiringQuoteDto(
+    Guid Id, string QuoteNumber, Guid OpportunityId, string Status,
+    decimal TotalAmount, string Currency, DateTime? ExpiryDate, int? DaysLeft);

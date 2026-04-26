@@ -297,6 +297,86 @@ else
 </div>
 </div>
 
+<!-- Expiring Soon -->
+@if (expiringOpportunities.Count > 0 || expiringQuotes.Count > 0)
+{
+    <button type="button" class="mob-section-btn @(_expiringOpen ? "open" : "")" @onclick="() => _expiringOpen = !_expiringOpen">
+        <span>Expiring Soon</span>
+        <svg class="mob-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>
+    </button>
+    <div class="mob-collapse @(_expiringOpen ? "open" : "")">
+    <div class="row g-3 mb-4">
+        <!-- Opportunities Closing Soon -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span style="font-size:14px;font-weight:700;color:#111827">Opportunities Closing Soon</span>
+                    <a href="/opportunities" class="btn btn-sm btn-outline-secondary" style="font-size:11px">View all</a>
+                </div>
+                <div class="card-body p-0">
+                    @if (expiringOpportunities.Count == 0)
+                    {
+                        <div class="text-center text-muted py-4" style="font-size:13px">No opportunities closing soon</div>
+                    }
+                    else
+                    {
+                        <div class="expiring-list">
+                            @foreach (var opp in expiringOpportunities)
+                            {
+                                <a href="/opportunities/@opp.Id" class="expiring-row">
+                                    <div class="expiring-info">
+                                        <div class="expiring-name">@opp.Name</div>
+                                        <div class="expiring-account">@opp.AccountName</div>
+                                    </div>
+                                    <div class="expiring-value">
+                                        <div class="expiring-amount">@FormatCurrency(opp.EstimatedValue)</div>
+                                        <span class="badge @GetUrgencyBadgeClass(opp.DaysLeft)">@GetDaysLeftText(opp.DaysLeft)</span>
+                                    </div>
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Quotes Expiring Soon -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span style="font-size:14px;font-weight:700;color:#111827">Quotes Expiring Soon</span>
+                    <a href="/quotes" class="btn btn-sm btn-outline-secondary" style="font-size:11px">View all</a>
+                </div>
+                <div class="card-body p-0">
+                    @if (expiringQuotes.Count == 0)
+                    {
+                        <div class="text-center text-muted py-4" style="font-size:13px">No quotes expiring soon</div>
+                    }
+                    else
+                    {
+                        <div class="expiring-list">
+                            @foreach (var quote in expiringQuotes)
+                            {
+                                <a href="/quotes/@quote.Id" class="expiring-row">
+                                    <div class="expiring-info">
+                                        <div class="expiring-name">@quote.QuoteNumber</div>
+                                        <div class="expiring-account">@quote.Status</div>
+                                    </div>
+                                    <div class="expiring-value">
+                                        <div class="expiring-amount">@FormatCurrency(quote.TotalAmount)</div>
+                                        <span class="badge @GetUrgencyBadgeClass(quote.DaysLeft)">@GetDaysLeftText(quote.DaysLeft)</span>
+                                    </div>
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+}
+
 <!-- Recent Activity -->
 @if (recentActivity.Count > 0)
 {
@@ -437,6 +517,28 @@ else
     .act-body { min-width: 0; }
     .act-desc { font-size: 13px; color: #111827; font-weight: 500; }
     .act-meta { font-size: 11.5px; color: #9CA3AF; margin-top: 1px; }
+
+    .expiring-list { display: flex; flex-direction: column; }
+    .expiring-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: .75rem 1.25rem;
+        border-bottom: 1px solid #F9FAFB;
+        text-decoration: none !important;
+        color: inherit;
+        transition: background .15s;
+    }
+    .expiring-row:last-child { border-bottom: none; }
+    .expiring-row:hover { background: #F9FAFB; color: inherit; text-decoration: none; }
+    .expiring-info { min-width: 0; flex: 1; }
+    .expiring-name { font-size: 13px; font-weight: 600; color: #111827; }
+    .expiring-account { font-size: 11.5px; color: #9CA3AF; margin-top: 1px; }
+    .expiring-value { text-align: right; flex-shrink: 0; margin-left: 1rem; }
+    .expiring-amount { font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 2px; }
+    .badge-urgency-red { background: #FEF2F2; color: #DC2626; }
+    .badge-urgency-amber { background: #FFFBEB; color: #D97706; }
+    .badge-urgency-yellow { background: #FEFCE8; color: #CA8A04; }
 </style>
 
 @code {
@@ -453,8 +555,11 @@ else
     private bool loading = true;
     private bool _kpiOpen = true;
     private bool _pipelineOpen = true;
+    private bool _expiringOpen = true;
     private bool _activityOpen = true;
 
+    private List<ExpiringOpportunityDto> expiringOpportunities = [];
+    private List<ExpiringQuoteDto> expiringQuotes = [];
     private List<AuditLogDto> recentActivity = [];
 
     private decimal pipelineValue;
@@ -484,17 +589,21 @@ else
             return;
         }
 
-        var oppSummaryTask   = Api.GetOpportunitySummaryAsync();
-        var quoteSummaryTask = Api.GetQuotesSummaryAsync();
-        var orderSummaryTask = Api.GetOrdersSummaryAsync();
-        var prodSummaryTask  = Api.GetProductSummaryAsync();
-        var activityTask     = Api.GetAuditLogsAsync(page: 1, pageSize: 8);
+        var oppSummaryTask      = Api.GetOpportunitySummaryAsync();
+        var quoteSummaryTask    = Api.GetQuotesSummaryAsync();
+        var orderSummaryTask    = Api.GetOrdersSummaryAsync();
+        var prodSummaryTask     = Api.GetProductSummaryAsync();
+        var activityTask        = Api.GetAuditLogsAsync(page: 1, pageSize: 8);
+        var expiringOppTask      = Api.GetExpiringOpportunitiesAsync();
+        var expiringQuoteTask   = Api.GetExpiringQuotesAsync();
 
-        var oppSummary   = await oppSummaryTask;
-        var quoteSummary = await quoteSummaryTask;
-        var orderSummary = await orderSummaryTask;
-        var prodSummary  = await prodSummaryTask;
-        recentActivity   = (await activityTask)?.Items ?? [];
+        var oppSummary        = await oppSummaryTask;
+        var quoteSummary      = await quoteSummaryTask;
+        var orderSummary      = await orderSummaryTask;
+        var prodSummary       = await prodSummaryTask;
+        recentActivity        = (await activityTask)?.Items ?? [];
+        expiringOpportunities = (await expiringOppTask) ?? [];
+        expiringQuotes        = (await expiringQuoteTask) ?? [];
 
         if (oppSummary is not null)
         {
@@ -561,5 +670,21 @@ else
         return value >= 1_000_000 ? $"{symbol}{value / 1_000_000:N1}M"
              : value >= 1_000     ? $"{symbol}{value / 1_000:N1}K"
              : $"{symbol}{value:N0}";
+    }
+
+    private static string GetUrgencyBadgeClass(int? daysLeft)
+    {
+        if (!daysLeft.HasValue) return "badge-soft-neutral";
+        if (daysLeft.Value <= 3) return "badge-urgency-red";
+        if (daysLeft.Value <= 7) return "badge-urgency-amber";
+        return "badge-urgency-yellow";
+    }
+
+    private static string GetDaysLeftText(int? daysLeft)
+    {
+        if (!daysLeft.HasValue) return "—";
+        if (daysLeft.Value <= 0) return "Expired";
+        if (daysLeft.Value == 1) return "1 day left";
+        return $"{daysLeft.Value} days left";
     }
 }

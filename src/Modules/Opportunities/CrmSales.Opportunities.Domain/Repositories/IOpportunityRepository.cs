@@ -21,4 +21,5 @@ public interface IOpportunityRepository : IRepository<Opportunity, Guid>
     Task<CursorPaginationResult<Opportunity>> SearchAsync(string? term, OpportunityStage? stage, Guid? ownerId, int limit, string? cursor, CancellationToken ct = default);
     Task<OpportunitySummaryData> GetSummaryAsync(CancellationToken ct = default);
     Task<List<TopOpportunityData>> GetTopOpportunitiesAsync(int count, CancellationToken ct = default);
+    Task<List<Opportunity>> GetExpiringSoonAsync(int days, int limit, Guid? ownerId = null, CancellationToken ct = default);
 }

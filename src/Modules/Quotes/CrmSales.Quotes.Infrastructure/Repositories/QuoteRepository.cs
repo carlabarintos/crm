@@ -96,6 +96,21 @@ internal sealed class QuoteRepository(QuotesDbContext dbContext) : IQuoteReposit
             sentValue, acceptedValue, currency);
     }
 
+    public async Task<List<Quote>> GetExpiringSoonAsync(int days, int limit, Guid? ownerId = null, CancellationToken ct = default)
+    {
+        var cutoff = DateTime.UtcNow.AddDays(days);
+        var query = dbContext.Quotes
+            .Where(q => q.ExpiryDate != null
+                        && q.ExpiryDate <= cutoff
+                        && (q.Status == QuoteStatus.Draft || q.Status == QuoteStatus.Sent));
+        if (ownerId.HasValue)
+            query = query.Where(q => q.OwnerId == ownerId.Value);
+        return await query
+            .OrderBy(q => q.ExpiryDate)
+            .Take(limit)
+            .ToListAsync(ct);
+    }
+
     public async Task AddAsync(Quote aggregate, CancellationToken ct = default)
     {
         await dbContext.Quotes.AddAsync(aggregate, ct);

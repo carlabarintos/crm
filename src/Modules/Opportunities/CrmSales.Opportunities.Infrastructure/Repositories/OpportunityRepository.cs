@@ -101,6 +101,22 @@ internal sealed class OpportunityRepository(OpportunitiesDbContext dbContext) : 
             o.Name, o.AccountName, o.Stage.ToString(), o.EstimatedValue, o.Currency)).ToList();
     }
 
+    public async Task<List<Opportunity>> GetExpiringSoonAsync(int days, int limit, Guid? ownerId = null, CancellationToken ct = default)
+    {
+        var cutoff = DateTime.UtcNow.AddDays(days);
+        var query = dbContext.Opportunities
+            .Where(o => o.ExpectedCloseDate != null
+                        && o.ExpectedCloseDate <= cutoff
+                        && o.Stage != OpportunityStage.ClosedWon
+                        && o.Stage != OpportunityStage.ClosedLost);
+        if (ownerId.HasValue)
+            query = query.Where(o => o.OwnerId == ownerId.Value);
+        return await query
+            .OrderBy(o => o.ExpectedCloseDate)
+            .Take(limit)
+            .ToListAsync(ct);
+    }
+
     public async Task AddAsync(Opportunity aggregate, CancellationToken ct = default)
     {
         await dbContext.Opportunities.AddAsync(aggregate, ct);
