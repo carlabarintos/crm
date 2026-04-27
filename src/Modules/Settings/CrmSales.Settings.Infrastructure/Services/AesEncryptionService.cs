@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using CrmSales.Settings.Application.Services;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace CrmSales.Settings.Infrastructure.Services;
 
@@ -12,10 +14,44 @@ internal sealed class AesEncryptionService : IEncryptionService
 
     private readonly byte[] _key;
 
-    public AesEncryptionService(IConfiguration configuration)
+    public AesEncryptionService(IConfiguration configuration, IHostEnvironment environment, ILogger<AesEncryptionService> logger)
     {
-        var keyBase64 = configuration["Encryption:Key"]
-            ?? throw new InvalidOperationException("Encryption:Key is not configured.");
+        var keyBase64 = configuration["Encryption:Key"];
+
+        if (string.IsNullOrEmpty(keyBase64))
+        {
+            if (environment.IsProduction())
+                throw new InvalidOperationException(
+                    "Encryption:Key is not configured. " +
+                    "Set Encryption__Key=<base64-32-bytes> as an environment variable before starting in production.");
+
+            var keyFilePath = configuration["Encryption:KeyFile"]
+                ?? Path.Combine(AppContext.BaseDirectory, "encryption.key");
+
+            if (File.Exists(keyFilePath))
+            {
+                keyBase64 = File.ReadAllText(keyFilePath).Trim();
+                logger.LogInformation("Encryption key loaded from {KeyFilePath}.", keyFilePath);
+            }
+            else
+            {
+                var newKey = new byte[32];
+                RandomNumberGenerator.Fill(newKey);
+                keyBase64 = Convert.ToBase64String(newKey);
+
+                var dir = Path.GetDirectoryName(keyFilePath);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+
+                File.WriteAllText(keyFilePath, keyBase64);
+
+                logger.LogWarning(
+                    "Encryption:Key was not configured. A new AES-256 key has been auto-generated and saved to " +
+                    "{KeyFilePath}. For production, read that file and set Encryption__Key=<value> as an environment variable.",
+                    keyFilePath);
+            }
+        }
+
         _key = Convert.FromBase64String(keyBase64);
         if (_key.Length != 32)
             throw new InvalidOperationException("Encryption:Key must decode to exactly 32 bytes (AES-256).");
