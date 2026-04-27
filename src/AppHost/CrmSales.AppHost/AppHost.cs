@@ -50,6 +50,12 @@ var api = builder.AddProject<Projects.CrmSales_Api>("crm-api")
     .WaitFor(crmDb)
     .WaitFor(rabbitmq);
 
+// Forward encryption key from host environment when set (overrides appsettings dev default).
+// Production: set Encryption__Key=<base64-32-bytes> in the host or container environment.
+var encryptionKey = builder.Configuration["Encryption__Key"];
+if (!string.IsNullOrEmpty(encryptionKey))
+    api.WithEnvironment("Encryption__Key", encryptionKey);
+
 // Blazor WASM host — serves the WASM app and provides /_app-config.
 // The browser calls the API directly; CORS is configured on the API side.
 var web = builder.AddProject<Projects.CrmSales_Web>("crm-web")

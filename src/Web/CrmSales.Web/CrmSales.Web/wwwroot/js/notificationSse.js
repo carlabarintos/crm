@@ -1,3 +1,16 @@
+// Insert text at the current cursor position inside a textarea, then fire an
+// input event so Blazor's @bind:event="oninput" picks up the change.
+window.insertAtCursor = function (id, text) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var start = el.selectionStart;
+    var end = el.selectionEnd;
+    el.value = el.value.substring(0, start) + text + el.value.substring(end);
+    el.selectionStart = el.selectionEnd = start + text.length;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.focus();
+};
+
 // Scroll detection for infinite-scroll dropdowns
 window.isScrolledNearBottom = function (element, threshold) {
     if (!element) return false;

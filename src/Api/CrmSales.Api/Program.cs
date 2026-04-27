@@ -369,6 +369,120 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// ── Ensure EmailTemplates and EmailSettings tables exist per tenant schema ────
+{
+    using var scope = app.Services.CreateScope();
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var companySlugs = await masterCtx.Companies.Select(c => c.Slug).ToListAsync();
+
+    if (companySlugs.Count > 0)
+    {
+        var conn = scope.ServiceProvider.GetRequiredService<ProductsDbContext>().Database.GetDbConnection();
+        await conn.OpenAsync();
+        try
+        {
+            foreach (var slug in companySlugs)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    CREATE TABLE IF NOT EXISTS "{slug}"."EmailTemplates" (
+                        "Id"           uuid         NOT NULL,
+                        "Version"      integer      NOT NULL DEFAULT 0,
+                        "TemplateType" varchar(50)  NOT NULL,
+                        "Subject"      varchar(500) NOT NULL,
+                        "BodyHtml"     text         NOT NULL,
+                        "IsActive"     boolean      NOT NULL DEFAULT true,
+                        "UpdatedAt"    timestamp    NOT NULL,
+                        CONSTRAINT "PK_EmailTemplates_{slug}" PRIMARY KEY ("Id")
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS "IX_EmailTemplates_TemplateType_{slug}"
+                        ON "{slug}"."EmailTemplates" ("TemplateType");
+                    CREATE TABLE IF NOT EXISTS "{slug}"."EmailSettings" (
+                        "Id"           uuid         NOT NULL,
+                        "Version"      integer      NOT NULL DEFAULT 0,
+                        "Host"         varchar(500) NOT NULL DEFAULT '',
+                        "Port"         integer      NOT NULL DEFAULT 587,
+                        "Username"     varchar(500) NOT NULL DEFAULT '',
+                        "Password"     varchar(500) NOT NULL DEFAULT '',
+                        "FromName"     varchar(500) NOT NULL DEFAULT '',
+                        "FromAddress"  varchar(500) NOT NULL DEFAULT '',
+                        "EnableSsl"    boolean      NOT NULL DEFAULT true,
+                        "IsEnabled"    boolean      NOT NULL DEFAULT false,
+                        "UpdatedAt"    timestamp    NOT NULL,
+                        CONSTRAINT "PK_EmailSettings_{slug}" PRIMARY KEY ("Id")
+                    );
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+        finally
+        {
+            if (conn.State == System.Data.ConnectionState.Open)
+                await conn.CloseAsync();
+        }
+    }
+}
+
+// ── Ensure AuthMode column exists on EmailSettings ────────────────────────────
+{
+    using var scope = app.Services.CreateScope();
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var companySlugs = await masterCtx.Companies.Select(c => c.Slug).ToListAsync();
+
+    if (companySlugs.Count > 0)
+    {
+        var conn = scope.ServiceProvider.GetRequiredService<ProductsDbContext>().Database.GetDbConnection();
+        await conn.OpenAsync();
+        try
+        {
+            foreach (var slug in companySlugs)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    ALTER TABLE IF EXISTS "{slug}"."EmailSettings"
+                        ADD COLUMN IF NOT EXISTS "AuthMode" varchar(50) NOT NULL DEFAULT 'UsernamePassword';
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+        finally
+        {
+            if (conn.State == System.Data.ConnectionState.Open)
+                await conn.CloseAsync();
+        }
+    }
+}
+
+// ── Widen Password column on EmailSettings to text (stores AES-256-GCM ciphertext) ─
+{
+    using var scope = app.Services.CreateScope();
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var companySlugs = await masterCtx.Companies.Select(c => c.Slug).ToListAsync();
+
+    if (companySlugs.Count > 0)
+    {
+        var conn = scope.ServiceProvider.GetRequiredService<ProductsDbContext>().Database.GetDbConnection();
+        await conn.OpenAsync();
+        try
+        {
+            foreach (var slug in companySlugs)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    ALTER TABLE IF EXISTS "{slug}"."EmailSettings"
+                        ALTER COLUMN "Password" TYPE text;
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+        finally
+        {
+            if (conn.State == System.Data.ConnectionState.Open)
+                await conn.CloseAsync();
+        }
+    }
+}
+
 // ── Ensure ReorderPoint column exists on Products ───────────────────────────
 {
     using var scope = app.Services.CreateScope();

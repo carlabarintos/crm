@@ -7,6 +7,8 @@ public sealed class SettingsDbContext(DbContextOptions<SettingsDbContext> option
     : DbContext(options)
 {
     public DbSet<TaxRate> TaxRates => Set<TaxRate>();
+    public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
+    public DbSet<EmailSettings> EmailSettings => Set<EmailSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

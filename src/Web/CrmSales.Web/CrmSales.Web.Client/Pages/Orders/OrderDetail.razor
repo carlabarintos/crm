@@ -215,11 +215,104 @@ else if (order is not null)
                     @if (!string.IsNullOrEmpty(actionError)) { <div class="text-danger small">@actionError</div> }
                     @if (!string.IsNullOrEmpty(actionSuccess)) { <div class="text-success small">@actionSuccess</div> }
 
-                    <a href="/orders" class="btn btn-outline-secondary btn-sm mt-2">Back to List</a>
+                    <button class="btn @(_showPreview ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="() => _showPreview = !_showPreview">
+                        @(_showPreview ? "Hide Preview" : "Document Preview")
+                    </button>
+                    <a href="/orders" class="btn btn-outline-secondary btn-sm">Back to List</a>
                 </div>
             </div>
         </div>
     </div>
+
+    @if (_showPreview)
+    {
+        <div class="card mt-4 preview-doc shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <div class="d-flex justify-content-between align-items-start mb-4 pb-3 border-bottom">
+                    <div>
+                        <div class="fw-bold fs-4 lh-1">CRM Sales</div>
+                        <div class="text-muted small mt-1">Sales Order</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold fs-5">@order.OrderNumber</div>
+                        <div class="small text-muted">Date: @order.CreatedAt.ToString("MMM dd, yyyy")</div>
+                        @if (order.ShippedAt.HasValue)
+                        {
+                            <div class="small text-muted">Shipped: @order.ShippedAt.Value.ToString("MMM dd, yyyy")</div>
+                        }
+                        @if (order.DeliveredAt.HasValue)
+                        {
+                            <div class="small text-muted">Delivered: @order.DeliveredAt.Value.ToString("MMM dd, yyyy")</div>
+                        }
+                        <span class="badge @GetStatusBadge(order.Status) mt-1">@order.Status</span>
+                    </div>
+                </div>
+
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-end" style="width:60px">Qty</th>
+                                <th class="text-end" style="width:110px">Unit Price</th>
+                                <th class="text-end" style="width:110px">Line Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!order.LineItems.Any())
+                            {
+                                <tr><td colspan="4" class="text-center text-muted py-3">No line items on this order.</td></tr>
+                            }
+                            @foreach (var l in order.LineItems)
+                            {
+                                <tr>
+                                    <td>@l.ProductName</td>
+                                    <td class="text-end">@l.Quantity</td>
+                                    <td class="text-end">@l.UnitPrice.ToString("F2")</td>
+                                    <td class="text-end fw-semibold">@l.LineTotal.ToString("F2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        @if (order.LineItems.Any())
+                        {
+                            <tfoot>
+                                <tr class="table-light">
+                                    <td colspan="3" class="text-end text-muted small">Net Total</td>
+                                    <td class="text-end">@order.TotalAmount.ToString("F2")</td>
+                                </tr>
+                                @if (order.TaxRatePercent > 0)
+                                {
+                                    <tr class="table-light">
+                                        <td colspan="3" class="text-end text-muted small">@order.TaxRateName (@order.TaxRatePercent.ToString("0.##")%)</td>
+                                        <td class="text-end text-muted">+@order.TaxAmount.ToString("F2")</td>
+                                    </tr>
+                                }
+                                <tr class="table-primary fw-bold">
+                                    <td colspan="3" class="text-end">Grand Total (@order.Currency)</td>
+                                    <td class="text-end fs-6">@order.GrandTotal.ToString("F2")</td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(order.ShippingAddress))
+                {
+                    <div class="border rounded px-3 py-2 mb-3 small bg-light">
+                        <strong>Ship to:</strong> @order.ShippingAddress
+                    </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(order.Notes))
+                {
+                    <div class="border rounded px-3 py-2 mb-3 small bg-light">
+                        <strong>Notes:</strong> @order.Notes
+                    </div>
+                }
+
+                <div class="text-center text-muted small mt-4 pt-2 border-top">Thank you for your business.</div>
+            </div>
+        </div>
+    }
 }
 
 @code {
@@ -231,6 +324,7 @@ else if (order is not null)
     private string? actionError;
     private string? actionSuccess;
 
+    private bool _showPreview;
     private bool showShipForm;
     private string? trackingInfo;
     private bool showCancelForm;

@@ -1,0 +1,605 @@
+@page "/settings/email-templates"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@attribute [Authorize(Roles = "Admin")]
+@inject CrmApiClient Api
+@inject IJSRuntime JS
+
+<PageTitle>Email Templates</PageTitle>
+
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Configuration</p>
+        <h1>Email Templates</h1>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+}
+else
+{
+    <div class="row g-4 stagger-2">
+        <!-- SMTP Configuration -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">SMTP Configuration</h5>
+                    @if (_settings?.IsEnabled == true)
+                    {
+                        <span class="badge bg-success">Active</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">Disabled</span>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(_smtpError))
+                    {
+                        <div class="alert alert-danger">@_smtpError</div>
+                    }
+                    @if (!string.IsNullOrEmpty(_smtpSuccess))
+                    {
+                        <div class="alert alert-success">@_smtpSuccess</div>
+                    }
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Authentication Mode</label>
+                            <div class="d-flex gap-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" id="authModeUserPass"
+                                           checked="@(_smtpAuthMode == "UsernamePassword")"
+                                           @onchange='() => _smtpAuthMode = "UsernamePassword"' />
+                                    <label class="form-check-label" for="authModeUserPass">Username &amp; Password</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" id="authModeApiKey"
+                                           checked="@(_smtpAuthMode == "ApiKey")"
+                                           @onchange='() => _smtpAuthMode = "ApiKey"' />
+                                    <label class="form-check-label" for="authModeApiKey">API Key (Brevo, SendGrid, Mailgun…)</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">SMTP Host <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_smtpHost" placeholder="smtp.example.com" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Port <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" @bind="_smtpPort" placeholder="587" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">
+                                Username
+                                @if (_smtpAuthMode == "ApiKey")
+                                {
+                                    <span class="text-muted small ms-1">(use <code>apikey</code> for SendGrid, your login email for Brevo)</span>
+                                }
+                            </label>
+                            <input class="form-control" @bind="_smtpUsername"
+                                   placeholder='@(_smtpAuthMode == "ApiKey" ? "apikey  or  your login email" : "user@example.com")' />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">
+                                @(_smtpAuthMode == "ApiKey" ? "API Key" : "Password")
+                            </label>
+                            <input type="password" class="form-control" @bind="_smtpPassword"
+                                   placeholder='@(_settings?.HasPassword == true ? "Leave blank to keep existing" : (_smtpAuthMode == "ApiKey" ? "Enter API key" : "Enter password"))' />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">From Name <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_smtpFromName" placeholder="CRM Sales" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">From Address <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" @bind="_smtpFromAddress" placeholder="noreply@example.com" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end gap-3">
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="enableSsl" @bind="_smtpEnableSsl" />
+                                <label class="form-check-label" for="enableSsl">Enable SSL/TLS</label>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="isEnabled" @bind="_smtpIsEnabled" />
+                                <label class="form-check-label" for="isEnabled">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-primary btn-sm" @onclick="SaveSmtpSettings" disabled="@_savingSmtp">
+                            @if (_savingSmtp) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                            Save SMTP Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Email Templates -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Email Templates</h5>
+                    <details class="mt-2">
+                        <summary class="small text-primary fw-semibold" style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px">
+                            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="7" cy="7" r="6"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
+                            Available placeholders — click to view reference
+                        </summary>
+                        <div class="mt-2 table-responsive">
+                            <table class="table table-sm table-bordered small mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width:200px">Placeholder</th>
+                                        <th>What it inserts</th>
+                                        <th style="width:160px">Example value</th>
+                                        <th style="width:160px">Available in</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>&#123;&#123;ContactName&#125;&#125;</code></td>
+                                        <td>The customer's full name</td>
+                                        <td class="text-muted">Jane Smith</td>
+                                        <td><span class="badge bg-secondary">All templates</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>&#123;&#123;TotalAmount&#125;&#125;</code></td>
+                                        <td>Grand total of the quote or order, after tax</td>
+                                        <td class="text-muted">1,292.50</td>
+                                        <td><span class="badge bg-secondary">All templates</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>&#123;&#123;Currency&#125;&#125;</code></td>
+                                        <td>Currency code</td>
+                                        <td class="text-muted">USD</td>
+                                        <td><span class="badge bg-secondary">All templates</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>&#123;&#123;QuoteNumber&#125;&#125;</code></td>
+                                        <td>Quote reference number</td>
+                                        <td class="text-muted">QT-0042</td>
+                                        <td><span class="badge bg-info text-dark">Quote Sent</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>&#123;&#123;ExpiryDate&#125;&#125;</code></td>
+                                        <td>Date the quote expires</td>
+                                        <td class="text-muted">May 31, 2026</td>
+                                        <td><span class="badge bg-info text-dark">Quote Sent</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>&#123;&#123;LineItemsHtml&#125;&#125;</code></td>
+                                        <td>Full product table — includes quantities, unit prices, per-line discounts, tax, and grand total</td>
+                                        <td class="text-muted"><em>HTML table</em></td>
+                                        <td><span class="badge bg-info text-dark">Quote Sent</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>&#123;&#123;OrderNumber&#125;&#125;</code></td>
+                                        <td>Order reference number</td>
+                                        <td class="text-muted">ORD-0017</td>
+                                        <td><span class="badge bg-primary">Order templates</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>&#123;&#123;TrackingInfo&#125;&#125;</code></td>
+                                        <td>Shipping carrier tracking number or info entered when marking the order shipped</td>
+                                        <td class="text-muted">TRK-9876543210</td>
+                                        <td><span class="badge bg-primary">Order Shipped</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>&#123;&#123;CancellationReason&#125;&#125;</code></td>
+                                        <td>Reason entered when the order was cancelled</td>
+                                        <td class="text-muted">Customer request</td>
+                                        <td><span class="badge bg-danger">Order Cancelled</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                </div>
+                <div class="card-body p-0">
+                    @foreach (var template in _templateOrder)
+                    {
+                        var existing = _templates.FirstOrDefault(t => t.TemplateType == template.Key);
+                        var state = _editStates[template.Key];
+
+                        <div class="border-bottom p-3">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>@template.Label</strong>
+                                    <span class="text-muted small ms-2">@template.Description</span>
+                                    @if (existing is { IsActive: true })
+                                    {
+                                        <span class="badge bg-success ms-2">Active</span>
+                                    }
+                                    else if (existing is { IsActive: false })
+                                    {
+                                        <span class="badge bg-secondary ms-2">Inactive</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark ms-2">Not configured</span>
+                                    }
+                                </div>
+                                <button class="btn btn-outline-primary btn-sm"
+                                        @onclick="() => ToggleEdit(template.Key, existing)">
+                                    @(state.IsEditing ? "Cancel" : (existing is null ? "Configure" : "Edit"))
+                                </button>
+                            </div>
+
+                            @if (!state.IsEditing && existing is not null)
+                            {
+                                <div class="mt-2 text-muted small">
+                                    <strong>Subject:</strong> @existing.Subject
+                                </div>
+                            }
+
+                            @if (state.IsEditing)
+                            {
+                                <div class="mt-3 border rounded overflow-hidden">
+                                    <div class="row g-0">
+
+                                        <!-- Left: clickable placeholder list -->
+                                        <div class="col-md-3 border-end" style="background:#f8f9fa">
+                                            <div class="px-3 pt-3 pb-2 border-bottom">
+                                                <div class="fw-semibold small">Placeholders</div>
+                                                <div class="text-muted" style="font-size:11px;margin-top:2px">Click to insert into body</div>
+                                            </div>
+                                            <div class="p-2">
+                                                @foreach (var p in _templatePlaceholders.GetValueOrDefault(template.Key, []))
+                                                {
+                                                    <button type="button"
+                                                            class="btn btn-light btn-sm w-100 text-start mb-1 px-2 py-1"
+                                                            style="border:1px solid #dee2e6;border-radius:5px"
+                                                            title="@p.Description"
+                                                            @onclick="() => InsertPlaceholder(template.Key, p.Token)">
+                                                        <div class="text-primary fw-semibold" style="font-family:monospace;font-size:11px">@p.Token</div>
+                                                        <div class="text-muted" style="font-size:10px;line-height:1.3;white-space:normal">@p.Description</div>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        <!-- Right: form -->
+                                        <div class="col-md-9 p-3">
+                                            @if (!string.IsNullOrEmpty(state.Error))
+                                            {
+                                                <div class="alert alert-danger py-2">@state.Error</div>
+                                            }
+                                            <div class="mb-2">
+                                                <label class="form-label">Subject <span class="text-danger">*</span></label>
+                                                <input class="form-control form-control-sm"
+                                                       @bind="state.Subject"
+                                                       placeholder="e.g. Your quote {{QuoteNumber}} is ready" />
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label">Body (HTML) <span class="text-danger">*</span></label>
+                                                <textarea class="form-control form-control-sm font-monospace"
+                                                          id="tmpl-body-@template.Key"
+                                                          rows="12"
+                                                          @bind="state.BodyHtml"
+                                                          @bind:event="oninput"
+                                                          placeholder="Enter HTML email body. Use {{Placeholder}} for dynamic values."></textarea>
+                                            </div>
+
+                                            @if (state.ShowPreview)
+                                            {
+                                                <div class="border rounded overflow-hidden mb-3">
+                                                    <div class="bg-light px-3 py-2 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                                        <span class="small fw-semibold">Email Preview <span class="fw-normal text-muted">(sample data)</span></span>
+                                                        <span class="small text-muted">Subject: <em>@RenderPreview(state.Subject)</em></span>
+                                                    </div>
+                                                    <div style="background:#f3f4f6;padding:28px 20px">
+                                                        <div style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:6px;padding:36px 40px;font-family:Arial,sans-serif;font-size:14px;color:#111827;line-height:1.65;border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+                                                            @((MarkupString)RenderPreview(state.BodyHtml))
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+
+                                            <div class="d-flex gap-2 flex-wrap">
+                                                <button class="btn btn-primary btn-sm"
+                                                        @onclick="() => SaveTemplate(template.Key, state)"
+                                                        disabled="@state.Saving">
+                                                    @if (state.Saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                                    Save Template
+                                                </button>
+                                                <button class="btn @(state.ShowPreview ? "btn-secondary" : "btn-outline-secondary") btn-sm"
+                                                        @onclick="() => state.ShowPreview = !state.ShowPreview">
+                                                    @(state.ShowPreview ? "Hide Preview" : "Preview Email")
+                                                </button>
+                                                <button class="btn btn-outline-secondary btn-sm"
+                                                        @onclick="() => state.IsEditing = false">
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<EmailTemplateDto> _templates = [];
+    private EmailSettingsDto? _settings;
+    private bool _loading = true;
+
+    // SMTP form state
+    private string _smtpHost = "";
+    private int _smtpPort = 587;
+    private string _smtpUsername = "";
+    private string _smtpPassword = "";
+    private string _smtpFromName = "";
+    private string _smtpFromAddress = "";
+    private bool _smtpEnableSsl = true;
+    private bool _smtpIsEnabled = false;
+    private string _smtpAuthMode = "UsernamePassword";
+    private bool _savingSmtp;
+    private string _smtpError = "";
+    private string _smtpSuccess = "";
+
+    private record TemplateInfo(string Key, string Label, string Description);
+
+    private readonly List<TemplateInfo> _templateOrder =
+    [
+        new("QuoteSent", "Quote Sent", "Sent to contact when a quote is dispatched"),
+        new("OrderConfirmed", "Order Confirmed", "Sent when an order is confirmed"),
+        new("OrderShipped", "Order Shipped", "Sent when an order is shipped"),
+        new("OrderCancelled", "Order Cancelled", "Sent when an order is cancelled")
+    ];
+
+    private class EditState
+    {
+        public bool IsEditing { get; set; }
+        public string Subject { get; set; } = "";
+        public string BodyHtml { get; set; } = "";
+        public bool Saving { get; set; }
+        public string Error { get; set; } = "";
+        public bool ShowPreview { get; set; }
+    }
+
+    private record PlaceholderInfo(string Token, string Description);
+
+    private static readonly Dictionary<string, List<PlaceholderInfo>> _templatePlaceholders = new()
+    {
+        ["QuoteSent"] =
+        [
+            new("{{ContactName}}",        "Customer's full name"),
+            new("{{QuoteNumber}}",         "Quote reference number (e.g. QT-0042)"),
+            new("{{TotalAmount}}",         "Grand total after tax"),
+            new("{{Currency}}",            "Currency code (e.g. USD)"),
+            new("{{ExpiryDate}}",          "Date the quote expires"),
+            new("{{LineItemsHtml}}",       "Full product table with quantities, discounts, tax, and grand total"),
+        ],
+        ["OrderConfirmed"] =
+        [
+            new("{{ContactName}}",  "Customer's full name"),
+            new("{{OrderNumber}}", "Order reference number (e.g. ORD-0017)"),
+            new("{{TotalAmount}}", "Grand total after tax"),
+            new("{{Currency}}",    "Currency code (e.g. USD)"),
+        ],
+        ["OrderShipped"] =
+        [
+            new("{{ContactName}}",   "Customer's full name"),
+            new("{{OrderNumber}}",  "Order reference number (e.g. ORD-0017)"),
+            new("{{TotalAmount}}", "Grand total after tax"),
+            new("{{Currency}}",    "Currency code (e.g. USD)"),
+            new("{{TrackingInfo}}", "Shipping carrier and tracking number"),
+        ],
+        ["OrderCancelled"] =
+        [
+            new("{{ContactName}}",          "Customer's full name"),
+            new("{{OrderNumber}}",         "Order reference number (e.g. ORD-0017)"),
+            new("{{TotalAmount}}",         "Grand total after tax"),
+            new("{{Currency}}",            "Currency code (e.g. USD)"),
+            new("{{CancellationReason}}", "Reason the order was cancelled"),
+        ],
+    };
+
+    private async Task InsertPlaceholder(string key, string token)
+        => await JS.InvokeVoidAsync("insertAtCursor", $"tmpl-body-{key}", token);
+
+    private static string RenderPreview(string template)
+    {
+        var samples = new Dictionary<string, string>
+        {
+            ["ContactName"]        = "Jane Smith",
+            ["QuoteNumber"]        = "QT-0042",
+            ["OrderNumber"]        = "ORD-0017",
+            ["TotalAmount"]        = "1,292.50",
+            ["Currency"]           = "USD",
+            ["ExpiryDate"]         = "May 31, 2026",
+            ["TrackingInfo"]       = "TRK-9876543210",
+            ["CancellationReason"] = "Customer request",
+            ["LineItemsHtml"]      = SampleLineItemsHtml
+        };
+        foreach (var (key, value) in samples)
+            template = template.Replace($"{{{{{key}}}}}", value);
+        return template;
+    }
+
+    private const string SampleLineItemsHtml =
+        "<table style=\"width:100%;border-collapse:collapse;font-size:14px;margin:20px 0\">" +
+        "<thead><tr style=\"background:#1f2937;color:#ffffff\">" +
+        "<th style=\"padding:10px 14px;text-align:left\">Product</th>" +
+        "<th style=\"padding:10px 14px;text-align:right\">Qty</th>" +
+        "<th style=\"padding:10px 14px;text-align:right\">Unit Price</th>" +
+        "<th style=\"padding:10px 14px;text-align:right\">Discount</th>" +
+        "<th style=\"padding:10px 14px;text-align:right\">Line Total</th>" +
+        "</tr></thead><tbody>" +
+        "<tr style=\"border-bottom:1px solid #e5e7eb\">" +
+        "<td style=\"padding:9px 14px\">Premium Widget Pro</td>" +
+        "<td style=\"padding:9px 14px;text-align:right\">3</td>" +
+        "<td style=\"padding:9px 14px;text-align:right\">250.00</td>" +
+        "<td style=\"padding:9px 14px;text-align:right\">10%</td>" +
+        "<td style=\"padding:9px 14px;text-align:right;font-weight:600\">750.00</td>" +
+        "</tr>" +
+        "<tr style=\"border-bottom:1px solid #e5e7eb\">" +
+        "<td style=\"padding:9px 14px\">Standard Support Package</td>" +
+        "<td style=\"padding:9px 14px;text-align:right\">1</td>" +
+        "<td style=\"padding:9px 14px;text-align:right\">500.00</td>" +
+        "<td style=\"padding:9px 14px;text-align:right\">&#8212;</td>" +
+        "<td style=\"padding:9px 14px;text-align:right;font-weight:600\">500.00</td>" +
+        "</tr>" +
+        "</tbody><tfoot>" +
+        "<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Subtotal</td><td style=\"padding:7px 14px;text-align:right\">1,250.00</td></tr>" +
+        "<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Discount</td><td style=\"padding:7px 14px;text-align:right;color:#dc2626\">&#8722;75.00</td></tr>" +
+        "<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Net Total</td><td style=\"padding:7px 14px;text-align:right\">1,175.00</td></tr>" +
+        "<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">VAT (10%)</td><td style=\"padding:7px 14px;text-align:right\">+117.50</td></tr>" +
+        "<tr style=\"font-weight:700;background:#eff6ff\"><td colspan=\"4\" style=\"padding:10px 14px;text-align:right\">Grand Total (USD)</td><td style=\"padding:10px 14px;text-align:right;font-size:15px;color:#2563eb\">1,292.50</td></tr>" +
+        "</tfoot></table>";
+
+    private Dictionary<string, EditState> _editStates = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        foreach (var t in _templateOrder)
+            _editStates[t.Key] = new EditState();
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var t1 = Api.GetEmailTemplatesAsync();
+        var t2 = Api.GetEmailSettingsAsync();
+        _templates = await t1 ?? [];
+        _settings = await t2;
+        if (_settings is not null)
+        {
+            _smtpHost = _settings.Host;
+            _smtpPort = _settings.Port;
+            _smtpUsername = _settings.Username;
+            _smtpFromName = _settings.FromName;
+            _smtpFromAddress = _settings.FromAddress;
+            _smtpEnableSsl = _settings.EnableSsl;
+            _smtpIsEnabled = _settings.IsEnabled;
+            _smtpAuthMode = _settings.AuthMode;
+        }
+        _loading = false;
+    }
+
+    private async Task SaveSmtpSettings()
+    {
+        _smtpError = "";
+        _smtpSuccess = "";
+        if (string.IsNullOrWhiteSpace(_smtpHost)) { _smtpError = "SMTP host is required."; return; }
+        if (_smtpPort is < 1 or > 65535) { _smtpError = "Port must be between 1 and 65535."; return; }
+        if (string.IsNullOrWhiteSpace(_smtpFromAddress)) { _smtpError = "From address is required."; return; }
+        if (string.IsNullOrWhiteSpace(_smtpFromName)) { _smtpError = "From name is required."; return; }
+
+        _savingSmtp = true;
+        try
+        {
+            var body = new
+            {
+                Host = _smtpHost.Trim(),
+                Port = _smtpPort,
+                Username = _smtpUsername.Trim(),
+                Password = string.IsNullOrWhiteSpace(_smtpPassword) ? (string?)null : _smtpPassword,
+                FromName = _smtpFromName.Trim(),
+                FromAddress = _smtpFromAddress.Trim(),
+                EnableSsl = _smtpEnableSsl,
+                IsEnabled = _smtpIsEnabled,
+                AuthMode = _smtpAuthMode
+            };
+            var res = await Api.SaveEmailSettingsAsync(body);
+            if (res.IsSuccessStatusCode)
+            {
+                _smtpSuccess = "SMTP settings saved.";
+                _smtpPassword = "";
+                await LoadAsync();
+            }
+            else
+            {
+                _smtpError = await res.Content.ReadAsStringAsync();
+            }
+        }
+        finally { _savingSmtp = false; }
+    }
+
+    private void ToggleEdit(string key, EmailTemplateDto? existing)
+    {
+        var state = _editStates[key];
+        if (state.IsEditing)
+        {
+            state.IsEditing = false;
+            return;
+        }
+        state.Subject = existing?.Subject ?? DefaultSubject(key);
+        state.BodyHtml = existing?.BodyHtml ?? DefaultBody(key);
+        state.Error = "";
+        state.IsEditing = true;
+    }
+
+    private async Task SaveTemplate(string key, EditState state)
+    {
+        state.Error = "";
+        if (string.IsNullOrWhiteSpace(state.Subject)) { state.Error = "Subject is required."; return; }
+        if (string.IsNullOrWhiteSpace(state.BodyHtml)) { state.Error = "Body is required."; return; }
+
+        state.Saving = true;
+        try
+        {
+            var body = new { Subject = state.Subject.Trim(), BodyHtml = state.BodyHtml.Trim() };
+            var res = await Api.UpsertEmailTemplateAsync(key, body);
+            if (res.IsSuccessStatusCode)
+            {
+                state.IsEditing = false;
+                await LoadAsync();
+            }
+            else
+            {
+                state.Error = await res.Content.ReadAsStringAsync();
+            }
+        }
+        finally { state.Saving = false; }
+    }
+
+    private static string DefaultSubject(string key) => key switch
+    {
+        "QuoteSent" => "Your quote {{QuoteNumber}} is ready",
+        "OrderConfirmed" => "Order {{OrderNumber}} confirmed",
+        "OrderShipped" => "Your order {{OrderNumber}} has shipped",
+        "OrderCancelled" => "Order {{OrderNumber}} has been cancelled",
+        _ => ""
+    };
+
+    private static string DefaultBody(string key) => key switch
+    {
+        "QuoteSent" => """
+            <p>Hi {{ContactName}},</p>
+            <p>Your quote <strong>{{QuoteNumber}}</strong> is ready for review.</p>
+            <p><strong>Valid until:</strong> {{ExpiryDate}}</p>
+            {{LineItemsHtml}}
+            <p>Please contact us if you have any questions.</p>
+            """,
+        "OrderConfirmed" => """
+            <p>Hi {{ContactName}},</p>
+            <p>Your order <strong>{{OrderNumber}}</strong> has been confirmed.</p>
+            <p><strong>Total:</strong> {{TotalAmount}} {{Currency}}</p>
+            <p>We will notify you once your order ships.</p>
+            """,
+        "OrderShipped" => """
+            <p>Hi {{ContactName}},</p>
+            <p>Your order <strong>{{OrderNumber}}</strong> has been shipped.</p>
+            <p><strong>Total:</strong> {{TotalAmount}} {{Currency}}<br/>
+            <strong>Tracking:</strong> {{TrackingInfo}}</p>
+            """,
+        "OrderCancelled" => """
+            <p>Hi {{ContactName}},</p>
+            <p>Your order <strong>{{OrderNumber}}</strong> has been cancelled.</p>
+            <p><strong>Reason:</strong> {{CancellationReason}}</p>
+            <p>Please contact us if you have any questions.</p>
+            """,
+        _ => ""
+    };
+}

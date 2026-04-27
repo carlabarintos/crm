@@ -1,9 +1,13 @@
 using CrmSales.Api.Auditing;
 using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
+using CrmSales.Contacts.Domain.Repositories;
 using CrmSales.Orders.Domain.Entities;
 using CrmSales.Orders.Domain.Repositories;
 using CrmSales.Products.Domain.Repositories;
+using CrmSales.Settings.Application.Services;
+using CrmSales.Settings.Domain.Enums;
+using CrmSales.Settings.Domain.Repositories;
 using CrmSales.SharedKernel.Application;
 using Microsoft.AspNetCore.Mvc;
 
@@ -113,9 +117,13 @@ public static class OrderEndpoints
             Guid id,
             HttpContext http,
             IOrderRepository repo,
+            IContactRepository contactRepo,
+            IEmailTemplateRepository emailTemplateRepo,
+            IEmailService emailService,
             INotificationBroadcaster broadcaster,
             IAuditService audit,
             ITenantContext tenant,
+            ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
             var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
@@ -130,6 +138,36 @@ public static class OrderEndpoints
                 order.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
             await audit.LogAsync(tenant.TenantId, "order.confirmed", "Order",
                 order.Id.ToString(), msg, actor, ct);
+
+            if (order.CustomerId != Guid.Empty)
+            {
+                var contact = await contactRepo.GetByIdAsync(order.CustomerId, ct);
+                if (contact?.Email is not null)
+                {
+                    var template = await emailTemplateRepo.GetByTypeAsync(EmailTemplateType.OrderConfirmed, ct);
+                    if (template is { IsActive: true })
+                    {
+                        var vars = new Dictionary<string, string>
+                        {
+                            ["ContactName"] = contact.FullName,
+                            ["OrderNumber"] = order.OrderNumber,
+                            ["TotalAmount"] = order.GrandTotal.ToString("N2"),
+                            ["Currency"] = order.Currency
+                        };
+                        try
+                        {
+                            await emailService.SendAsync(
+                                contact.Email, contact.FullName,
+                                TemplateRenderer.Render(template.Subject, vars),
+                                TemplateRenderer.Render(template.BodyHtml, vars), ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            loggerFactory.CreateLogger("OrderEndpoints").LogError(ex, "Failed to send order confirmation email for {OrderNumber}", order.OrderNumber);
+                        }
+                    }
+                }
+            }
 
             return Results.Ok(new { order.Id, Status = order.Status.ToString() });
         });
@@ -164,9 +202,13 @@ public static class OrderEndpoints
             [FromBody] ShipOrderRequest req,
             HttpContext http,
             IOrderRepository repo,
+            IContactRepository contactRepo,
+            IEmailTemplateRepository emailTemplateRepo,
+            IEmailService emailService,
             INotificationBroadcaster broadcaster,
             IAuditService audit,
             ITenantContext tenant,
+            ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
             var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
@@ -182,6 +224,37 @@ public static class OrderEndpoints
                 order.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
             await audit.LogAsync(tenant.TenantId, "order.shipped", "Order",
                 order.Id.ToString(), msg, actor, ct);
+
+            if (order.CustomerId != Guid.Empty)
+            {
+                var contact = await contactRepo.GetByIdAsync(order.CustomerId, ct);
+                if (contact?.Email is not null)
+                {
+                    var template = await emailTemplateRepo.GetByTypeAsync(EmailTemplateType.OrderShipped, ct);
+                    if (template is { IsActive: true })
+                    {
+                        var vars = new Dictionary<string, string>
+                        {
+                            ["ContactName"] = contact.FullName,
+                            ["OrderNumber"] = order.OrderNumber,
+                            ["TotalAmount"] = order.GrandTotal.ToString("N2"),
+                            ["Currency"] = order.Currency,
+                            ["TrackingInfo"] = req.TrackingInfo ?? "N/A"
+                        };
+                        try
+                        {
+                            await emailService.SendAsync(
+                                contact.Email, contact.FullName,
+                                TemplateRenderer.Render(template.Subject, vars),
+                                TemplateRenderer.Render(template.BodyHtml, vars), ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            loggerFactory.CreateLogger("OrderEndpoints").LogError(ex, "Failed to send shipment email for {OrderNumber}", order.OrderNumber);
+                        }
+                    }
+                }
+            }
 
             return Results.Ok(new { order.Id, Status = order.Status.ToString(), order.ShippedAt });
         });
@@ -227,9 +300,13 @@ public static class OrderEndpoints
             [FromBody] CancelOrderRequest req,
             HttpContext http,
             IOrderRepository repo,
+            IContactRepository contactRepo,
+            IEmailTemplateRepository emailTemplateRepo,
+            IEmailService emailService,
             INotificationBroadcaster broadcaster,
             IAuditService audit,
             ITenantContext tenant,
+            ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
             var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
@@ -244,6 +321,37 @@ public static class OrderEndpoints
                 order.Id.ToString(), actor, tenant.TenantId, DateTime.UtcNow), ct);
             await audit.LogAsync(tenant.TenantId, "order.cancelled", "Order",
                 order.Id.ToString(), msg, actor, ct);
+
+            if (order.CustomerId != Guid.Empty)
+            {
+                var contact = await contactRepo.GetByIdAsync(order.CustomerId, ct);
+                if (contact?.Email is not null)
+                {
+                    var template = await emailTemplateRepo.GetByTypeAsync(EmailTemplateType.OrderCancelled, ct);
+                    if (template is { IsActive: true })
+                    {
+                        var vars = new Dictionary<string, string>
+                        {
+                            ["ContactName"] = contact.FullName,
+                            ["OrderNumber"] = order.OrderNumber,
+                            ["TotalAmount"] = order.GrandTotal.ToString("N2"),
+                            ["Currency"] = order.Currency,
+                            ["CancellationReason"] = req.Reason
+                        };
+                        try
+                        {
+                            await emailService.SendAsync(
+                                contact.Email, contact.FullName,
+                                TemplateRenderer.Render(template.Subject, vars),
+                                TemplateRenderer.Render(template.BodyHtml, vars), ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            loggerFactory.CreateLogger("OrderEndpoints").LogError(ex, "Failed to send cancellation email for {OrderNumber}", order.OrderNumber);
+                        }
+                    }
+                }
+            }
 
             return Results.Ok(new { order.Id, Status = order.Status.ToString() });
         });

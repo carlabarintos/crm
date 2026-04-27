@@ -4,6 +4,7 @@
 @inject CrmApiClient Api
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@using System.Net.Http.Json
 
 <PageTitle>@(quote?.QuoteNumber ?? "Quote")</PageTitle>
 
@@ -200,9 +201,13 @@ else if (quote is not null)
                         </div>
                     }
 
-                    @if (!string.IsNullOrEmpty(actionError)) { <div class="text-danger small">@actionError</div> }
-                    @if (!string.IsNullOrEmpty(actionSuccess)) { <div class="text-success small">@actionSuccess</div> }
+                    @if (!string.IsNullOrEmpty(actionError)) { <div class="alert alert-danger py-2 small mb-1">@actionError</div> }
+                    @if (!string.IsNullOrEmpty(actionSuccess)) { <div class="alert alert-success py-2 small mb-1">@actionSuccess</div> }
+                    @if (!string.IsNullOrEmpty(actionWarning)) { <div class="alert alert-warning py-2 small mb-1">@actionWarning</div> }
 
+                    <button class="btn @(_showPreview ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="() => _showPreview = !_showPreview">
+                        @(_showPreview ? "Hide Preview" : "Document Preview")
+                    </button>
                     <button class="btn btn-outline-secondary btn-sm" @onclick="PrintQuote">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-right:4px;vertical-align:-1px">
                             <rect x="2" y="5" width="10" height="7" rx="1"/><path d="M4 5V2h6v3" stroke-linecap="round"/>
@@ -241,6 +246,100 @@ else if (quote is not null)
                     </div>
                 </div>
             }
+        </div>
+    </div>
+}
+
+<!-- Document Preview -->
+@if (_showPreview && quote is not null)
+{
+    <div class="card mt-4 preview-doc shadow-sm">
+        <div class="card-body p-4 p-md-5">
+            <div class="d-flex justify-content-between align-items-start mb-4 pb-3 border-bottom">
+                <div>
+                    <div class="fw-bold fs-4 lh-1">CRM Sales</div>
+                    <div class="text-muted small mt-1">Sales Quotation</div>
+                </div>
+                <div class="text-end">
+                    <div class="fw-bold fs-5">@quote.QuoteNumber</div>
+                    <div class="small text-muted">Date: @quote.CreatedAt.ToString("MMM dd, yyyy")</div>
+                    @if (quote.ExpiryDate.HasValue)
+                    {
+                        <div class="small text-muted">Valid until: @quote.ExpiryDate.Value.ToString("MMM dd, yyyy")</div>
+                    }
+                    <span class="badge @GetStatusBadge(quote.Status) mt-1">@quote.Status</span>
+                </div>
+            </div>
+
+            <div class="table-responsive mb-3">
+                <table class="table table-sm table-bordered mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Product</th>
+                            <th class="text-end" style="width:60px">Qty</th>
+                            <th class="text-end" style="width:110px">Unit Price</th>
+                            <th class="text-end" style="width:90px">Discount</th>
+                            <th class="text-end" style="width:110px">Line Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!quote.LineItems.Any())
+                        {
+                            <tr><td colspan="5" class="text-center text-muted py-3">No products added.</td></tr>
+                        }
+                        @foreach (var l in quote.LineItems)
+                        {
+                            <tr>
+                                <td>@l.ProductName</td>
+                                <td class="text-end">@l.Quantity</td>
+                                <td class="text-end">@l.UnitPrice.ToString("F2")</td>
+                                <td class="text-end">@(l.DiscountPercent > 0 ? $"{l.DiscountPercent:0.##}%" : "—")</td>
+                                <td class="text-end fw-semibold">@l.LineTotal.ToString("F2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    @if (quote.LineItems.Any())
+                    {
+                        <tfoot>
+                            <tr class="table-light">
+                                <td colspan="4" class="text-end text-muted small">Subtotal</td>
+                                <td class="text-end">@quote.SubTotal.ToString("F2")</td>
+                            </tr>
+                            @if (quote.DiscountTotal > 0)
+                            {
+                                <tr class="table-light">
+                                    <td colspan="4" class="text-end text-muted small">Discount</td>
+                                    <td class="text-end text-danger">−@quote.DiscountTotal.ToString("F2")</td>
+                                </tr>
+                            }
+                            <tr class="table-light">
+                                <td colspan="4" class="text-end text-muted small">Net Total</td>
+                                <td class="text-end">@quote.TotalAmount.ToString("F2")</td>
+                            </tr>
+                            @if (quote.TaxRatePercent > 0)
+                            {
+                                <tr class="table-light">
+                                    <td colspan="4" class="text-end text-muted small">@quote.TaxRateName (@quote.TaxRatePercent.ToString("0.##")%)</td>
+                                    <td class="text-end text-muted">+@quote.TaxAmount.ToString("F2")</td>
+                                </tr>
+                            }
+                            <tr class="table-primary fw-bold">
+                                <td colspan="4" class="text-end">Grand Total (@quote.Currency)</td>
+                                <td class="text-end fs-6">@quote.GrandTotal.ToString("F2")</td>
+                            </tr>
+                        </tfoot>
+                    }
+                </table>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(quote.Notes))
+            {
+                <div class="border rounded px-3 py-2 mb-3 small bg-light">
+                    <strong>Notes:</strong> @quote.Notes
+                </div>
+            }
+
+            <div class="text-center text-muted small mt-4 pt-2 border-top">Thank you for your business.</div>
         </div>
     </div>
 }
@@ -403,9 +502,11 @@ else if (quote is not null)
     private bool actionSaving;
     private string? actionError;
     private string? actionSuccess;
+    private string? actionWarning;
     private bool showRejectForm;
     private string? rejectReason;
     private bool _taxRemoving;
+    private bool _showPreview;
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -458,13 +559,22 @@ else if (quote is not null)
         finally { liSaving = false; }
     }
 
+    private record SendQuoteResult(bool EmailSent, string? EmailNote);
+
     private async Task Send()
     {
-        actionError = null; actionSuccess = null; actionSaving = true;
+        actionError = null; actionSuccess = null; actionWarning = null; actionSaving = true;
         try
         {
             var resp = await Api.SendQuoteAsync(Id);
-            if (resp.IsSuccessStatusCode) { actionSuccess = "Quote sent to customer."; await Load(); }
+            if (resp.IsSuccessStatusCode)
+            {
+                var result = await resp.Content.ReadFromJsonAsync<SendQuoteResult>();
+                actionSuccess = "Quote sent.";
+                if (result is { EmailSent: false })
+                    actionWarning = $"Email not delivered — {result.EmailNote}";
+                await Load();
+            }
             else actionError = await resp.Content.ReadAsStringAsync();
         }
         finally { actionSaving = false; }

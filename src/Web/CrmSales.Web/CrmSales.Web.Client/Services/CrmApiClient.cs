@@ -281,6 +281,20 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> SetDefaultTaxRateAsync(Guid id)
         => _http.PostAsync($"/api/settings/tax-rates/{id}/set-default", null);
 
+    // ── Settings / Email Templates ────────────────────────────────────────
+    public Task<List<EmailTemplateDto>?> GetEmailTemplatesAsync()
+        => _http.GetFromJsonAsync<List<EmailTemplateDto>>("/api/settings/email-templates");
+
+    public Task<HttpResponseMessage> UpsertEmailTemplateAsync(string templateType, object body)
+        => _http.PutAsJsonAsync($"/api/settings/email-templates/{templateType}", body);
+
+    // ── Settings / Email Config ───────────────────────────────────────────
+    public Task<EmailSettingsDto?> GetEmailSettingsAsync()
+        => _http.GetFromJsonAsync<EmailSettingsDto>("/api/settings/email-config");
+
+    public Task<HttpResponseMessage> SaveEmailSettingsAsync(object body)
+        => _http.PutAsJsonAsync("/api/settings/email-config", body);
+
     // ── Users ──────────────────────────────────────────────────────────────
     public Task<List<UserDto>?> GetUsersAsync()
         => _http.GetFromJsonAsync<List<UserDto>>("/api/users");
@@ -369,6 +383,15 @@ public record CompanyDto(Guid Id, string Name, string Slug, bool IsActive, DateT
 public record TaxRateDto(
     Guid Id, string Name, decimal Rate, string? Description, string? Region,
     bool IsDefault, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);
+
+public record EmailTemplateDto(
+    Guid Id, string TemplateType, string Subject, string BodyHtml,
+    bool IsActive, DateTime UpdatedAt);
+
+public record EmailSettingsDto(
+    Guid? Id, string Host, int Port, string Username,
+    string FromName, string FromAddress, bool EnableSsl, bool IsEnabled, bool HasPassword,
+    string AuthMode = "UsernamePassword");
 
 public record NotificationEventDto(
     string Type, string Title, string Message,

@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using CrmSales.Api.Auditing;
 using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
@@ -5,6 +7,8 @@ using CrmSales.Opportunities.Domain.Entities;
 using CrmSales.Opportunities.Domain.Repositories;
 using CrmSales.Quotes.Domain.Entities;
 using CrmSales.Quotes.Domain.Repositories;
+using CrmSales.Settings.Application.Services;
+using CrmSales.Settings.Domain.Enums;
 using CrmSales.Settings.Domain.Repositories;
 using CrmSales.Users.Domain.Repositories;
 using CrmSales.SharedKernel.Messaging;
@@ -178,11 +182,16 @@ public static class QuoteEndpoints
             Guid id,
             HttpContext http,
             IQuoteRepository repo,
+            IOpportunityRepository oppRepo,
+            IEmailTemplateRepository emailTemplateRepo,
+            IEmailService emailService,
             INotificationBroadcaster broadcaster,
             IAuditService audit,
             ITenantContext tenant,
+            ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
+            var logger = loggerFactory.CreateLogger("QuoteEndpoints");
             var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var quote = await repo.GetByIdAsync(id, ct);
             if (quote is null) return Results.NotFound();
@@ -196,7 +205,57 @@ public static class QuoteEndpoints
             await audit.LogAsync(tenant.TenantId, "quote.sent", "Quote",
                 quote.Id.ToString(), msg, actor, ct);
 
-            return Results.Ok(new { quote.Id, Status = quote.Status.ToString() });
+            bool emailSent = false;
+            string? emailNote = null;
+
+            var opp = await oppRepo.GetByIdAsync(quote.OpportunityId, ct);
+            if (string.IsNullOrWhiteSpace(opp?.ContactEmail))
+            {
+                emailNote = "No contact email on this opportunity.";
+                logger.LogInformation("Quote email skipped for {QuoteNumber}: {Reason}", quote.QuoteNumber, emailNote);
+            }
+            else
+            {
+                var template = await emailTemplateRepo.GetByTypeAsync(EmailTemplateType.QuoteSent, ct);
+                if (template is null)
+                {
+                    emailNote = "No 'Quote Sent' email template configured — set one up in Settings → Email Templates.";
+                    logger.LogInformation("Quote email skipped for {QuoteNumber}: {Reason}", quote.QuoteNumber, emailNote);
+                }
+                else if (!template.IsActive)
+                {
+                    emailNote = "'Quote Sent' email template is inactive.";
+                    logger.LogInformation("Quote email skipped for {QuoteNumber}: {Reason}", quote.QuoteNumber, emailNote);
+                }
+                else
+                {
+                    var vars = new Dictionary<string, string>
+                    {
+                        ["ContactName"] = opp.ContactName,
+                        ["QuoteNumber"] = quote.QuoteNumber,
+                        ["TotalAmount"] = quote.GrandTotal.ToString("N2"),
+                        ["Currency"] = quote.Currency,
+                        ["ExpiryDate"] = quote.ExpiryDate?.ToString("MMM d, yyyy") ?? "N/A",
+                        ["LineItemsHtml"] = BuildLineItemsHtml(quote)
+                    };
+                    try
+                    {
+                        await emailService.SendAsync(
+                            opp.ContactEmail, opp.ContactName,
+                            TemplateRenderer.Render(template.Subject, vars),
+                            TemplateRenderer.Render(template.BodyHtml, vars), ct);
+                        emailSent = true;
+                        logger.LogInformation("Quote email sent for {QuoteNumber} to {Email}", quote.QuoteNumber, opp.ContactEmail);
+                    }
+                    catch (Exception ex)
+                    {
+                        emailNote = ex.Message;
+                        logger.LogError(ex, "Failed to send quote email for {QuoteNumber}", quote.QuoteNumber);
+                    }
+                }
+            }
+
+            return Results.Ok(new { quote.Id, Status = quote.Status.ToString(), EmailSent = emailSent, EmailNote = emailNote });
         }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager", "SalesRep"));
 
         group.MapPost("/{id:guid}/accept", async (
@@ -295,6 +354,46 @@ public static class QuoteEndpoints
         });
 
         return app;
+    }
+
+    private static string BuildLineItemsHtml(Quote quote)
+    {
+        var sb = new StringBuilder();
+        sb.Append("<table style=\"width:100%;border-collapse:collapse;font-size:14px;margin:20px 0\">");
+        sb.Append("<thead><tr style=\"background:#1f2937;color:#ffffff\">");
+        sb.Append("<th style=\"padding:10px 14px;text-align:left\">Product</th>");
+        sb.Append("<th style=\"padding:10px 14px;text-align:right\">Qty</th>");
+        sb.Append("<th style=\"padding:10px 14px;text-align:right\">Unit Price</th>");
+        sb.Append("<th style=\"padding:10px 14px;text-align:right\">Discount</th>");
+        sb.Append("<th style=\"padding:10px 14px;text-align:right\">Line Total</th>");
+        sb.Append("</tr></thead><tbody>");
+
+        foreach (var l in quote.LineItems)
+        {
+            sb.Append("<tr style=\"border-bottom:1px solid #e5e7eb\">");
+            sb.Append($"<td style=\"padding:9px 14px\">{WebUtility.HtmlEncode(l.ProductName)}</td>");
+            sb.Append($"<td style=\"padding:9px 14px;text-align:right\">{l.Quantity}</td>");
+            sb.Append($"<td style=\"padding:9px 14px;text-align:right\">{l.UnitPrice:F2}</td>");
+            sb.Append($"<td style=\"padding:9px 14px;text-align:right\">{(l.DiscountPercent > 0 ? $"{l.DiscountPercent:0.##}%" : "—")}</td>");
+            sb.Append($"<td style=\"padding:9px 14px;text-align:right;font-weight:600\">{l.LineTotal:F2}</td>");
+            sb.Append("</tr>");
+        }
+
+        sb.Append("</tbody><tfoot>");
+        sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Subtotal</td><td style=\"padding:7px 14px;text-align:right\">{quote.SubTotal:F2}</td></tr>");
+
+        if (quote.DiscountTotal > 0)
+            sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Discount</td><td style=\"padding:7px 14px;text-align:right;color:#dc2626\">&#8722;{quote.DiscountTotal:F2}</td></tr>");
+
+        sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Net Total</td><td style=\"padding:7px 14px;text-align:right\">{quote.TotalAmount:F2}</td></tr>");
+
+        if (quote.TaxRatePercent > 0)
+            sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">{WebUtility.HtmlEncode(quote.TaxRateName ?? "")} ({quote.TaxRatePercent:0.##}%)</td><td style=\"padding:7px 14px;text-align:right\">+{quote.TaxAmount:F2}</td></tr>");
+
+        sb.Append($"<tr style=\"font-weight:700;background:#eff6ff\"><td colspan=\"4\" style=\"padding:10px 14px;text-align:right\">Grand Total ({WebUtility.HtmlEncode(quote.Currency)})</td><td style=\"padding:10px 14px;text-align:right;font-size:15px;color:#2563eb\">{quote.GrandTotal:F2}</td></tr>");
+        sb.Append("</tfoot></table>");
+
+        return sb.ToString();
     }
 }
 
