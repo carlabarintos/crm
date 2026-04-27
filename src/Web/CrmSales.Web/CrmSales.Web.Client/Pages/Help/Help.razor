@@ -374,6 +374,90 @@
     </div>
 </div>
 
+<!-- Email & Notifications -->
+<div id="email" class="help-section card mb-4">
+    <div class="card-header help-card-header">
+        <div class="help-section-icon" style="background:linear-gradient(135deg,#f0fdfa,#ccfbf1)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#14b8a6" stroke-width="1.6">
+                <rect x="1" y="3.5" width="14" height="9.5" rx="1.5"/>
+                <path d="M1 5l7 5 7-5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </div>
+        <span>Email &amp; Notifications</span>
+    </div>
+    <div class="card-body help-body">
+        <p>CRM Sales can automatically send emails to contacts at key points in the sales lifecycle — when a quote is dispatched, when an order is confirmed, shipped, or cancelled. All email sending is driven by two settings: the <strong>SMTP configuration</strong> (your mail server) and <strong>email templates</strong> (what the message says).</p>
+        <p>Both are managed under <strong>Settings → Email Templates</strong>. Only Admins can configure these settings.</p>
+
+        <h4 class="help-h4">SMTP setup</h4>
+        <p>SMTP is the protocol used to deliver email. You need an outbound mail account from any provider — Gmail, Outlook, or a transactional service such as Brevo, SendGrid, or Mailgun. Enter the connection details once; they are stored encrypted. The <strong>Enabled</strong> toggle must be on for any emails to send.</p>
+        <div class="help-field-table">
+            <div class="help-field-row"><span>SMTP Host</span><span>The mail server address (e.g. <code>smtp.gmail.com</code>)</span></div>
+            <div class="help-field-row"><span>Port</span><span>587 with STARTTLS (SSL <em>off</em>) is the most common. Use 465 if your provider requires SSL/TLS directly. Avoid port 25 — it is blocked by most hosting providers.</span></div>
+            <div class="help-field-row"><span>Auth Mode</span><span><em>Username &amp; Password</em> for standard accounts; <em>API Key</em> for transactional services (SendGrid, Brevo, Mailgun)</span></div>
+            <div class="help-field-row"><span>From Address</span><span>The address recipients will see as the sender (e.g. <code>sales@yourcompany.com</code>)</span></div>
+            <div class="help-field-row"><span>From Name</span><span>Display name shown in recipients' inboxes (e.g. <em>CRM Sales</em>)</span></div>
+        </div>
+        <div class="help-grid" style="margin-bottom:.75rem">
+            <div class="help-grid-item">
+                <strong>Gmail</strong>
+                <p>Host: <code>smtp.gmail.com</code>, port 587, SSL off. Password must be a <strong>Google App Password</strong> — standard passwords are rejected when 2FA is enabled.</p>
+            </div>
+            <div class="help-grid-item">
+                <strong>Outlook / Microsoft 365</strong>
+                <p>Host: <code>smtp.office365.com</code>, port 587, SSL off. Username is your full Microsoft email address.</p>
+            </div>
+            <div class="help-grid-item">
+                <strong>SendGrid</strong>
+                <p>Host: <code>smtp.sendgrid.net</code>, port 587, auth mode <em>API Key</em>. Username = <code>apikey</code> (literal); password = your SendGrid API key.</p>
+            </div>
+            <div class="help-grid-item">
+                <strong>Brevo</strong>
+                <p>Host: <code>smtp-relay.brevo.com</code>, port 587, auth mode <em>API Key</em>. Username = your Brevo login email; password = SMTP key from the Brevo dashboard.</p>
+            </div>
+        </div>
+        <div class="help-tip">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" stroke-width="1.5"><circle cx="7" cy="7" r="6"/><path d="M7 5v3M7 10v.5" stroke-linecap="round"/></svg>
+            <span>Passwords and API keys are encrypted at rest using AES-256-GCM. Leave the password field blank when re-saving settings to keep the existing stored credential.</span>
+        </div>
+
+        <h4 class="help-h4">Email templates</h4>
+        <p>There are four built-in template types. Each must be configured and set to <strong>Active</strong> before it will send. If a template is inactive or not yet configured, the related action still completes — the email is silently skipped and a note is returned in the API response.</p>
+        <div class="help-stages">
+            <div class="help-stage-row">
+                <span class="badge badge-soft-info" style="min-width:155px">Quote Sent</span>
+                <span><strong>Manual.</strong> Triggered when a sales rep clicks <em>Send</em> on a quote. Delivers the full product line-item table to the contact.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-success" style="min-width:155px">Order Confirmed</span>
+                <span><strong>Automatic.</strong> Sent when a quote is accepted and an order is created from it — no extra action required.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-primary" style="min-width:155px">Order Shipped</span>
+                <span><strong>Manual.</strong> Sent when an order is marked as shipped. Includes the tracking reference entered at that time.</span>
+            </div>
+            <div class="help-stage-row">
+                <span class="badge badge-soft-danger" style="min-width:155px">Order Cancelled</span>
+                <span><strong>Manual.</strong> Sent when an order is cancelled. Includes the cancellation reason entered at that time.</span>
+            </div>
+        </div>
+
+        <h4 class="help-h4">Placeholders</h4>
+        <p>Templates are written in HTML and use <code>&#123;&#123;PlaceholderName&#125;&#125;</code> tokens that are replaced with live data when the email is sent. The template editor provides a clickable sidebar to insert tokens and a live preview with sample data.</p>
+        <div class="help-field-table">
+            <div class="help-field-row"><span><code>&#123;&#123;ContactName&#125;&#125;</code></span><span>Customer's full name — all templates</span></div>
+            <div class="help-field-row"><span><code>&#123;&#123;TotalAmount&#125;&#125;</code></span><span>Grand total after tax — all templates</span></div>
+            <div class="help-field-row"><span><code>&#123;&#123;Currency&#125;&#125;</code></span><span>Currency code (e.g. USD) — all templates</span></div>
+            <div class="help-field-row"><span><code>&#123;&#123;QuoteNumber&#125;&#125;</code></span><span>Quote reference number — Quote Sent only</span></div>
+            <div class="help-field-row"><span><code>&#123;&#123;ExpiryDate&#125;&#125;</code></span><span>Date the quote expires — Quote Sent only</span></div>
+            <div class="help-field-row"><span><code>&#123;&#123;LineItemsHtml&#125;&#125;</code></span><span>Full HTML product table with quantities, discounts, and totals — Quote Sent only</span></div>
+            <div class="help-field-row"><span><code>&#123;&#123;OrderNumber&#125;&#125;</code></span><span>Order reference number — all Order templates</span></div>
+            <div class="help-field-row"><span><code>&#123;&#123;TrackingInfo&#125;&#125;</code></span><span>Shipping tracking reference — Order Shipped only</span></div>
+            <div class="help-field-row"><span><code>&#123;&#123;CancellationReason&#125;&#125;</code></span><span>Cancellation reason — Order Cancelled only</span></div>
+        </div>
+    </div>
+</div>
+
 <!-- Event Log -->
 <div id="eventlog" class="help-section card mb-4">
     <div class="card-header help-card-header">
@@ -636,6 +720,7 @@
         ("Contacts",         "contacts"),
         ("Products",         "products"),
         ("Users & Roles",    "users"),
+        ("Email",            "email"),
         ("Event Log",        "eventlog"),
         ("Reports",          "reports"),
         ("Tips",             "tips"),

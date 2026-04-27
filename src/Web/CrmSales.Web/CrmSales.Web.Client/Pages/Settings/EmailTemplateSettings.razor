@@ -24,16 +24,98 @@ else
         <!-- SMTP Configuration -->
         <div class="col-12">
             <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">SMTP Configuration</h5>
-                    @if (_settings?.IsEnabled == true)
-                    {
-                        <span class="badge bg-success">Active</span>
-                    }
-                    else
-                    {
-                        <span class="badge bg-secondary">Disabled</span>
-                    }
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">SMTP Configuration</h5>
+                        @if (_settings?.IsEnabled == true)
+                        {
+                            <span class="badge bg-success">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Disabled</span>
+                        }
+                    </div>
+                    <details class="mt-2">
+                        <summary class="small text-primary fw-semibold" style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px">
+                            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="7" cy="7" r="6"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
+                            Email server setup guide — click to view
+                        </summary>
+                        <div class="mt-2">
+                            <p class="small text-muted mb-2">
+                                Use <strong>port 587</strong> with STARTTLS (Enable SSL <em>off</em>) or <strong>port 465</strong> with SSL/TLS (Enable SSL <em>on</em>).
+                                Port 25 is blocked by most hosting providers and should be avoided.
+                            </p>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered small mb-2">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:170px">Provider</th>
+                                            <th>SMTP Host</th>
+                                            <th style="width:60px">Port</th>
+                                            <th style="width:80px">SSL</th>
+                                            <th style="width:160px">Auth Mode</th>
+                                            <th>Username / Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Gmail</strong></td>
+                                            <td><code>smtp.gmail.com</code></td>
+                                            <td>587</td>
+                                            <td>Off</td>
+                                            <td>Username &amp; Password</td>
+                                            <td>Your Gmail address. Password must be a <strong>Google App Password</strong> — standard password is blocked when 2FA is enabled.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Outlook / Microsoft 365</strong></td>
+                                            <td><code>smtp.office365.com</code></td>
+                                            <td>587</td>
+                                            <td>Off</td>
+                                            <td>Username &amp; Password</td>
+                                            <td>Your full Microsoft email address and account password.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Brevo</strong></td>
+                                            <td><code>smtp-relay.brevo.com</code></td>
+                                            <td>587</td>
+                                            <td>Off</td>
+                                            <td>API Key</td>
+                                            <td>Username = your Brevo login email. API Key = SMTP key from the Brevo dashboard under <em>SMTP &amp; API</em>.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>SendGrid</strong></td>
+                                            <td><code>smtp.sendgrid.net</code></td>
+                                            <td>587</td>
+                                            <td>Off</td>
+                                            <td>API Key</td>
+                                            <td>Username = <code>apikey</code> (literal string). API Key = your SendGrid API key with <em>Mail Send</em> permission.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Mailgun</strong></td>
+                                            <td><code>smtp.mailgun.org</code></td>
+                                            <td>587</td>
+                                            <td>Off</td>
+                                            <td>Username &amp; Password</td>
+                                            <td>Username = <code>postmaster@your-domain</code>. Password = Mailgun SMTP password shown in your domain settings.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Amazon SES</strong></td>
+                                            <td><code>email-smtp.<em>region</em>.amazonaws.com</code></td>
+                                            <td>587</td>
+                                            <td>Off</td>
+                                            <td>Username &amp; Password</td>
+                                            <td>Use SMTP credentials generated in the AWS console — these differ from your IAM access key.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="small text-muted mb-0">
+                                <strong>Security:</strong> SMTP passwords and API keys are encrypted at rest using AES-256-GCM.
+                                Leave the password/key field blank when editing to keep the existing stored credential.
+                            </p>
+                        </div>
+                    </details>
                 </div>
                 <div class="card-body">
                     @if (!string.IsNullOrEmpty(_smtpError))
@@ -125,75 +207,120 @@ else
                     <details class="mt-2">
                         <summary class="small text-primary fw-semibold" style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px">
                             <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="7" cy="7" r="6"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
-                            Available placeholders — click to view reference
+                            Send triggers &amp; placeholder reference — click to view
                         </summary>
-                        <div class="mt-2 table-responsive">
-                            <table class="table table-sm table-bordered small mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th style="width:200px">Placeholder</th>
-                                        <th>What it inserts</th>
-                                        <th style="width:160px">Example value</th>
-                                        <th style="width:160px">Available in</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td><code>&#123;&#123;ContactName&#125;&#125;</code></td>
-                                        <td>The customer's full name</td>
-                                        <td class="text-muted">Jane Smith</td>
-                                        <td><span class="badge bg-secondary">All templates</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>&#123;&#123;TotalAmount&#125;&#125;</code></td>
-                                        <td>Grand total of the quote or order, after tax</td>
-                                        <td class="text-muted">1,292.50</td>
-                                        <td><span class="badge bg-secondary">All templates</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>&#123;&#123;Currency&#125;&#125;</code></td>
-                                        <td>Currency code</td>
-                                        <td class="text-muted">USD</td>
-                                        <td><span class="badge bg-secondary">All templates</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>&#123;&#123;QuoteNumber&#125;&#125;</code></td>
-                                        <td>Quote reference number</td>
-                                        <td class="text-muted">QT-0042</td>
-                                        <td><span class="badge bg-info text-dark">Quote Sent</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>&#123;&#123;ExpiryDate&#125;&#125;</code></td>
-                                        <td>Date the quote expires</td>
-                                        <td class="text-muted">May 31, 2026</td>
-                                        <td><span class="badge bg-info text-dark">Quote Sent</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>&#123;&#123;LineItemsHtml&#125;&#125;</code></td>
-                                        <td>Full product table — includes quantities, unit prices, per-line discounts, tax, and grand total</td>
-                                        <td class="text-muted"><em>HTML table</em></td>
-                                        <td><span class="badge bg-info text-dark">Quote Sent</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>&#123;&#123;OrderNumber&#125;&#125;</code></td>
-                                        <td>Order reference number</td>
-                                        <td class="text-muted">ORD-0017</td>
-                                        <td><span class="badge bg-primary">Order templates</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>&#123;&#123;TrackingInfo&#125;&#125;</code></td>
-                                        <td>Shipping carrier tracking number or info entered when marking the order shipped</td>
-                                        <td class="text-muted">TRK-9876543210</td>
-                                        <td><span class="badge bg-primary">Order Shipped</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>&#123;&#123;CancellationReason&#125;&#125;</code></td>
-                                        <td>Reason entered when the order was cancelled</td>
-                                        <td class="text-muted">Customer request</td>
-                                        <td><span class="badge bg-danger">Order Cancelled</span></td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <div class="mt-2">
+
+                            <!-- When each email fires -->
+                            <p class="small fw-semibold text-secondary mb-1">When each email is sent</p>
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm table-bordered small mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:180px">Template</th>
+                                            <th>Trigger</th>
+                                            <th style="width:100px">How</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Quote Sent</strong></td>
+                                            <td>A sales rep clicks <em>Send</em> on a draft or open quote</td>
+                                            <td><span class="badge bg-secondary">Manual</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Order Confirmed</strong></td>
+                                            <td>A quote is accepted and an order is automatically created from it</td>
+                                            <td><span class="badge bg-success">Automatic</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Order Shipped</strong></td>
+                                            <td>An order is marked as shipped (tracking info is required)</td>
+                                            <td><span class="badge bg-secondary">Manual</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Order Cancelled</strong></td>
+                                            <td>An order is cancelled (cancellation reason is required)</td>
+                                            <td><span class="badge bg-secondary">Manual</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="small text-muted mb-3">
+                                A template must be <strong>Active</strong> to send. If a template is <strong>Inactive</strong> or not yet configured, the action still completes — the email is silently skipped and a note is returned in the API response.
+                                SMTP must also be <strong>Enabled</strong> in the configuration above; if it is disabled, all email sending is bypassed.
+                            </p>
+
+                            <!-- Placeholder reference -->
+                            <p class="small fw-semibold text-secondary mb-1">Available placeholders</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered small mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:200px">Placeholder</th>
+                                            <th>What it inserts</th>
+                                            <th style="width:160px">Example value</th>
+                                            <th style="width:160px">Available in</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><code>&#123;&#123;ContactName&#125;&#125;</code></td>
+                                            <td>The customer's full name</td>
+                                            <td class="text-muted">Jane Smith</td>
+                                            <td><span class="badge bg-secondary">All templates</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>&#123;&#123;TotalAmount&#125;&#125;</code></td>
+                                            <td>Grand total of the quote or order, after tax</td>
+                                            <td class="text-muted">1,292.50</td>
+                                            <td><span class="badge bg-secondary">All templates</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>&#123;&#123;Currency&#125;&#125;</code></td>
+                                            <td>Currency code</td>
+                                            <td class="text-muted">USD</td>
+                                            <td><span class="badge bg-secondary">All templates</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>&#123;&#123;QuoteNumber&#125;&#125;</code></td>
+                                            <td>Quote reference number</td>
+                                            <td class="text-muted">QT-0042</td>
+                                            <td><span class="badge bg-info text-dark">Quote Sent</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>&#123;&#123;ExpiryDate&#125;&#125;</code></td>
+                                            <td>Date the quote expires</td>
+                                            <td class="text-muted">May 31, 2026</td>
+                                            <td><span class="badge bg-info text-dark">Quote Sent</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>&#123;&#123;LineItemsHtml&#125;&#125;</code></td>
+                                            <td>Full product table — includes quantities, unit prices, per-line discounts, tax, and grand total. Place it on its own line in the body so it renders correctly in most email clients.</td>
+                                            <td class="text-muted"><em>HTML table</em></td>
+                                            <td><span class="badge bg-info text-dark">Quote Sent</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>&#123;&#123;OrderNumber&#125;&#125;</code></td>
+                                            <td>Order reference number</td>
+                                            <td class="text-muted">ORD-0017</td>
+                                            <td><span class="badge bg-primary">Order templates</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>&#123;&#123;TrackingInfo&#125;&#125;</code></td>
+                                            <td>Shipping carrier tracking number or info entered when marking the order shipped</td>
+                                            <td class="text-muted">TRK-9876543210</td>
+                                            <td><span class="badge bg-primary">Order Shipped</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>&#123;&#123;CancellationReason&#125;&#125;</code></td>
+                                            <td>Reason entered when the order was cancelled</td>
+                                            <td class="text-muted">Customer request</td>
+                                            <td><span class="badge bg-danger">Order Cancelled</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </details>
                 </div>
