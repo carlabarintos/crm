@@ -1,4 +1,4 @@
-/* ── CRM Sales — Keycloak Login Theme ─────────────────────────────────────── */
+/* ── ZoeIly — Keycloak Login Theme ────────────────────────────────────────── */
 /* Matches the AuthSplash card in the Blazor WASM client.                      */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap');
@@ -103,14 +103,17 @@ body.login-pf {
     margin-bottom: .25rem !important;
 }
 
-/* "CRM Sales" title — mirrors .auth-brand-name */
+/* "ZoeIly" title — mirrors .auth-brand-name */
 #kc-header-wrapper::after {
-    content: 'CRM Sales' !important;
-    font-family: 'Inter', sans-serif !important;
-    font-size: 17px !important;
-    font-weight: 800 !important;
-    color: var(--txt-1) !important;
-    letter-spacing: -.03em !important;
+    content: 'ZoeIly' !important;
+    font-family: "Segoe Script", "Brush Script MT", "Apple Chancery", cursive !important;
+    font-size: 26px !important;
+    font-weight: 700 !important;
+    background: linear-gradient(135deg, #4F46E5 0%, #A855F7 60%, #EC4899 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    letter-spacing: .01em !important;
     line-height: 1.1 !important;
 }
 

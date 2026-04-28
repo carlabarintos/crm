@@ -1,7 +1,7 @@
 {
   "realm": "crm",
   "enabled": true,
-  "displayName": "CRM Sales",
+  "displayName": "ZoeIly",
   "sslRequired": "external",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
