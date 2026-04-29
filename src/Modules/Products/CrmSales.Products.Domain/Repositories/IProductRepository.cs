@@ -1,5 +1,6 @@
 using CrmSales.Products.Domain.Entities;
 using CrmSales.SharedKernel.Application;
+using CrmSales.SharedKernel.Catalog;
 using CrmSales.SharedKernel.Domain;
 
 namespace CrmSales.Products.Domain.Repositories;
@@ -19,4 +20,19 @@ public interface IProductCategoryRepository : IRepository<ProductCategory, Guid>
 {
     Task<bool> ExistsAsync(Guid id, CancellationToken ct = default);
     Task<CursorPaginationResult<ProductCategory>> SearchAsync(string? term, int limit, string? cursor, CancellationToken ct = default);
+}
+
+public interface IServiceRepository : IRepository<Service, Guid>
+{
+    Task<Service?> GetByServiceCodeAsync(string serviceCode, CancellationToken ct = default);
+    Task<bool> IsServiceCodeUniqueAsync(string serviceCode, Guid? excludeId = null, CancellationToken ct = default);
+    Task<CursorPaginationResult<Service>> SearchAsync(string? term, bool? isActive, int limit, string? cursor, CancellationToken ct = default);
+}
+
+public record CatalogItemLookup(Guid Id, string Name, decimal Price, string Currency, CatalogItemType Type, bool IsActive);
+
+public interface ICatalogItemRepository
+{
+    Task<CatalogItem?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<CursorPaginationResult<CatalogItemLookup>> SearchAsync(string? term, bool? isActive, CatalogItemType? type, int limit, string? cursor, CancellationToken ct = default);
 }

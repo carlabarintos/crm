@@ -11,7 +11,7 @@ internal sealed class UserRepository(UsersDbContext dbContext) : IUserRepository
         await dbContext.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
 
     public async Task<IReadOnlyList<User>> GetAllAsync(CancellationToken ct = default) =>
-        await dbContext.Users.OrderBy(u => u.LastName).ToListAsync(ct);
+        await dbContext.Users.AsNoTracking().OrderBy(u => u.LastName).ToListAsync(ct);
 
     public async Task<User?> GetByEmailAsync(string email, CancellationToken ct = default) =>
         await dbContext.Users.FirstOrDefaultAsync(u => u.Email == email.ToLowerInvariant(), ct);
@@ -20,7 +20,7 @@ internal sealed class UserRepository(UsersDbContext dbContext) : IUserRepository
         await dbContext.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
 
     public async Task<IReadOnlyList<User>> GetByRoleAsync(UserRole role, CancellationToken ct = default) =>
-        await dbContext.Users.Where(u => u.Role == role && u.IsActive).ToListAsync(ct);
+        await dbContext.Users.AsNoTracking().Where(u => u.Role == role && u.IsActive).ToListAsync(ct);
 
     public async Task<bool> EmailExistsAsync(string email, Guid? excludeId = null, CancellationToken ct = default) =>
         await dbContext.Users.AnyAsync(u => u.Email == email.ToLowerInvariant()

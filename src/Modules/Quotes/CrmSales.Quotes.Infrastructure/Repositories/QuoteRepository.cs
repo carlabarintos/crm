@@ -13,15 +13,15 @@ internal sealed class QuoteRepository(QuotesDbContext dbContext) : IQuoteReposit
             .FirstOrDefaultAsync(q => q.Id == id, ct);
 
     public async Task<IReadOnlyList<Quote>> GetAllAsync(CancellationToken ct = default) =>
-        await dbContext.Quotes.Include(q => q.LineItems)
+        await dbContext.Quotes.AsNoTracking().Include(q => q.LineItems)
             .OrderByDescending(q => q.CreatedAt).ToListAsync(ct);
 
     public async Task<IReadOnlyList<Quote>> GetByOpportunityAsync(Guid opportunityId, CancellationToken ct = default) =>
-        await dbContext.Quotes.Include(q => q.LineItems)
+        await dbContext.Quotes.AsNoTracking().Include(q => q.LineItems)
             .Where(q => q.OpportunityId == opportunityId).ToListAsync(ct);
 
     public async Task<IReadOnlyList<Quote>> GetByOwnerAsync(Guid ownerId, CancellationToken ct = default) =>
-        await dbContext.Quotes.Where(q => q.OwnerId == ownerId)
+        await dbContext.Quotes.AsNoTracking().Where(q => q.OwnerId == ownerId)
             .OrderByDescending(q => q.CreatedAt).ToListAsync(ct);
 
     public async Task<Quote?> GetByNumberAsync(string quoteNumber, CancellationToken ct = default) =>
@@ -31,7 +31,7 @@ internal sealed class QuoteRepository(QuotesDbContext dbContext) : IQuoteReposit
     public async Task<CursorPaginationResult<Quote>> SearchPagedAsync(
         string? search, string? status, Guid? opportunityId, int limit, string? cursor, CancellationToken ct = default)
     {
-        var query = dbContext.Quotes.Include(q => q.LineItems).AsQueryable();
+        var query = dbContext.Quotes.AsNoTracking().Include(q => q.LineItems).AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(q => EF.Functions.ILike(q.QuoteNumber, $"%{search}%"));
@@ -62,7 +62,7 @@ internal sealed class QuoteRepository(QuotesDbContext dbContext) : IQuoteReposit
 
     public async Task<QuoteSummaryData> GetSummaryAsync(int? year = null, int? month = null, CancellationToken ct = default)
     {
-        var query = dbContext.Quotes.AsQueryable();
+        var query = dbContext.Quotes.AsNoTracking().AsQueryable();
         if (year.HasValue)  query = query.Where(q => q.CreatedAt.Year  == year.Value);
         if (month.HasValue) query = query.Where(q => q.CreatedAt.Month == month.Value);
 
@@ -92,7 +92,7 @@ internal sealed class QuoteRepository(QuotesDbContext dbContext) : IQuoteReposit
             .SumAsync(ct);
 
         var currency = await dbContext.Quotes
-            .Select(q => q.Currency).FirstOrDefaultAsync(ct) ?? "USD";
+            .AsNoTracking().Select(q => q.Currency).FirstOrDefaultAsync(ct) ?? "USD";
 
         return new QuoteSummaryData(
             counts?.Total ?? 0, counts?.Draft ?? 0, counts?.Sent ?? 0,
@@ -104,6 +104,7 @@ internal sealed class QuoteRepository(QuotesDbContext dbContext) : IQuoteReposit
     {
         var cutoff = DateTime.UtcNow.AddDays(days);
         var query = dbContext.Quotes
+            .AsNoTracking()
             .Where(q => q.ExpiryDate != null
                         && q.ExpiryDate <= cutoff
                         && (q.Status == QuoteStatus.Draft || q.Status == QuoteStatus.Sent));

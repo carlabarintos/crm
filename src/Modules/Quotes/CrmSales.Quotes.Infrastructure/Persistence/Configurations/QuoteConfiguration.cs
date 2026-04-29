@@ -1,4 +1,5 @@
 using CrmSales.Quotes.Domain.Entities;
+using CrmSales.SharedKernel.Catalog;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -22,11 +23,14 @@ internal sealed class QuoteConfiguration : IEntityTypeConfiguration<Quote>
 
         builder.Property(q => q.TaxRateName).HasMaxLength(100);
         builder.Property(q => q.TaxRatePercent).HasPrecision(5, 2);
+        builder.Property(q => q.QuoteDiscountPercent).HasPrecision(5, 2).IsRequired();
 
         builder.Ignore(q => q.DomainEvents);
         builder.Ignore(q => q.SubTotal);
         builder.Ignore(q => q.DiscountTotal);
         builder.Ignore(q => q.TotalAmount);
+        builder.Ignore(q => q.QuoteDiscountAmount);
+        builder.Ignore(q => q.TaxableAmount);
         builder.Ignore(q => q.TaxAmount);
         builder.Ignore(q => q.GrandTotal);
 
@@ -42,7 +46,8 @@ internal sealed class QuoteLineItemConfiguration : IEntityTypeConfiguration<Quot
     {
         builder.HasKey(l => l.Id);
         builder.Property(l => l.Id).ValueGeneratedNever();
-        builder.Property(l => l.ProductName).IsRequired().HasMaxLength(200);
+        builder.Property(l => l.ItemName).IsRequired().HasMaxLength(200);
+        builder.Property(l => l.ItemType).IsRequired().HasConversion<string>().HasDefaultValue(CatalogItemType.Product);
         builder.Property(l => l.UnitPrice).HasPrecision(18, 4).IsRequired();
         builder.Property(l => l.DiscountPercent).HasPrecision(5, 2).IsRequired();
 

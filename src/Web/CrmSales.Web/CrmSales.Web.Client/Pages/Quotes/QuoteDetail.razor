@@ -51,14 +51,8 @@ else if (quote is not null)
 
             <!-- Line Items -->
             <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">Products / Line Items</h6>
-                    @if (quote.Status == "Draft")
-                    {
-                        <button class="btn btn-sm btn-outline-primary" @onclick="ToggleAddItem">
-                            @(showLineItemForm ? "Cancel" : "+ Add Product")
-                        </button>
-                    }
+                <div class="card-header">
+                    <h6 class="mb-0">Line Items</h6>
                 </div>
 
                 @if (showLineItemForm && quote.Status == "Draft")
@@ -66,8 +60,8 @@ else if (quote is not null)
                     <div class="card-body border-bottom">
                         <div class="row g-2 mb-2">
                             <div class="col-md-6">
-                                <label class="form-label form-label-sm">Product</label>
-                                <ProductCombobox Value="_liProduct" ValueChanged="OnProductSelected" />
+                                <label class="form-label form-label-sm">Product / Service</label>
+                                <CatalogCombobox Value="_liCatalogItem" ValueChanged="OnCatalogItemSelected" />
                             </div>
                                 <div class="col-md-2">
                                     <label class="form-label form-label-sm">Qty</label>
@@ -88,10 +82,13 @@ else if (quote is not null)
                                 <div class="text-muted small mb-2">Line total: @quote.Currency @lineTotal.ToString("F2")</div>
                             }
                             @if (!string.IsNullOrEmpty(liError)) { <div class="text-danger small mb-1">@liError</div> }
-                            <button class="btn btn-sm btn-primary" @onclick="AddLineItem" disabled="@(liSaving || _liProduct is null)">
-                                @if (liSaving) { <span class="spinner-border spinner-border-sm me-1"></span> }
-                                Add to Quote
-                            </button>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-primary" @onclick="AddLineItem" disabled="@(liSaving || _liCatalogItem is null)">
+                                    @if (liSaving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                    Add to Quote
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleAddItem">Cancel</button>
+                            </div>
                     </div>
                 }
 
@@ -99,26 +96,73 @@ else if (quote is not null)
                     <table class="table table-sm mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>Product</th>
+                                <th>Item</th>
                                 <th class="text-end">Qty</th>
                                 <th class="text-end">Unit Price</th>
-                                <th class="text-end">Discount</th>
+                                <th class="text-end">Discount %</th>
                                 <th class="text-end">Line Total</th>
+                                @if (quote.Status == "Draft") { <th></th> }
                             </tr>
                         </thead>
                         <tbody>
                             @if (!quote.LineItems.Any())
                             {
-                                <tr><td colspan="5" class="text-center text-muted py-3">No products added yet.</td></tr>
+                                <tr><td colspan="6" class="text-center text-muted py-3">No items added yet.</td></tr>
                             }
                             @foreach (var l in quote.LineItems)
                             {
+                                @if (_editingLineItemId == l.Id && quote.Status == "Draft")
+                                {
+                                    <tr class="table-warning">
+                                        <td>
+                                            @l.ItemName
+                                            @if (l.ItemType == "Service") { <span class="badge bg-info text-dark ms-1" style="font-size:9px">Service</span> }
+                                            else { <span class="badge bg-success ms-1" style="font-size:9px">Product</span> }
+                                        </td>
+                                        <td class="text-end" style="width:80px">
+                                            <input class="form-control form-control-sm text-end" type="number" min="1" @bind="_editQty" style="width:70px" />
+                                        </td>
+                                        <td class="text-end" style="width:110px">
+                                            <input class="form-control form-control-sm text-end" type="number" step="0.01" @bind="_editUnitPrice" style="width:90px" />
+                                        </td>
+                                        <td class="text-end" style="width:110px">
+                                            <input class="form-control form-control-sm text-end" type="number" step="0.01" min="0" max="100" @bind="_editDiscount" style="width:90px" />
+                                        </td>
+                                        <td class="text-end fw-semibold">@((_editUnitPrice * _editQty * (1 - _editDiscount / 100m)).ToString("F2"))</td>
+                                        <td class="text-end" style="white-space:nowrap">
+                                            <button class="btn btn-success btn-sm py-0 px-1 me-1" @onclick="() => SaveLineItemEdit(l.Id)" disabled="@_editSaving" title="Save">✓</button>
+                                            <button class="btn btn-outline-secondary btn-sm py-0 px-1" @onclick="CancelLineItemEdit" title="Cancel">✕</button>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td>
+                                            @l.ItemName
+                                            @if (l.ItemType == "Service") { <span class="badge bg-info text-dark ms-1" style="font-size:9px">Service</span> }
+                                            else if (l.ItemType == "Product") { <span class="badge bg-success ms-1" style="font-size:9px">Product</span> }
+                                        </td>
+                                        <td class="text-end">@l.Quantity</td>
+                                        <td class="text-end">@l.UnitPrice.ToString("F2")</td>
+                                        <td class="text-end">@(l.DiscountPercent > 0 ? $"{l.DiscountPercent}%" : "-")</td>
+                                        <td class="text-end fw-semibold">@l.LineTotal.ToString("F2")</td>
+                                        @if (quote.Status == "Draft")
+                                        {
+                                            <td class="text-end" style="white-space:nowrap">
+                                                <button class="btn btn-link btn-sm p-0 me-2 text-secondary" @onclick="() => StartLineItemEdit(l)" title="Edit">✎</button>
+                                                <button class="btn btn-link btn-sm p-0 text-danger" @onclick="() => DeleteLineItem(l.Id)" title="Remove">✕</button>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            }
+                            @if (quote.Status == "Draft" && !showLineItemForm)
+                            {
                                 <tr>
-                                    <td>@l.ProductName</td>
-                                    <td class="text-end">@l.Quantity</td>
-                                    <td class="text-end">@l.UnitPrice.ToString("F2")</td>
-                                    <td class="text-end">@(l.DiscountPercent > 0 ? $"{l.DiscountPercent}%" : "-")</td>
-                                    <td class="text-end fw-semibold">@l.LineTotal.ToString("F2")</td>
+                                    <td colspan="6">
+                                        <button class="btn btn-link btn-sm p-0" @onclick="ToggleAddItem">+ Add line item</button>
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -126,24 +170,65 @@ else if (quote is not null)
                         {
                             <tfoot class="table-light">
                                 <tr>
-                                    <td colspan="4" class="text-end text-muted">Subtotal</td>
+                                    <td colspan="@(quote.Status == "Draft" ? 5 : 4)" class="text-end text-muted">Subtotal</td>
                                     <td class="text-end">@quote.SubTotal.ToString("F2")</td>
                                 </tr>
                                 @if (quote.DiscountTotal > 0)
                                 {
                                     <tr>
-                                        <td colspan="4" class="text-end text-muted">Discount</td>
-                                        <td class="text-end text-muted">-@quote.DiscountTotal.ToString("F2")</td>
+                                        <td colspan="@(quote.Status == "Draft" ? 5 : 4)" class="text-end text-muted">Item Discounts</td>
+                                        <td class="text-end text-danger">-@quote.DiscountTotal.ToString("F2")</td>
                                     </tr>
                                 }
                                 <tr>
-                                    <td colspan="4" class="text-end text-muted">Net Total</td>
+                                    <td colspan="@(quote.Status == "Draft" ? 5 : 4)" class="text-end text-muted">Net Total</td>
                                     <td class="text-end">@quote.TotalAmount.ToString("F2")</td>
+                                </tr>
+                                @if (quote.Status == "Draft" || quote.QuoteDiscountPercent > 0)
+                                {
+                                    <tr>
+                                        <td colspan="@(quote.Status == "Draft" ? 5 : 4)" class="text-end text-muted">
+                                            Quote Discount
+                                            @if (quote.Status == "Draft")
+                                            {
+                                                @if (_editingQuoteDiscount)
+                                                {
+                                                    <span class="ms-2">
+                                                        <input class="form-control form-control-sm d-inline-block text-end" type="number" step="0.01" min="0" max="100"
+                                                               @bind="_quoteDiscountInput" style="width:80px;vertical-align:middle" />
+                                                        <span class="text-muted small">%</span>
+                                                        <button class="btn btn-success btn-sm py-0 px-1 ms-1" @onclick="SaveQuoteDiscount" disabled="@_discountSaving">✓</button>
+                                                        <button class="btn btn-outline-secondary btn-sm py-0 px-1 ms-1" @onclick="() => _editingQuoteDiscount = false">✕</button>
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <button class="btn btn-link btn-sm p-0 ms-2" style="font-size:11px;vertical-align:baseline" @onclick="StartQuoteDiscountEdit">
+                                                        @(quote.QuoteDiscountPercent > 0 ? $"{quote.QuoteDiscountPercent:0.##}% – Edit" : "Add")
+                                                    </button>
+                                                    @if (quote.QuoteDiscountPercent > 0)
+                                                    {
+                                                        <button class="btn btn-link btn-sm text-danger p-0 ms-1" style="font-size:11px;vertical-align:baseline"
+                                                                @onclick="ClearQuoteDiscount" disabled="@_discountSaving">Remove</button>
+                                                    }
+                                                }
+                                            }
+                                            else if (quote.QuoteDiscountPercent > 0)
+                                            {
+                                                <span class="text-muted small ms-1">(@quote.QuoteDiscountPercent.ToString("0.##")%)</span>
+                                            }
+                                        </td>
+                                        <td class="text-end text-danger">@(quote.QuoteDiscountAmount > 0 ? $"-{quote.QuoteDiscountAmount:F2}" : "-")</td>
+                                    </tr>
+                                }
+                                <tr>
+                                    <td colspan="@(quote.Status == "Draft" ? 5 : 4)" class="text-end text-muted">Taxable Amount</td>
+                                    <td class="text-end">@quote.TaxableAmount.ToString("F2")</td>
                                 </tr>
                                 @if (quote.TaxRatePercent > 0)
                                 {
                                     <tr>
-                                        <td colspan="4" class="text-end text-muted">
+                                        <td colspan="@(quote.Status == "Draft" ? 5 : 4)" class="text-end text-muted">
                                             @quote.TaxRateName (@quote.TaxRatePercent.ToString("0.##")%)
                                             @if (quote.Status == "Draft")
                                             {
@@ -156,7 +241,7 @@ else if (quote is not null)
                                     </tr>
                                 }
                                 <tr class="fw-bold">
-                                    <td colspan="4" class="text-end">Grand Total</td>
+                                    <td colspan="@(quote.Status == "Draft" ? 5 : 4)" class="text-end">Grand Total</td>
                                     <td class="text-end text-primary">@quote.GrandTotal.ToString("F2") @quote.Currency</td>
                                 </tr>
                             </tfoot>
@@ -229,8 +314,26 @@ else if (quote is not null)
                             <span class="small">@quote.LineItems.Count</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted small">Net Total</span>
-                            <span class="small">@quote.TotalAmount.ToString("F2") @quote.Currency</span>
+                            <span class="text-muted small">Subtotal</span>
+                            <span class="small">@quote.SubTotal.ToString("F2") @quote.Currency</span>
+                        </div>
+                        @if (quote.DiscountTotal > 0)
+                        {
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted small">Item Discounts</span>
+                                <span class="small text-danger">-@quote.DiscountTotal.ToString("F2")</span>
+                            </div>
+                        }
+                        @if (quote.QuoteDiscountPercent > 0)
+                        {
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted small">Quote Discount (@quote.QuoteDiscountPercent.ToString("0.##")%)</span>
+                                <span class="small text-danger">-@quote.QuoteDiscountAmount.ToString("F2")</span>
+                            </div>
+                        }
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted small">Taxable Amount</span>
+                            <span class="small">@quote.TaxableAmount.ToString("F2") @quote.Currency</span>
                         </div>
                         @if (quote.TaxRatePercent > 0)
                         {
@@ -275,7 +378,7 @@ else if (quote is not null)
                 <table class="table table-sm table-bordered mb-0">
                     <thead class="table-dark">
                         <tr>
-                            <th>Product</th>
+                            <th>Item</th>
                             <th class="text-end" style="width:60px">Qty</th>
                             <th class="text-end" style="width:110px">Unit Price</th>
                             <th class="text-end" style="width:90px">Discount</th>
@@ -285,12 +388,12 @@ else if (quote is not null)
                     <tbody>
                         @if (!quote.LineItems.Any())
                         {
-                            <tr><td colspan="5" class="text-center text-muted py-3">No products added.</td></tr>
+                            <tr><td colspan="5" class="text-center text-muted py-3">No items added.</td></tr>
                         }
                         @foreach (var l in quote.LineItems)
                         {
                             <tr>
-                                <td>@l.ProductName</td>
+                                <td>@l.ItemName</td>
                                 <td class="text-end">@l.Quantity</td>
                                 <td class="text-end">@l.UnitPrice.ToString("F2")</td>
                                 <td class="text-end">@(l.DiscountPercent > 0 ? $"{l.DiscountPercent:0.##}%" : "—")</td>
@@ -308,7 +411,7 @@ else if (quote is not null)
                             @if (quote.DiscountTotal > 0)
                             {
                                 <tr class="table-light">
-                                    <td colspan="4" class="text-end text-muted small">Discount</td>
+                                    <td colspan="4" class="text-end text-muted small">Item Discounts</td>
                                     <td class="text-end text-danger">−@quote.DiscountTotal.ToString("F2")</td>
                                 </tr>
                             }
@@ -316,6 +419,17 @@ else if (quote is not null)
                                 <td colspan="4" class="text-end text-muted small">Net Total</td>
                                 <td class="text-end">@quote.TotalAmount.ToString("F2")</td>
                             </tr>
+                            @if (quote.QuoteDiscountPercent > 0)
+                            {
+                                <tr class="table-light">
+                                    <td colspan="4" class="text-end text-muted small">Quote Discount (@quote.QuoteDiscountPercent.ToString("0.##")%)</td>
+                                    <td class="text-end text-danger">−@quote.QuoteDiscountAmount.ToString("F2")</td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td colspan="4" class="text-end text-muted small">Taxable Amount</td>
+                                    <td class="text-end">@quote.TaxableAmount.ToString("F2")</td>
+                                </tr>
+                            }
                             @if (quote.TaxRatePercent > 0)
                             {
                                 <tr class="table-light">
@@ -367,7 +481,7 @@ else if (quote is not null)
         <table class="qprint-table">
             <thead>
                 <tr>
-                    <th>Product</th>
+                    <th>Item</th>
                     <th class="text-end">Qty</th>
                     <th class="text-end">Unit Price</th>
                     <th class="text-end">Discount</th>
@@ -382,7 +496,7 @@ else if (quote is not null)
                 @foreach (var l in quote.LineItems)
                 {
                     <tr>
-                        <td>@l.ProductName</td>
+                        <td>@l.ItemName</td>
                         <td class="text-end">@l.Quantity</td>
                         <td class="text-end">@l.UnitPrice.ToString("F2")</td>
                         <td class="text-end">@(l.DiscountPercent > 0 ? $"{l.DiscountPercent}%" : "—")</td>
@@ -394,8 +508,15 @@ else if (quote is not null)
                 @if (quote.DiscountTotal > 0)
                 {
                     <tr>
-                        <td colspan="4" class="text-end" style="color:#6B7280">Discount</td>
+                        <td colspan="4" class="text-end" style="color:#6B7280">Item Discounts</td>
                         <td class="text-end" style="color:#6B7280">-@quote.DiscountTotal.ToString("F2")</td>
+                    </tr>
+                }
+                @if (quote.QuoteDiscountPercent > 0)
+                {
+                    <tr>
+                        <td colspan="4" class="text-end" style="color:#6B7280">Quote Discount (@quote.QuoteDiscountPercent.ToString("0.##")%)</td>
+                        <td class="text-end" style="color:#6B7280">-@quote.QuoteDiscountAmount.ToString("F2")</td>
                     </tr>
                 }
                 @if (quote.TaxRatePercent > 0)
@@ -489,14 +610,26 @@ else if (quote is not null)
     private OrderDetailDto? order;
     private string? error;
 
-    // Line item form
+    // Add line item form
     private bool showLineItemForm;
-    private ProductDto? _liProduct;
+    private CatalogItemDto? _liCatalogItem;
     private int liQuantity = 1;
     private decimal liUnitPrice;
     private decimal liDiscount;
     private bool liSaving;
     private string? liError;
+
+    // Inline line item edit
+    private Guid? _editingLineItemId;
+    private int _editQty = 1;
+    private decimal _editUnitPrice;
+    private decimal _editDiscount;
+    private bool _editSaving;
+
+    // Quote-level discount
+    private bool _editingQuoteDiscount;
+    private decimal _quoteDiscountInput;
+    private bool _discountSaving;
 
     // Actions
     private bool actionSaving;
@@ -524,19 +657,19 @@ else if (quote is not null)
     private void ToggleAddItem()
     {
         showLineItemForm = !showLineItemForm;
-        if (!showLineItemForm) { _liProduct = null; liQuantity = 1; liUnitPrice = 0; liDiscount = 0; }
+        if (!showLineItemForm) { _liCatalogItem = null; liQuantity = 1; liUnitPrice = 0; liDiscount = 0; }
     }
 
-    private void OnProductSelected(ProductDto? p)
+    private void OnCatalogItemSelected(CatalogItemDto? item)
     {
-        _liProduct = p;
-        liUnitPrice = p?.Price ?? 0;
+        _liCatalogItem = item;
+        liUnitPrice = item?.Price ?? 0;
     }
 
     private async Task AddLineItem()
     {
         liError = null;
-        if (_liProduct is null) { liError = "Please select a product."; return; }
+        if (_liCatalogItem is null) { liError = "Please select an item."; return; }
         if (liQuantity <= 0) { liError = "Quantity must be > 0."; return; }
         if (liUnitPrice <= 0) { liError = "Unit price must be > 0."; return; }
 
@@ -545,18 +678,79 @@ else if (quote is not null)
         {
             var resp = await Api.AddLineItemAsync(Id, new
             {
-                ProductId = _liProduct.Id, ProductName = _liProduct.Name,
+                CatalogItemId = _liCatalogItem.Id, ItemName = _liCatalogItem.Name,
+                ItemType = _liCatalogItem.Type,
                 Quantity = liQuantity, UnitPrice = liUnitPrice, DiscountPercent = liDiscount
             });
             if (resp.IsSuccessStatusCode)
             {
-                showLineItemForm = false;
-                _liProduct = null; liQuantity = 1; liUnitPrice = 0; liDiscount = 0;
+                _liCatalogItem = null; liQuantity = 1; liUnitPrice = 0; liDiscount = 0;
                 await Load();
             }
             else liError = await resp.Content.ReadAsStringAsync();
         }
         finally { liSaving = false; }
+    }
+
+    private void StartLineItemEdit(QuoteLineItemDto l)
+    {
+        _editingLineItemId = l.Id;
+        _editQty = l.Quantity;
+        _editUnitPrice = l.UnitPrice;
+        _editDiscount = l.DiscountPercent;
+    }
+
+    private void CancelLineItemEdit()
+    {
+        _editingLineItemId = null;
+    }
+
+    private async Task SaveLineItemEdit(Guid lineItemId)
+    {
+        _editSaving = true;
+        try
+        {
+            var resp = await Api.UpdateLineItemAsync(Id, lineItemId, new
+            {
+                Quantity = _editQty, UnitPrice = _editUnitPrice, DiscountPercent = _editDiscount
+            });
+            if (resp.IsSuccessStatusCode) { _editingLineItemId = null; await Load(); }
+        }
+        finally { _editSaving = false; }
+    }
+
+    private async Task DeleteLineItem(Guid lineItemId)
+    {
+        var resp = await Api.RemoveLineItemAsync(Id, lineItemId);
+        if (resp.IsSuccessStatusCode) await Load();
+    }
+
+    private void StartQuoteDiscountEdit()
+    {
+        _quoteDiscountInput = quote?.QuoteDiscountPercent ?? 0;
+        _editingQuoteDiscount = true;
+    }
+
+    private async Task SaveQuoteDiscount()
+    {
+        _discountSaving = true;
+        try
+        {
+            var resp = await Api.SetQuoteDiscountAsync(Id, _quoteDiscountInput);
+            if (resp.IsSuccessStatusCode) { _editingQuoteDiscount = false; await Load(); }
+        }
+        finally { _discountSaving = false; }
+    }
+
+    private async Task ClearQuoteDiscount()
+    {
+        _discountSaving = true;
+        try
+        {
+            var resp = await Api.RemoveQuoteDiscountAsync(Id);
+            if (resp.IsSuccessStatusCode) await Load();
+        }
+        finally { _discountSaving = false; }
     }
 
     private record SendQuoteResult(bool EmailSent, string? EmailNote);

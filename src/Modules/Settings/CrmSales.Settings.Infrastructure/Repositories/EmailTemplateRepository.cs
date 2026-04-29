@@ -9,7 +9,7 @@ namespace CrmSales.Settings.Infrastructure.Repositories;
 internal sealed class EmailTemplateRepository(SettingsDbContext db) : IEmailTemplateRepository
 {
     public Task<List<EmailTemplate>> GetAllAsync(CancellationToken ct)
-        => db.EmailTemplates.OrderBy(t => t.TemplateType).ToListAsync(ct);
+        => db.EmailTemplates.AsNoTracking().OrderBy(t => t.TemplateType).ToListAsync(ct);
 
     public Task<EmailTemplate?> GetByTypeAsync(EmailTemplateType type, CancellationToken ct)
         => db.EmailTemplates.FirstOrDefaultAsync(t => t.TemplateType == type, ct);

@@ -28,6 +28,45 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> ImportProductsAsync(object rows)
         => _http.PostAsJsonAsync("/api/products/import", rows);
 
+    // ── Services ──────────────────────────────────────────────────────────────
+    public Task<PaginatedResult<ServiceDto>?> GetServicesAsync(string? search = null, bool? isActive = null, int limit = 20, string? cursor = null)
+    {
+        var url = "/api/services";
+        var query = new List<string>();
+        if (!string.IsNullOrEmpty(search)) query.Add($"search={Uri.EscapeDataString(search)}");
+        if (isActive.HasValue) query.Add($"isActive={isActive}");
+        if (limit != 20) query.Add($"limit={limit}");
+        if (!string.IsNullOrEmpty(cursor)) query.Add($"cursor={cursor}");
+        if (query.Count > 0) url += "?" + string.Join("&", query);
+        return _http.GetFromJsonAsync<PaginatedResult<ServiceDto>>(url);
+    }
+
+    public Task<ServiceDto?> GetServiceAsync(Guid id)
+        => _http.GetFromJsonAsync<ServiceDto>($"/api/services/{id}");
+
+    public Task<HttpResponseMessage> CreateServiceAsync(object body)
+        => _http.PostAsJsonAsync("/api/services", body);
+
+    public Task<HttpResponseMessage> UpdateServiceAsync(Guid id, object body)
+        => _http.PutAsJsonAsync($"/api/services/{id}", body);
+
+    public Task<HttpResponseMessage> ImportServicesAsync(object rows)
+        => _http.PostAsJsonAsync("/api/services/import", rows);
+
+    // ── Catalog unified search ─────────────────────────────────────────────────
+    public Task<PaginatedResult<CatalogItemDto>?> SearchCatalogAsync(string? q = null, bool? isActive = null, string? type = null, int limit = 20, string? cursor = null)
+    {
+        var url = "/api/catalog/search";
+        var query = new List<string>();
+        if (!string.IsNullOrEmpty(q)) query.Add($"q={Uri.EscapeDataString(q)}");
+        if (isActive.HasValue) query.Add($"isActive={isActive}");
+        if (!string.IsNullOrEmpty(type)) query.Add($"type={type}");
+        if (limit != 20) query.Add($"limit={limit}");
+        if (!string.IsNullOrEmpty(cursor)) query.Add($"cursor={cursor}");
+        if (query.Count > 0) url += "?" + string.Join("&", query);
+        return _http.GetFromJsonAsync<PaginatedResult<CatalogItemDto>>(url);
+    }
+
     // ── Products ───────────────────────────────────────────────────────────
     public Task<ProductSummaryDto?> GetProductSummaryAsync()
         => _http.GetFromJsonAsync<ProductSummaryDto>("/api/products/summary");
@@ -149,6 +188,18 @@ public class CrmApiClient(HttpClient httpClient)
 
     public Task<HttpResponseMessage> AddLineItemAsync(Guid id, object body)
         => _http.PostAsJsonAsync($"/api/quotes/{id}/line-items", body);
+
+    public Task<HttpResponseMessage> UpdateLineItemAsync(Guid id, Guid lineItemId, object body)
+        => _http.PutAsJsonAsync($"/api/quotes/{id}/line-items/{lineItemId}", body);
+
+    public Task<HttpResponseMessage> RemoveLineItemAsync(Guid id, Guid lineItemId)
+        => _http.DeleteAsync($"/api/quotes/{id}/line-items/{lineItemId}");
+
+    public Task<HttpResponseMessage> SetQuoteDiscountAsync(Guid id, decimal percent)
+        => _http.PutAsJsonAsync($"/api/quotes/{id}/discount", new { Percent = percent });
+
+    public Task<HttpResponseMessage> RemoveQuoteDiscountAsync(Guid id)
+        => _http.DeleteAsync($"/api/quotes/{id}/discount");
 
     public Task<HttpResponseMessage> SendQuoteAsync(Guid id)
         => _http.PostAsync($"/api/quotes/{id}/send", null);
@@ -323,6 +374,13 @@ public record ProductDto(Guid Id, string Name, string? Description, string Sku,
     decimal Price, string Currency, Guid CategoryId, string? CategoryName,
     bool IsActive, int StockQuantity, int ReorderPoint, DateTime CreatedAt, DateTime UpdatedAt);
 
+public record ServiceDto(Guid Id, string Name, string? Description, string ServiceCode,
+    decimal Price, string Currency, Guid CategoryId, string? CategoryName,
+    bool IsActive, string? UnitOfMeasure, int? EstimatedDurationMinutes,
+    DateTime CreatedAt, DateTime UpdatedAt);
+
+public record CatalogItemDto(Guid Id, string Name, decimal Price, string Currency, string Type, bool IsActive);
+
 public record ContactDto(Guid Id, string FirstName, string LastName, string FullName,
     string? Email, string? Phone, string? Company, string? JobTitle, bool IsActive, DateTime CreatedAt);
 
@@ -346,11 +404,12 @@ public record QuoteDto(Guid Id, string QuoteNumber, Guid OpportunityId, string S
 
 public record QuoteDetailDto(Guid Id, string QuoteNumber, Guid OpportunityId, string Status,
     decimal SubTotal, decimal DiscountTotal, decimal TotalAmount,
+    decimal QuoteDiscountPercent, decimal QuoteDiscountAmount, decimal TaxableAmount,
     string? TaxRateName, decimal TaxRatePercent, decimal TaxAmount, decimal GrandTotal,
     string Currency, DateTime? ExpiryDate, string? Notes, List<QuoteLineItemDto> LineItems,
     DateTime CreatedAt, DateTime UpdatedAt);
 
-public record QuoteLineItemDto(Guid Id, Guid ProductId, string ProductName,
+public record QuoteLineItemDto(Guid Id, Guid CatalogItemId, string ItemName, string ItemType,
     int Quantity, decimal UnitPrice, decimal DiscountPercent, decimal LineTotal);
 
 public record OrderDto(Guid Id, string OrderNumber, Guid QuoteId, string Status,
@@ -358,23 +417,27 @@ public record OrderDto(Guid Id, string OrderNumber, Guid QuoteId, string Status,
     DateTime? ShippedAt, DateTime? DeliveredAt);
 
 public record OrderDetailDto(Guid Id, string OrderNumber, Guid QuoteId, string Status,
-    decimal TotalAmount, string? TaxRateName, decimal TaxRatePercent,
+    decimal SubTotal, decimal DiscountTotal, decimal TotalAmount,
+    decimal QuoteDiscountPercent, decimal QuoteDiscountAmount, decimal TaxableAmount,
+    string? TaxRateName, decimal TaxRatePercent,
     decimal TaxAmount, decimal GrandTotal, string Currency,
     string? ShippingAddress, string? Notes,
     List<OrderLineItemDto> LineItems, DateTime CreatedAt,
     DateTime? ShippedAt, DateTime? DeliveredAt);
 
-public record OrderLineItemDto(Guid Id, Guid ProductId, string ProductName,
-    int Quantity, decimal UnitPrice, decimal LineTotal);
+public record OrderLineItemDto(Guid Id, Guid CatalogItemId, string ItemName, string ItemType,
+    int Quantity, decimal UnitPrice, decimal DiscountPercent, decimal LineTotal, decimal DiscountAmount);
 
 public record ContactOrderDto(
     Guid Id, string OrderNumber, Guid QuoteId, string Status,
-    decimal TotalAmount, decimal TaxAmount, decimal GrandTotal, string Currency,
+    decimal SubTotal, decimal DiscountTotal, decimal TotalAmount,
+    decimal QuoteDiscountPercent, decimal QuoteDiscountAmount, decimal TaxableAmount,
+    decimal TaxAmount, decimal GrandTotal, string Currency,
     string? Notes, string? ShippingAddress,
     List<ContactOrderLineItemDto> LineItems,
     DateTime CreatedAt, DateTime? ShippedAt, DateTime? DeliveredAt);
 
-public record ContactOrderLineItemDto(Guid Id, string ProductName, int Quantity, decimal UnitPrice, decimal LineTotal);
+public record ContactOrderLineItemDto(Guid Id, string ItemName, int Quantity, decimal UnitPrice, decimal DiscountPercent, decimal LineTotal, decimal DiscountAmount);
 
 public record UserDto(Guid Id, string Email, string FirstName, string LastName, string FullName, string Role, bool IsActive);
 

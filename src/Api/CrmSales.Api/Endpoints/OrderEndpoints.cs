@@ -1,4 +1,5 @@
 using CrmSales.Api.Auditing;
+using CrmSales.SharedKernel.Catalog;
 using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
 using CrmSales.Contacts.Domain.Repositories;
@@ -67,11 +68,14 @@ public static class OrderEndpoints
             return Results.Ok(orders.Select(o => new
             {
                 o.Id, o.OrderNumber, o.QuoteId,
-                Status = o.Status.ToString(), o.TotalAmount, o.TaxAmount, o.GrandTotal,
+                Status = o.Status.ToString(),
+                o.SubTotal, o.DiscountTotal, o.TotalAmount,
+                o.QuoteDiscountPercent, o.QuoteDiscountAmount, o.TaxableAmount,
+                o.TaxAmount, o.GrandTotal,
                 o.Currency, o.Notes, o.ShippingAddress,
                 LineItems = o.LineItems.Select(l => new
                 {
-                    l.Id, l.ProductName, l.Quantity, l.UnitPrice, l.LineTotal
+                    l.Id, l.ItemName, l.Quantity, l.UnitPrice, l.DiscountPercent, l.LineTotal, l.DiscountAmount
                 }),
                 o.CreatedAt, o.ShippedAt, o.DeliveredAt
             }));
@@ -84,12 +88,15 @@ public static class OrderEndpoints
             {
                 order.Id, order.OrderNumber, order.QuoteId,
                 Status = order.Status.ToString(),
-                order.TotalAmount, order.TaxRateName, order.TaxRatePercent,
+                order.SubTotal, order.DiscountTotal, order.TotalAmount,
+                order.QuoteDiscountPercent, order.QuoteDiscountAmount, order.TaxableAmount,
+                order.TaxRateName, order.TaxRatePercent,
                 order.TaxAmount, order.GrandTotal, order.Currency,
                 order.ShippingAddress, order.Notes,
                 LineItems = order.LineItems.Select(l => new
                 {
-                    l.Id, l.ProductId, l.ProductName, l.Quantity, l.UnitPrice, l.LineTotal
+                    l.Id, l.CatalogItemId, l.ItemName, ItemType = l.ItemType.ToString(),
+                    l.Quantity, l.UnitPrice, l.DiscountPercent, l.LineTotal, l.DiscountAmount
                 }),
                 order.CreatedAt, order.ShippedAt, order.DeliveredAt
             });
@@ -102,12 +109,15 @@ public static class OrderEndpoints
             {
                 order.Id, order.OrderNumber, order.QuoteId,
                 Status = order.Status.ToString(),
-                order.TotalAmount, order.TaxRateName, order.TaxRatePercent,
+                order.SubTotal, order.DiscountTotal, order.TotalAmount,
+                order.QuoteDiscountPercent, order.QuoteDiscountAmount, order.TaxableAmount,
+                order.TaxRateName, order.TaxRatePercent,
                 order.TaxAmount, order.GrandTotal, order.Currency,
                 order.ShippingAddress, order.Notes,
                 LineItems = order.LineItems.Select(l => new
                 {
-                    l.Id, l.ProductId, l.ProductName, l.Quantity, l.UnitPrice, l.LineTotal
+                    l.Id, l.CatalogItemId, l.ItemName, ItemType = l.ItemType.ToString(),
+                    l.Quantity, l.UnitPrice, l.DiscountPercent, l.LineTotal, l.DiscountAmount
                 }),
                 order.CreatedAt, order.ShippedAt, order.DeliveredAt
             });
@@ -277,7 +287,7 @@ public static class OrderEndpoints
 
             foreach (var item in order.LineItems)
             {
-                var product = await productRepo.GetByIdAsync(item.ProductId, ct);
+                var product = await productRepo.GetByIdAsync(item.CatalogItemId, ct);
                 if (product is not null)
                 {
                     product.AdjustStock(-item.Quantity);
@@ -363,7 +373,8 @@ public static class OrderEndpoints
         {
             var order = await repo.GetByIdAsync(id, ct);
             if (order is null) return Results.NotFound();
-            order.AddLineItem(req.ProductId, req.ProductName, req.Quantity, req.UnitPrice);
+            var itemType = Enum.TryParse<CatalogItemType>(req.ItemType, true, out var t) ? t : CatalogItemType.Product;
+            order.AddLineItem(req.CatalogItemId, req.ItemName, req.Quantity, req.UnitPrice, itemType);
             await repo.UpdateAsync(order, ct);
             return Results.Ok(new { order.Id, order.TotalAmount });
         });
@@ -399,5 +410,5 @@ public static class OrderEndpoints
 
 record ShipOrderRequest(string? TrackingInfo);
 record CancelOrderRequest(string Reason);
-record AddOrderLineItemRequest(Guid ProductId, string ProductName, int Quantity, decimal UnitPrice);
+record AddOrderLineItemRequest(Guid CatalogItemId, string ItemName, int Quantity, decimal UnitPrice, string ItemType = "Product");
 record UpdateOrderLineItemRequest(int Quantity, decimal UnitPrice);

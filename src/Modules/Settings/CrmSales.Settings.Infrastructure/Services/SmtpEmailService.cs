@@ -14,10 +14,11 @@ internal sealed class SmtpEmailService(
     public async Task SendAsync(string toEmail, string toName, string subject, string bodyHtml, CancellationToken ct = default)
     {
         var settings = await settingsRepo.GetAsync(ct);
-        if (settings is null)
-            throw new InvalidOperationException("SMTP is not configured. Set it up in Settings → Email Templates.");
-        if (!settings.IsEnabled)
-            throw new InvalidOperationException("SMTP is disabled. Enable it in Settings → Email Templates.");
+        if (settings is null || !settings.IsEnabled)
+        {
+            logger.LogInformation("Email skipped — SMTP is not configured or disabled.");
+            return;
+        }
 
         var plaintextPassword = string.IsNullOrEmpty(settings.Password)
             ? string.Empty

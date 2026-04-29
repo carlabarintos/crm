@@ -211,7 +211,7 @@ else if (contact is not null)
                                                                 @foreach (var item in order.LineItems)
                                                                 {
                                                                     <tr>
-                                                                        <td>@item.ProductName</td>
+                                                                        <td>@item.ItemName</td>
                                                                         <td class="text-center">@item.Quantity</td>
                                                                         <td class="text-end">@item.UnitPrice.ToString("N2")</td>
                                                                         <td class="text-end fw-semibold">@item.LineTotal.ToString("N2") @order.Currency</td>

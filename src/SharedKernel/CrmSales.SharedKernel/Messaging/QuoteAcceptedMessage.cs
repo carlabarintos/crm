@@ -1,10 +1,5 @@
 namespace CrmSales.SharedKernel.Messaging;
 
-/// <summary>
-/// Integration message published to RabbitMQ when a Quote is accepted.
-/// Consumed by the Orders module to auto-create an Order.
-/// Lives in SharedKernel so both Quotes (publisher) and Orders (consumer) share the same contract.
-/// </summary>
 public record QuoteAcceptedMessage(
     Guid QuoteId,
     string QuoteNumber,
@@ -17,10 +12,13 @@ public record QuoteAcceptedMessage(
     bool AutoComplete = false,
     string? TaxRateName = null,
     decimal TaxRatePercent = 0,
-    Guid? ContactId = null);
+    Guid? ContactId = null,
+    decimal QuoteDiscountPercent = 0);
 
 public record QuoteLineItemMessage(
-    Guid ProductId,
-    string ProductName,
+    Guid CatalogItemId,
+    string ItemName,
     int Quantity,
-    decimal UnitPrice);
+    decimal UnitPrice,
+    string ItemType = "Product",
+    decimal DiscountPercent = 0);

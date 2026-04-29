@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using CrmSales.Api.Auditing;
+using CrmSales.SharedKernel.Catalog;
 using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
 using CrmSales.Opportunities.Domain.Entities;
@@ -126,11 +127,13 @@ public static class QuoteEndpoints
                 quote.Id, quote.QuoteNumber, quote.OpportunityId,
                 Status = quote.Status.ToString(),
                 quote.SubTotal, quote.DiscountTotal, quote.TotalAmount,
+                quote.QuoteDiscountPercent, quote.QuoteDiscountAmount, quote.TaxableAmount,
                 quote.TaxRateName, quote.TaxRatePercent, quote.TaxAmount, quote.GrandTotal,
                 quote.Currency, quote.ExpiryDate, quote.Notes,
                 LineItems = quote.LineItems.Select(l => new
                 {
-                    l.Id, l.ProductId, l.ProductName,
+                    l.Id, l.CatalogItemId, l.ItemName,
+                    ItemType = l.ItemType.ToString(),
                     l.Quantity, l.UnitPrice, l.DiscountPercent, l.LineTotal
                 }),
                 quote.CreatedAt, quote.UpdatedAt
@@ -173,9 +176,73 @@ public static class QuoteEndpoints
         {
             var quote = await repo.GetByIdAsync(id, ct);
             if (quote is null) return Results.NotFound();
-            quote.AddLineItem(req.ProductId, req.ProductName, req.Quantity, req.UnitPrice, req.DiscountPercent);
+            var itemType = Enum.TryParse<CatalogItemType>(req.ItemType, true, out var t) ? t : CatalogItemType.Product;
+            quote.AddLineItem(req.CatalogItemId, req.ItemName, req.Quantity, req.UnitPrice, req.DiscountPercent, itemType);
             await repo.UpdateAsync(quote, ct);
             return Results.Ok(new { quote.TotalAmount, quote.TaxAmount, quote.GrandTotal });
+        });
+
+        group.MapPut("/{id:guid}/line-items/{lineItemId:guid}", async (
+            Guid id, Guid lineItemId,
+            [FromBody] UpdateLineItemRequest req,
+            IQuoteRepository repo, CancellationToken ct) =>
+        {
+            var quote = await repo.GetByIdAsync(id, ct);
+            if (quote is null) return Results.NotFound();
+            quote.UpdateLineItem(lineItemId, req.Quantity, req.UnitPrice, req.DiscountPercent);
+            await repo.UpdateAsync(quote, ct);
+            return Results.Ok(new
+            {
+                quote.SubTotal, quote.DiscountTotal, quote.TotalAmount,
+                quote.QuoteDiscountPercent, quote.QuoteDiscountAmount, quote.TaxableAmount,
+                quote.TaxAmount, quote.GrandTotal
+            });
+        });
+
+        group.MapDelete("/{id:guid}/line-items/{lineItemId:guid}", async (
+            Guid id, Guid lineItemId,
+            IQuoteRepository repo, CancellationToken ct) =>
+        {
+            var quote = await repo.GetByIdAsync(id, ct);
+            if (quote is null) return Results.NotFound();
+            quote.RemoveLineItem(lineItemId);
+            await repo.UpdateAsync(quote, ct);
+            return Results.Ok(new
+            {
+                quote.SubTotal, quote.DiscountTotal, quote.TotalAmount,
+                quote.QuoteDiscountPercent, quote.QuoteDiscountAmount, quote.TaxableAmount,
+                quote.TaxAmount, quote.GrandTotal
+            });
+        });
+
+        group.MapPut("/{id:guid}/discount", async (
+            Guid id,
+            [FromBody] SetQuoteDiscountRequest req,
+            IQuoteRepository repo, CancellationToken ct) =>
+        {
+            var quote = await repo.GetByIdAsync(id, ct);
+            if (quote is null) return Results.NotFound();
+            quote.SetQuoteDiscount(req.Percent);
+            await repo.UpdateAsync(quote, ct);
+            return Results.Ok(new
+            {
+                quote.QuoteDiscountPercent, quote.QuoteDiscountAmount, quote.TaxableAmount,
+                quote.TaxAmount, quote.GrandTotal
+            });
+        });
+
+        group.MapDelete("/{id:guid}/discount", async (
+            Guid id, IQuoteRepository repo, CancellationToken ct) =>
+        {
+            var quote = await repo.GetByIdAsync(id, ct);
+            if (quote is null) return Results.NotFound();
+            quote.RemoveQuoteDiscount();
+            await repo.UpdateAsync(quote, ct);
+            return Results.Ok(new
+            {
+                quote.QuoteDiscountPercent, quote.QuoteDiscountAmount, quote.TaxableAmount,
+                quote.TaxAmount, quote.GrandTotal
+            });
         });
 
         group.MapPost("/{id:guid}/send", async (
@@ -289,12 +356,13 @@ public static class QuoteEndpoints
                 quote.Id, quote.QuoteNumber, quote.OpportunityId,
                 quote.GrandTotal, quote.Currency, quote.OwnerId,
                 quote.LineItems
-                    .Select(l => new QuoteLineItemMessage(l.ProductId, l.ProductName, l.Quantity, l.UnitPrice))
+                    .Select(l => new QuoteLineItemMessage(l.CatalogItemId, l.ItemName, l.Quantity, l.UnitPrice, l.ItemType.ToString(), l.DiscountPercent))
                     .ToList(),
                 TenantId: tenantId,
                 TaxRateName: quote.TaxRateName,
                 TaxRatePercent: quote.TaxRatePercent,
-                ContactId: opp?.ContactId));
+                ContactId: opp?.ContactId,
+                QuoteDiscountPercent: quote.QuoteDiscountPercent));
 
             var msg = $"Quote {quote.QuoteNumber} accepted by {actor}";
             await broadcaster.BroadcastAsync(new NotificationEvent(
@@ -371,7 +439,7 @@ public static class QuoteEndpoints
         foreach (var l in quote.LineItems)
         {
             sb.Append("<tr style=\"border-bottom:1px solid #e5e7eb\">");
-            sb.Append($"<td style=\"padding:9px 14px\">{WebUtility.HtmlEncode(l.ProductName)}</td>");
+            sb.Append($"<td style=\"padding:9px 14px\">{WebUtility.HtmlEncode(l.ItemName)}</td>");
             sb.Append($"<td style=\"padding:9px 14px;text-align:right\">{l.Quantity}</td>");
             sb.Append($"<td style=\"padding:9px 14px;text-align:right\">{l.UnitPrice:F2}</td>");
             sb.Append($"<td style=\"padding:9px 14px;text-align:right\">{(l.DiscountPercent > 0 ? $"{l.DiscountPercent:0.##}%" : "—")}</td>");
@@ -383,9 +451,15 @@ public static class QuoteEndpoints
         sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Subtotal</td><td style=\"padding:7px 14px;text-align:right\">{quote.SubTotal:F2}</td></tr>");
 
         if (quote.DiscountTotal > 0)
-            sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Discount</td><td style=\"padding:7px 14px;text-align:right;color:#dc2626\">&#8722;{quote.DiscountTotal:F2}</td></tr>");
+            sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Item Discounts</td><td style=\"padding:7px 14px;text-align:right;color:#dc2626\">&#8722;{quote.DiscountTotal:F2}</td></tr>");
 
         sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Net Total</td><td style=\"padding:7px 14px;text-align:right\">{quote.TotalAmount:F2}</td></tr>");
+
+        if (quote.QuoteDiscountPercent > 0)
+        {
+            sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Quote Discount ({quote.QuoteDiscountPercent:0.##}%)</td><td style=\"padding:7px 14px;text-align:right;color:#dc2626\">&#8722;{quote.QuoteDiscountAmount:F2}</td></tr>");
+            sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">Taxable Amount</td><td style=\"padding:7px 14px;text-align:right\">{quote.TaxableAmount:F2}</td></tr>");
+        }
 
         if (quote.TaxRatePercent > 0)
             sb.Append($"<tr style=\"color:#6b7280\"><td colspan=\"4\" style=\"padding:7px 14px;text-align:right\">{WebUtility.HtmlEncode(quote.TaxRateName ?? "")} ({quote.TaxRatePercent:0.##}%)</td><td style=\"padding:7px 14px;text-align:right\">+{quote.TaxAmount:F2}</td></tr>");
@@ -398,5 +472,7 @@ public static class QuoteEndpoints
 }
 
 record CreateQuoteRequest(Guid OpportunityId, Guid OwnerId, string Currency, DateTime? ExpiryDate, string? Notes);
-record AddLineItemRequest(Guid ProductId, string ProductName, int Quantity, decimal UnitPrice, decimal DiscountPercent = 0);
+record AddLineItemRequest(Guid CatalogItemId, string ItemName, int Quantity, decimal UnitPrice, decimal DiscountPercent = 0, string ItemType = "Product");
+record UpdateLineItemRequest(int Quantity, decimal UnitPrice, decimal DiscountPercent);
+record SetQuoteDiscountRequest(decimal Percent);
 record RejectQuoteRequest(string? Reason);

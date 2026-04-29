@@ -11,10 +11,10 @@ internal sealed class TaxRateRepository(SettingsDbContext dbContext) : ITaxRateR
         await dbContext.TaxRates.FirstOrDefaultAsync(t => t.Id == id, ct);
 
     public async Task<IReadOnlyList<TaxRate>> GetAllAsync(CancellationToken ct = default) =>
-        await dbContext.TaxRates.ToListAsync(ct);
+        await dbContext.TaxRates.AsNoTracking().ToListAsync(ct);
 
     public async Task<IReadOnlyList<TaxRate>> GetActiveAsync(CancellationToken ct = default) =>
-        await dbContext.TaxRates.Where(t => t.IsActive).ToListAsync(ct);
+        await dbContext.TaxRates.AsNoTracking().Where(t => t.IsActive).ToListAsync(ct);
 
     public async Task<TaxRate?> GetDefaultAsync(CancellationToken ct = default) =>
         await dbContext.TaxRates.FirstOrDefaultAsync(t => t.IsDefault, ct);

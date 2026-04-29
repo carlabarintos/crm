@@ -1,0 +1,232 @@
+@page "/services/new"
+@page "/services/{Id:guid}/edit"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>@(Id.HasValue ? "Edit Service" : "New Service")</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/services">Services</a></li>
+        <li class="breadcrumb-item active">@(Id.HasValue ? "Edit" : "New")</li>
+    </ol>
+</nav>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">@(Id.HasValue ? "Edit Service" : "Create Service")</h5></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Name <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="name" placeholder="Service name" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Service Code <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="serviceCode" placeholder="e.g. SVC-001" />
+                    <div class="form-text">Unique identifier, uppercase letters and numbers.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Description</label>
+                    <textarea class="form-control" @bind="description" rows="3" placeholder="Optional description"></textarea>
+                </div>
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label">Price <span class="text-danger">*</span></label>
+                        <input class="form-control" type="number" step="0.01" @bind="price" />
+                    </div>
+                    <div class="col">
+                        <label class="form-label">Currency</label>
+                        <select class="form-select" @bind="currency">
+                            <option>PHP</option>
+                            <option>USD</option>
+                            <option>EUR</option>
+                            <option>GBP</option>
+                            <option>AUD</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Category <span class="text-danger">*</span></label>
+                    <div class="d-flex gap-2 align-items-start">
+                        <div class="flex-grow-1">
+                            <CategoryCombobox @bind-Value="_selectedCategory" />
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                                @onclick="() => showNewCategory = !showNewCategory">
+                            + New
+                        </button>
+                    </div>
+                    @if (showNewCategory)
+                    {
+                        <div class="card mt-2">
+                            <div class="card-body p-2">
+                                <div class="mb-2">
+                                    <input class="form-control form-control-sm" @bind="newCategoryName"
+                                           placeholder="Category name *" />
+                                </div>
+                                <div class="mb-2">
+                                    <input class="form-control form-control-sm" @bind="newCategoryDescription"
+                                           placeholder="Description (optional)" />
+                                </div>
+                                @if (!string.IsNullOrEmpty(newCategoryError))
+                                {
+                                    <div class="text-danger small mb-1">@newCategoryError</div>
+                                }
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-primary btn-sm"
+                                            @onclick="AddCategory" disabled="@newCategorySaving">
+                                        @if (newCategorySaving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                        Save Category
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                                            @onclick="() => showNewCategory = false">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Unit of Measure</label>
+                    <input class="form-control" @bind="unitOfMeasure" placeholder="e.g. Hour, Day, Project" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Estimated Duration (minutes)</label>
+                    <input class="form-control" type="number" @bind="estimatedDurationMinutes" placeholder="e.g. 60" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-danger">@error</div>
+                }
+            </div>
+            <div class="card-footer d-flex gap-2">
+                <button class="btn btn-primary" @onclick="Save" disabled="@saving">
+                    @if (saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    @(Id.HasValue ? "Save Changes" : "Create Service")
+                </button>
+                <a href="/services" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private string name = "";
+    private string serviceCode = "";
+    private string? description;
+    private decimal price;
+    private string currency = "PHP";
+    private string? unitOfMeasure;
+    private int? estimatedDurationMinutes;
+    private CategoryDto? _selectedCategory;
+    private bool saving;
+    private string? error;
+
+    private bool showNewCategory;
+    private string newCategoryName = "";
+    private string? newCategoryDescription;
+    private bool newCategorySaving;
+    private string? newCategoryError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id.HasValue)
+        {
+            var s = await Api.GetServiceAsync(Id.Value);
+            if (s is not null)
+            {
+                name = s.Name;
+                serviceCode = s.ServiceCode;
+                description = s.Description;
+                price = s.Price;
+                currency = s.Currency;
+                unitOfMeasure = s.UnitOfMeasure;
+                estimatedDurationMinutes = s.EstimatedDurationMinutes;
+                var cats = await Api.GetCategoriesAsync();
+                _selectedCategory = cats?.Items.FirstOrDefault(c => c.Id == s.CategoryId);
+            }
+        }
+    }
+
+    private async Task AddCategory()
+    {
+        newCategoryError = null;
+        if (string.IsNullOrWhiteSpace(newCategoryName))
+        { newCategoryError = "Category name is required."; return; }
+
+        newCategorySaving = true;
+        try
+        {
+            var resp = await Api.CreateCategoryAsync(new { Name = newCategoryName, Description = newCategoryDescription });
+            if (resp.IsSuccessStatusCode)
+            {
+                var results = await Api.GetCategoriesAsync(newCategoryName.Trim(), limit: 5);
+                var created = results?.Items.FirstOrDefault(c =>
+                    string.Equals(c.Name, newCategoryName.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (created is not null) _selectedCategory = created;
+                newCategoryName = "";
+                newCategoryDescription = null;
+                showNewCategory = false;
+            }
+            else
+                newCategoryError = await resp.Content.ReadAsStringAsync();
+        }
+        finally { newCategorySaving = false; }
+    }
+
+    private async Task Save()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(serviceCode) || price <= 0)
+        {
+            error = "Name, Service Code and a positive Price are required.";
+            return;
+        }
+        if (_selectedCategory is null)
+        {
+            error = "Please select a category.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            HttpResponseMessage resp;
+            if (Id.HasValue)
+            {
+                resp = await Api.UpdateServiceAsync(Id.Value, new
+                {
+                    Id = Id.Value, Name = name, Description = description,
+                    ServiceCode = serviceCode, Price = price, Currency = currency,
+                    CategoryId = _selectedCategory.Id,
+                    UnitOfMeasure = unitOfMeasure,
+                    EstimatedDurationMinutes = estimatedDurationMinutes
+                });
+            }
+            else
+            {
+                resp = await Api.CreateServiceAsync(new
+                {
+                    Name = name, Description = description,
+                    ServiceCode = serviceCode, Price = price, Currency = currency,
+                    CategoryId = _selectedCategory.Id,
+                    UnitOfMeasure = unitOfMeasure,
+                    EstimatedDurationMinutes = estimatedDurationMinutes
+                });
+            }
+
+            if (resp.IsSuccessStatusCode)
+                Nav.NavigateTo("/services");
+            else
+                error = await resp.Content.ReadAsStringAsync();
+        }
+        finally { saving = false; }
+    }
+}

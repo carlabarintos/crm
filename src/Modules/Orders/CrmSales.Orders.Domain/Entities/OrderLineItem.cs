@@ -1,3 +1,4 @@
+using CrmSales.SharedKernel.Catalog;
 using CrmSales.SharedKernel.Domain;
 
 namespace CrmSales.Orders.Domain.Entities;
@@ -5,23 +6,30 @@ namespace CrmSales.Orders.Domain.Entities;
 public sealed class OrderLineItem : Entity<Guid>
 {
     public Guid OrderId { get; private set; }
-    public Guid ProductId { get; private set; }
-    public string ProductName { get; private set; }
+    public Guid CatalogItemId { get; private set; }
+    public string ItemName { get; private set; }
+    public CatalogItemType ItemType { get; private set; }
     public int Quantity { get; private set; }
     public decimal UnitPrice { get; private set; }
+    public decimal DiscountPercent { get; private set; }
     public decimal LineTotal => Quantity * UnitPrice;
+    public decimal DiscountAmount => LineTotal * (DiscountPercent / 100);
 
-    private OrderLineItem() { ProductName = string.Empty; }
+    private OrderLineItem() { ItemName = string.Empty; }
 
-    internal static OrderLineItem Create(Guid orderId, Guid productId, string productName, int quantity, decimal unitPrice) =>
+    internal static OrderLineItem Create(Guid orderId, Guid catalogItemId, string itemName,
+        int quantity, decimal unitPrice, CatalogItemType itemType = CatalogItemType.Product,
+        decimal discountPercent = 0) =>
         new()
         {
             Id = Guid.NewGuid(),
             OrderId = orderId,
-            ProductId = productId,
-            ProductName = productName.Trim(),
+            CatalogItemId = catalogItemId,
+            ItemName = itemName.Trim(),
+            ItemType = itemType,
             Quantity = quantity,
-            UnitPrice = unitPrice
+            UnitPrice = unitPrice,
+            DiscountPercent = discountPercent
         };
 
     internal void Update(int quantity, decimal unitPrice)

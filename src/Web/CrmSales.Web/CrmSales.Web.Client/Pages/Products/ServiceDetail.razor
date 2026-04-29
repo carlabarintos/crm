@@ -1,0 +1,92 @@
+@page "/services/{Id:guid}"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+
+<PageTitle>@(service?.Name ?? "Service")</PageTitle>
+
+@if (service is null && error is null)
+{
+    <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+}
+else if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (service is not null)
+{
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/services">Services</a></li>
+            <li class="breadcrumb-item active">@service.Name</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">@service.Name</h5>
+                    <span class="badge @(service.IsActive ? "bg-success" : "bg-secondary")">
+                        @(service.IsActive ? "Active" : "Inactive")
+                    </span>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-4">Service Code</dt>
+                        <dd class="col-sm-8"><code>@service.ServiceCode</code></dd>
+
+                        <dt class="col-sm-4">Description</dt>
+                        <dd class="col-sm-8">@(service.Description ?? "-")</dd>
+
+                        <dt class="col-sm-4">Price</dt>
+                        <dd class="col-sm-8 fs-5 fw-bold text-primary">@service.Price.ToString("F2") @service.Currency</dd>
+
+                        <dt class="col-sm-4">Category</dt>
+                        <dd class="col-sm-8">@(service.CategoryName ?? service.CategoryId.ToString())</dd>
+
+                        <dt class="col-sm-4">Unit of Measure</dt>
+                        <dd class="col-sm-8">@(service.UnitOfMeasure ?? "-")</dd>
+
+                        <dt class="col-sm-4">Est. Duration</dt>
+                        <dd class="col-sm-8">
+                            @if (service.EstimatedDurationMinutes.HasValue)
+                            {
+                                @FormatDuration(service.EstimatedDurationMinutes.Value)
+                            }
+                            else { <span>-</span> }
+                        </dd>
+
+                        <dt class="col-sm-4">Created</dt>
+                        <dd class="col-sm-8">@service.CreatedAt.ToString("MMM dd, yyyy")</dd>
+
+                        <dt class="col-sm-4">Updated</dt>
+                        <dd class="col-sm-8">@service.UpdatedAt.ToString("MMM dd, yyyy")</dd>
+                    </dl>
+                </div>
+                <div class="card-footer">
+                    <AuthorizeView Roles="Admin">
+                        <a href="/services/@service.Id/edit" class="btn btn-outline-primary btn-sm me-2">Edit</a>
+                    </AuthorizeView>
+                    <a href="/services" class="btn btn-outline-secondary btn-sm">Back to Services</a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ServiceDto? service;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { service = await Api.GetServiceAsync(Id); }
+        catch { error = "Failed to load service."; }
+    }
+
+    private static string FormatDuration(int minutes) =>
+        minutes >= 60 ? $"{minutes / 60}h {(minutes % 60 > 0 ? $" {minutes % 60}m" : "")}" : $"{minutes}m";
+}

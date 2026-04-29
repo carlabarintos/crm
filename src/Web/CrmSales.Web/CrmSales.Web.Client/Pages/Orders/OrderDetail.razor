@@ -36,9 +36,26 @@ else if (order is not null)
                         <dt class="col-sm-4">Quote</dt>
                         <dd class="col-sm-8"><a href="/quotes/@order.QuoteId">@order.QuoteId.ToString()[..8]…</a></dd>
 
+                        @if (order.DiscountTotal > 0 || order.QuoteDiscountPercent > 0)
+                        {
+                            <dt class="col-sm-4">Subtotal</dt>
+                            <dd class="col-sm-8">@order.SubTotal.ToString("F2") @order.Currency</dd>
+                        }
+                        @if (order.DiscountTotal > 0)
+                        {
+                            <dt class="col-sm-4">Item Discounts</dt>
+                            <dd class="col-sm-8 text-danger">-@order.DiscountTotal.ToString("F2") @order.Currency</dd>
+                        }
                         <dt class="col-sm-4">Net Total</dt>
                         <dd class="col-sm-8">@order.TotalAmount.ToString("F2") @order.Currency</dd>
 
+                        @if (order.QuoteDiscountPercent > 0)
+                        {
+                            <dt class="col-sm-4">Quote Discount (@order.QuoteDiscountPercent.ToString("0.##")%)</dt>
+                            <dd class="col-sm-8 text-danger">-@order.QuoteDiscountAmount.ToString("F2") @order.Currency</dd>
+                            <dt class="col-sm-4">Taxable Amount</dt>
+                            <dd class="col-sm-8">@order.TaxableAmount.ToString("F2") @order.Currency</dd>
+                        }
                         @if (order.TaxRatePercent > 0)
                         {
                             <dt class="col-sm-4">@order.TaxRateName (@order.TaxRatePercent.ToString("0.##")%)</dt>
@@ -74,13 +91,47 @@ else if (order is not null)
             <!-- Line items -->
             <div class="card">
                 <div class="card-header"><h6 class="mb-0">Line Items</h6></div>
+
+                @if (showAddLineItem && order.Status == "Pending")
+                {
+                    <div class="card-body border-bottom">
+                        <div class="row g-2 align-items-end">
+                            <div class="col">
+                                <label class="form-label form-label-sm">Product / Service</label>
+                                <CatalogCombobox Value="_newCatalogItem" ValueChanged="OnAddCatalogItemSelected" />
+                            </div>
+                            <div class="col-auto" style="width:90px">
+                                <label class="form-label form-label-sm">Qty</label>
+                                <input class="form-control form-control-sm text-end" type="number" min="1" @bind="newQty" />
+                            </div>
+                            <div class="col-auto" style="width:110px">
+                                <label class="form-label form-label-sm">Unit Price</label>
+                                <input class="form-control form-control-sm text-end" type="number" step="0.01" @bind="newUnitPrice" />
+                            </div>
+                            <div class="col-auto d-flex align-items-end gap-1">
+                                <button class="btn btn-success btn-sm" @onclick="AddLineItem" disabled="@(lineItemSaving || _newCatalogItem is null)">
+                                    @if (lineItemSaving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                    Add
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="CancelAdd">Cancel</button>
+                            </div>
+                        </div>
+                        @if (newUnitPrice > 0 && newQty > 0)
+                        {
+                            <div class="text-muted small mt-1">Line total: @((newQty * newUnitPrice).ToString("F2"))</div>
+                        }
+                        @if (!string.IsNullOrEmpty(lineItemError)) { <div class="text-danger small mt-1">@lineItemError</div> }
+                    </div>
+                }
+
                 <div class="table-responsive">
                     <table class="table table-sm mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>Product</th>
+                                <th>Item</th>
                                 <th class="text-end">Qty</th>
                                 <th class="text-end">Unit Price</th>
+                                <th class="text-end">Discount %</th>
                                 <th class="text-end">Line Total</th>
                                 @if (order.Status == "Pending") { <th></th> }
                             </tr>
@@ -88,21 +139,22 @@ else if (order is not null)
                         <tbody>
                             @if (!order.LineItems.Any())
                             {
-                                <tr><td colspan="5" class="text-center text-muted py-3">No line items on this order.</td></tr>
+                                <tr><td colspan="6" class="text-center text-muted py-3">No line items on this order.</td></tr>
                             }
                             @foreach (var l in order.LineItems)
                             {
                                 @if (editingLineItemId == l.Id)
                                 {
                                     <tr class="table-warning">
-                                        <td>@l.ProductName</td>
+                                        <td>@l.ItemName</td>
                                         <td class="text-end" style="width:90px">
                                             <input class="form-control form-control-sm text-end" type="number" min="1" @bind="editQty" />
                                         </td>
                                         <td class="text-end" style="width:110px">
                                             <input class="form-control form-control-sm text-end" type="number" step="0.01" @bind="editUnitPrice" />
                                         </td>
-                                        <td class="text-end fw-semibold">@((editQty * editUnitPrice).ToString("F2"))</td>
+                                        <td class="text-end text-muted small">@l.DiscountPercent.ToString("0.##")%</td>
+                                        <td class="text-end fw-semibold">@((editQty * editUnitPrice * (1 - l.DiscountPercent / 100m)).ToString("F2"))</td>
                                         <td class="text-end text-nowrap">
                                             <button class="btn btn-success btn-sm py-0 px-1 me-1" @onclick="() => SaveEdit(l.Id)" disabled="@lineItemSaving">✓</button>
                                             <button class="btn btn-outline-secondary btn-sm py-0 px-1" @onclick="CancelEdit">✕</button>
@@ -112,10 +164,15 @@ else if (order is not null)
                                 else
                                 {
                                     <tr>
-                                        <td>@l.ProductName</td>
+                                        <td>
+                                            @l.ItemName
+                                            @if (l.ItemType == "Service") { <span class="badge bg-info text-dark ms-1" style="font-size:9px">Service</span> }
+                                            else if (l.ItemType == "Product") { <span class="badge bg-success ms-1" style="font-size:9px">Product</span> }
+                                        </td>
                                         <td class="text-end">@l.Quantity</td>
                                         <td class="text-end">@l.UnitPrice.ToString("F2")</td>
-                                        <td class="text-end fw-semibold">@l.LineTotal.ToString("F2")</td>
+                                        <td class="text-end">@(l.DiscountPercent > 0 ? $"{l.DiscountPercent:0.##}%" : "-")</td>
+                                        <td class="text-end fw-semibold">@((l.LineTotal - l.DiscountAmount).ToString("F2"))</td>
                                         @if (order.Status == "Pending")
                                         {
                                             <td class="text-end text-nowrap">
@@ -126,50 +183,60 @@ else if (order is not null)
                                     </tr>
                                 }
                             }
-                            @if (order.Status == "Pending")
+                            @if (order.Status == "Pending" && !showAddLineItem)
                             {
-                                @if (showAddLineItem)
-                                {
-                                    <tr class="table-light">
-                                        <td style="min-width:220px">
-                                            <ProductCombobox Value="_newProduct" ValueChanged="OnAddProductSelected" />
-                                            @if (addStockWarning is not null)
-                                            {
-                                                <div class="small @(addStockWarning.StartsWith("⚠") ? "text-warning" : "text-danger")">@addStockWarning</div>
-                                            }
-                                        </td>
-                                        <td style="width:80px"><input class="form-control form-control-sm text-end" type="number" min="1" @bind="newQty" @bind:after="CheckAddStock" /></td>
-                                        <td style="width:100px"><input class="form-control form-control-sm text-end" type="number" step="0.01" @bind="newUnitPrice" /></td>
-                                        <td class="text-end fw-semibold text-muted">@((newQty * newUnitPrice).ToString("F2"))</td>
-                                        <td class="text-end text-nowrap">
-                                            <button class="btn btn-success btn-sm py-0 px-1 me-1" @onclick="AddLineItem" disabled="@lineItemSaving">✓</button>
-                                            <button class="btn btn-outline-secondary btn-sm py-0 px-1" @onclick="CancelAdd">✕</button>
-                                        </td>
-                                    </tr>
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td colspan="5">
-                                            <button class="btn btn-link btn-sm p-0" @onclick="() => showAddLineItem = true">+ Add line item</button>
-                                        </td>
-                                    </tr>
-                                }
+                                <tr>
+                                    <td colspan="6">
+                                        <button class="btn btn-link btn-sm p-0" @onclick="() => showAddLineItem = true">+ Add line item</button>
+                                    </td>
+                                </tr>
                             }
                         </tbody>
                         <tfoot class="table-light">
+                            @{ var cols = order.Status == "Pending" ? 5 : 4; }
+                            @if (order.DiscountTotal > 0)
+                            {
+                                <tr>
+                                    <td colspan="@cols" class="text-end text-muted">Subtotal</td>
+                                    <td class="text-end">@order.SubTotal.ToString("F2")</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="@cols" class="text-end text-muted">Item Discounts</td>
+                                    <td class="text-end text-danger">-@order.DiscountTotal.ToString("F2")</td>
+                                </tr>
+                            }
+                            @if (order.DiscountTotal > 0 || order.QuoteDiscountPercent > 0 || order.TaxRatePercent > 0)
+                            {
+                                <tr>
+                                    <td colspan="@cols" class="text-end text-muted">Net Total</td>
+                                    <td class="text-end">@order.TotalAmount.ToString("F2")</td>
+                                </tr>
+                            }
+                            @if (order.QuoteDiscountPercent > 0)
+                            {
+                                <tr>
+                                    <td colspan="@cols" class="text-end text-muted">Quote Discount (@order.QuoteDiscountPercent.ToString("0.##")%)</td>
+                                    <td class="text-end text-danger">-@order.QuoteDiscountAmount.ToString("F2")</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="@cols" class="text-end text-muted">Taxable Amount</td>
+                                    <td class="text-end">@order.TaxableAmount.ToString("F2")</td>
+                                </tr>
+                            }
+                            @if (order.TaxRatePercent > 0)
+                            {
+                                <tr>
+                                    <td colspan="@cols" class="text-end text-muted">@order.TaxRateName (@order.TaxRatePercent.ToString("0.##")%)</td>
+                                    <td class="text-end text-muted">+@order.TaxAmount.ToString("F2")</td>
+                                </tr>
+                            }
                             <tr class="fw-bold">
-                                <td colspan="@(order.Status == "Pending" ? 3 : 3)" class="text-end">Total</td>
-                                <td class="text-end text-primary">@order.TotalAmount.ToString("F2") @order.Currency</td>
-                                @if (order.Status == "Pending") { <td></td> }
+                                <td colspan="@cols" class="text-end">Grand Total</td>
+                                <td class="text-end text-primary">@order.GrandTotal.ToString("F2") @order.Currency</td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
-                @if (!string.IsNullOrEmpty(lineItemError))
-                {
-                    <div class="card-footer text-danger small">@lineItemError</div>
-                }
             </div>
         </div>
 
@@ -252,43 +319,67 @@ else if (order is not null)
                     <table class="table table-sm table-bordered mb-0">
                         <thead class="table-dark">
                             <tr>
-                                <th>Product</th>
+                                <th>Item</th>
                                 <th class="text-end" style="width:60px">Qty</th>
                                 <th class="text-end" style="width:110px">Unit Price</th>
+                                <th class="text-end" style="width:90px">Discount</th>
                                 <th class="text-end" style="width:110px">Line Total</th>
                             </tr>
                         </thead>
                         <tbody>
                             @if (!order.LineItems.Any())
                             {
-                                <tr><td colspan="4" class="text-center text-muted py-3">No line items on this order.</td></tr>
+                                <tr><td colspan="5" class="text-center text-muted py-3">No line items on this order.</td></tr>
                             }
                             @foreach (var l in order.LineItems)
                             {
                                 <tr>
-                                    <td>@l.ProductName</td>
+                                    <td>@l.ItemName</td>
                                     <td class="text-end">@l.Quantity</td>
                                     <td class="text-end">@l.UnitPrice.ToString("F2")</td>
-                                    <td class="text-end fw-semibold">@l.LineTotal.ToString("F2")</td>
+                                    <td class="text-end">@(l.DiscountPercent > 0 ? $"{l.DiscountPercent:0.##}%" : "—")</td>
+                                    <td class="text-end fw-semibold">@((l.LineTotal - l.DiscountAmount).ToString("F2"))</td>
                                 </tr>
                             }
                         </tbody>
                         @if (order.LineItems.Any())
                         {
                             <tfoot>
+                                @if (order.DiscountTotal > 0)
+                                {
+                                    <tr class="table-light">
+                                        <td colspan="4" class="text-end text-muted small">Subtotal</td>
+                                        <td class="text-end">@order.SubTotal.ToString("F2")</td>
+                                    </tr>
+                                    <tr class="table-light">
+                                        <td colspan="4" class="text-end text-muted small">Item Discounts</td>
+                                        <td class="text-end text-danger">−@order.DiscountTotal.ToString("F2")</td>
+                                    </tr>
+                                }
                                 <tr class="table-light">
-                                    <td colspan="3" class="text-end text-muted small">Net Total</td>
+                                    <td colspan="4" class="text-end text-muted small">Net Total</td>
                                     <td class="text-end">@order.TotalAmount.ToString("F2")</td>
                                 </tr>
+                                @if (order.QuoteDiscountPercent > 0)
+                                {
+                                    <tr class="table-light">
+                                        <td colspan="4" class="text-end text-muted small">Quote Discount (@order.QuoteDiscountPercent.ToString("0.##")%)</td>
+                                        <td class="text-end text-danger">−@order.QuoteDiscountAmount.ToString("F2")</td>
+                                    </tr>
+                                    <tr class="table-light">
+                                        <td colspan="4" class="text-end text-muted small">Taxable Amount</td>
+                                        <td class="text-end">@order.TaxableAmount.ToString("F2")</td>
+                                    </tr>
+                                }
                                 @if (order.TaxRatePercent > 0)
                                 {
                                     <tr class="table-light">
-                                        <td colspan="3" class="text-end text-muted small">@order.TaxRateName (@order.TaxRatePercent.ToString("0.##")%)</td>
+                                        <td colspan="4" class="text-end text-muted small">@order.TaxRateName (@order.TaxRatePercent.ToString("0.##")%)</td>
                                         <td class="text-end text-muted">+@order.TaxAmount.ToString("F2")</td>
                                     </tr>
                                 }
                                 <tr class="table-primary fw-bold">
-                                    <td colspan="3" class="text-end">Grand Total (@order.Currency)</td>
+                                    <td colspan="4" class="text-end">Grand Total (@order.Currency)</td>
                                     <td class="text-end fs-6">@order.GrandTotal.ToString("F2")</td>
                                 </tr>
                             </tfoot>
@@ -335,10 +426,9 @@ else if (order is not null)
     private string? lineItemError;
 
     private bool showAddLineItem;
-    private ProductDto? _newProduct;
+    private CatalogItemDto? _newCatalogItem;
     private int newQty = 1;
     private decimal newUnitPrice;
-    private string? addStockWarning;
 
     private Guid? editingLineItemId;
     private int editQty;
@@ -435,46 +525,37 @@ else if (order is not null)
         finally { lineItemSaving = false; }
     }
 
-    private void OnAddProductSelected(ProductDto? p)
+    private void OnAddCatalogItemSelected(CatalogItemDto? item)
     {
-        _newProduct = p;
-        newUnitPrice = p?.Price ?? 0;
-        addStockWarning = null;
-        CheckAddStock();
-    }
-
-    private void CheckAddStock()
-    {
-        addStockWarning = null;
-        if (_newProduct is null) return;
-        if (_newProduct.StockQuantity == 0) addStockWarning = "⚠ Out of stock";
-        else if (newQty > _newProduct.StockQuantity) addStockWarning = $"⚠ Only {_newProduct.StockQuantity} in stock";
+        _newCatalogItem = item;
+        newUnitPrice = item?.Price ?? 0;
     }
 
     private void CancelAdd()
     {
         showAddLineItem = false;
-        _newProduct = null; newQty = 1; newUnitPrice = 0; addStockWarning = null;
+        _newCatalogItem = null; newQty = 1; newUnitPrice = 0;
     }
 
     private async Task AddLineItem()
     {
         lineItemError = null;
-        if (_newProduct is null) { lineItemError = "Please select a product."; return; }
+        if (_newCatalogItem is null) { lineItemError = "Please select an item."; return; }
         if (newQty <= 0) { lineItemError = "Quantity must be positive."; return; }
         lineItemSaving = true;
         try
         {
             var resp = await Api.AddOrderLineItemAsync(Id, new
             {
-                ProductId = _newProduct.Id,
-                ProductName = _newProduct.Name,
+                CatalogItemId = _newCatalogItem.Id,
+                ItemName = _newCatalogItem.Name,
+                ItemType = _newCatalogItem.Type,
                 Quantity = newQty,
                 UnitPrice = newUnitPrice
             });
             if (resp.IsSuccessStatusCode)
             {
-                CancelAdd();
+                _newCatalogItem = null; newQty = 1; newUnitPrice = 0;
                 await Load();
             }
             else lineItemError = await resp.Content.ReadAsStringAsync();

@@ -13,7 +13,7 @@ internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderReposit
             .FirstOrDefaultAsync(o => o.Id == id, ct);
 
     public async Task<IReadOnlyList<Order>> GetAllAsync(CancellationToken ct = default) =>
-        await dbContext.Orders.Include(o => o.LineItems)
+        await dbContext.Orders.AsNoTracking().Include(o => o.LineItems)
             .OrderByDescending(o => o.CreatedAt).ToListAsync(ct);
 
     public async Task<Order?> GetByNumberAsync(string orderNumber, CancellationToken ct = default) =>
@@ -25,16 +25,16 @@ internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderReposit
             .FirstOrDefaultAsync(o => o.QuoteId == quoteId, ct);
 
     public async Task<IReadOnlyList<Order>> GetByCustomerAsync(Guid customerId, CancellationToken ct = default) =>
-        await dbContext.Orders.Include(o => o.LineItems)
+        await dbContext.Orders.AsNoTracking().Include(o => o.LineItems)
             .Where(o => o.CustomerId == customerId)
             .OrderByDescending(o => o.CreatedAt).ToListAsync(ct);
 
     public async Task<IReadOnlyList<Order>> GetByStatusAsync(OrderStatus status, CancellationToken ct = default) =>
-        await dbContext.Orders.Where(o => o.Status == status).ToListAsync(ct);
+        await dbContext.Orders.AsNoTracking().Where(o => o.Status == status).ToListAsync(ct);
 
     public async Task<CursorPaginationResult<Order>> SearchAsync(string? term, OrderStatus? status, int limit, string? cursor, CancellationToken ct = default)
     {
-        var query = dbContext.Orders.AsQueryable();
+        var query = dbContext.Orders.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(term))
             query = query.Where(o => EF.Functions.ILike(o.OrderNumber, $"%{term}%"));
@@ -62,7 +62,7 @@ internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderReposit
 
     public async Task<OrderSummaryData> GetSummaryAsync(int? year = null, int? month = null, CancellationToken ct = default)
     {
-        var filtered = dbContext.Orders.AsQueryable();
+        var filtered = dbContext.Orders.AsNoTracking().AsQueryable();
         if (year.HasValue)  filtered = filtered.Where(o => o.CreatedAt.Year  == year.Value);
         if (month.HasValue) filtered = filtered.Where(o => o.CreatedAt.Month == month.Value);
 
@@ -88,6 +88,7 @@ internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderReposit
 
         // Monthly revenue is always all-time so the endpoint can derive yearly totals and slices
         var monthlyRaw = await dbContext.Orders
+            .AsNoTracking()
             .Where(o => o.Status == OrderStatus.Delivered)
             .Join(dbContext.LineItems, o => o.Id, l => l.OrderId,
                 (o, l) => new { o.CreatedAt.Year, o.CreatedAt.Month, Revenue = l.UnitPrice * l.Quantity })
@@ -97,7 +98,7 @@ internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderReposit
             .ToListAsync(ct);
 
         var currency = await dbContext.Orders
-            .Select(o => o.Currency).FirstOrDefaultAsync(ct) ?? "USD";
+            .AsNoTracking().Select(o => o.Currency).FirstOrDefaultAsync(ct) ?? "USD";
 
         int active = (counts?.Confirmed ?? 0) + (counts?.Processing ?? 0) + (counts?.Shipped ?? 0);
 

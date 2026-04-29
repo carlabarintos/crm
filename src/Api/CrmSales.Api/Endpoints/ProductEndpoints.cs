@@ -2,6 +2,11 @@ using CrmSales.Products.Application.Products.Commands.CreateProduct;
 using CrmSales.Products.Application.Products.Commands.UpdateProduct;
 using CrmSales.Products.Application.Products.Queries.GetProductById;
 using CrmSales.Products.Application.Products.Queries.GetProducts;
+using CrmSales.Products.Application.Services.Commands.CreateService;
+using CrmSales.Products.Application.Services.Commands.UpdateService;
+using CrmSales.Products.Application.Services.DTOs;
+using CrmSales.Products.Application.Services.Queries.GetServiceById;
+using CrmSales.Products.Application.Services.Queries.GetServices;
 using CrmSales.Products.Domain.Entities;
 using CrmSales.Products.Domain.Repositories;
 using CrmSales.SharedKernel;
@@ -16,6 +21,7 @@ record CreateCategoryRequest(string Name, string? Description);
 
 record ImportCategoryRow(string Name, string? Description);
 record ImportProductRow(string Name, string Sku, string? Description, decimal Price, string Currency, int StockQuantity, string? CategoryName);
+record ImportServiceRow(string Name, string ServiceCode, string? Description, decimal Price, string Currency, string? UnitOfMeasure, int? EstimatedDurationMinutes, string? CategoryName);
 record ImportRowError(int Row, string Reason);
 record ImportResult(int Created, int Skipped, List<ImportRowError> Errors);
 
@@ -151,6 +157,135 @@ public static class ProductEndpoints
 
             return Results.Ok(new ImportResult(created, skipped, errors));
         }).RequireAuthorization(p => p.RequireRole("Admin"));
+
+        return app;
+    }
+
+    public static IEndpointRouteBuilder MapServiceEndpoints(this IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/api/services")
+            .WithTags("Services")
+            .RequireAuthorization();
+
+        group.MapGet("/", async (
+            IMessageBus bus,
+            CancellationToken ct,
+            [FromQuery] string? search = null,
+            [FromQuery] bool? isActive = null,
+            [FromQuery] int limit = 20,
+            [FromQuery] string? cursor = null) =>
+        {
+            var result = await bus.InvokeAsync<Result<CursorPaginationResult<ServiceDto>>>(
+                new GetServicesQuery(search, isActive, limit, cursor), ct);
+            return result.IsSuccess ? Results.Ok(result.Value) : Results.Problem(result.Error.Description);
+        });
+
+        group.MapGet("/{id:guid}", async (Guid id, IMessageBus bus, CancellationToken ct) =>
+        {
+            var result = await bus.InvokeAsync<Result<ServiceDto>>(new GetServiceByIdQuery(id), ct);
+            return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error.Description);
+        }).WithName("GetServiceById");
+
+        group.MapPost("/", async (CreateServiceCommand cmd, IMessageBus bus, CancellationToken ct) =>
+        {
+            var result = await bus.InvokeAsync<Result<Guid>>(cmd, ct);
+            return result.IsSuccess
+                ? Results.CreatedAtRoute("GetServiceById", new { id = result.Value }, result.Value)
+                : Results.Problem(result.Error.Description, statusCode: StatusCodes.Status400BadRequest);
+        }).RequireAuthorization(p => p.RequireRole("Admin"));
+
+        group.MapPut("/{id:guid}", async (
+            Guid id,
+            [FromBody] UpdateServiceCommand cmd,
+            IMessageBus bus,
+            CancellationToken ct) =>
+        {
+            if (id != cmd.Id) return Results.BadRequest("ID mismatch.");
+            var result = await bus.InvokeAsync<Result>(cmd, ct);
+            return result.IsSuccess ? Results.NoContent() : Results.Problem(result.Error.Description);
+        }).RequireAuthorization(p => p.RequireRole("Admin"));
+
+        return app;
+    }
+
+    public static IEndpointRouteBuilder MapServiceImportEndpoint(this IEndpointRouteBuilder app)
+    {
+        app.MapPost("/api/services/import", async (
+            List<ImportServiceRow> rows,
+            IServiceRepository serviceRepo,
+            IProductCategoryRepository categoryRepo,
+            CancellationToken ct) =>
+        {
+            const int MaxRows = 200;
+            if (rows.Count > MaxRows)
+                return Results.Problem($"Import limited to {MaxRows} rows.", statusCode: StatusCodes.Status400BadRequest);
+
+            var categories = (await categoryRepo.GetAllAsync(ct))
+                .ToDictionary(c => c.Name.Trim().ToLowerInvariant());
+
+            int created = 0, skipped = 0;
+            var errors = new List<ImportRowError>();
+
+            for (int i = 0; i < rows.Count; i++)
+            {
+                var row = rows[i];
+                var rowNum = i + 2;
+
+                if (string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.ServiceCode))
+                {
+                    errors.Add(new(rowNum, "Name and Service Code are required."));
+                    continue;
+                }
+                if (row.Price <= 0)
+                {
+                    errors.Add(new(rowNum, "Price must be greater than 0."));
+                    continue;
+                }
+
+                // ServiceCode match → skip (protects existing quotes that reference this service)
+                var codeUnique = await serviceRepo.IsServiceCodeUniqueAsync(row.ServiceCode, ct: ct);
+                if (!codeUnique)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                // Resolve category by name
+                Guid categoryId;
+                if (!string.IsNullOrWhiteSpace(row.CategoryName))
+                {
+                    var catKey = row.CategoryName.Trim().ToLowerInvariant();
+                    if (!categories.TryGetValue(catKey, out var cat))
+                    {
+                        cat = ProductCategory.Create(row.CategoryName.Trim());
+                        await categoryRepo.AddAsync(cat, ct);
+                        categories[catKey] = cat;
+                    }
+                    categoryId = cat.Id;
+                }
+                else
+                {
+                    const string defaultName = "Uncategorized";
+                    var defaultKey = defaultName.ToLowerInvariant();
+                    if (!categories.TryGetValue(defaultKey, out var defCat))
+                    {
+                        defCat = ProductCategory.Create(defaultName);
+                        await categoryRepo.AddAsync(defCat, ct);
+                        categories[defaultKey] = defCat;
+                    }
+                    categoryId = defCat.Id;
+                }
+
+                var currency = string.IsNullOrWhiteSpace(row.Currency) ? "USD" : row.Currency.Trim().ToUpperInvariant();
+                var service = Service.Create(row.Name.Trim(), row.Description?.Trim(),
+                    row.ServiceCode.Trim(), row.Price, currency, categoryId,
+                    row.UnitOfMeasure?.Trim(), row.EstimatedDurationMinutes);
+                await serviceRepo.AddAsync(service, ct);
+                created++;
+            }
+
+            return Results.Ok(new ImportResult(created, skipped, errors));
+        }).WithTags("Services").RequireAuthorization(p => p.RequireRole("Admin"));
 
         return app;
     }

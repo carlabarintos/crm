@@ -352,11 +352,15 @@ using (var scope = app.Services.CreateScope())
                 await using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"""
                     ALTER TABLE IF EXISTS "{slug}"."Quotes"
-                        ADD COLUMN IF NOT EXISTS "TaxRateName"    varchar(100) NULL,
-                        ADD COLUMN IF NOT EXISTS "TaxRatePercent" numeric(5,2) NOT NULL DEFAULT 0;
+                        ADD COLUMN IF NOT EXISTS "TaxRateName"           varchar(100) NULL,
+                        ADD COLUMN IF NOT EXISTS "TaxRatePercent"        numeric(5,2) NOT NULL DEFAULT 0,
+                        ADD COLUMN IF NOT EXISTS "QuoteDiscountPercent"  numeric(5,2) NOT NULL DEFAULT 0;
                     ALTER TABLE IF EXISTS "{slug}"."Orders"
-                        ADD COLUMN IF NOT EXISTS "TaxRateName"    varchar(100) NULL,
-                        ADD COLUMN IF NOT EXISTS "TaxRatePercent" numeric(5,2) NOT NULL DEFAULT 0;
+                        ADD COLUMN IF NOT EXISTS "TaxRateName"            varchar(100) NULL,
+                        ADD COLUMN IF NOT EXISTS "TaxRatePercent"         numeric(5,2) NOT NULL DEFAULT 0,
+                        ADD COLUMN IF NOT EXISTS "QuoteDiscountPercent"   numeric(5,2) NOT NULL DEFAULT 0;
+                    ALTER TABLE IF EXISTS "{slug}"."OrderLineItems"
+                        ADD COLUMN IF NOT EXISTS "DiscountPercent" numeric(5,2) NOT NULL DEFAULT 0;
                     """;
                 await cmd.ExecuteNonQueryAsync();
             }
@@ -513,6 +517,83 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// ── Migrate Products → CatalogItems (TPH), rename line-item columns ──────────
+{
+    using var scope = app.Services.CreateScope();
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var companySlugs = await masterCtx.Companies.Select(c => c.Slug).ToListAsync();
+
+    if (companySlugs.Count > 0)
+    {
+        var conn = scope.ServiceProvider.GetRequiredService<ProductsDbContext>().Database.GetDbConnection();
+        await conn.OpenAsync();
+        try
+        {
+            foreach (var slug in companySlugs)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '{slug}' AND table_name = 'Products')
+                           AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '{slug}' AND table_name = 'CatalogItems')
+                        THEN
+                            ALTER TABLE "{slug}"."Products" RENAME TO "CatalogItems";
+                        END IF;
+                    END $$;
+                    ALTER TABLE IF EXISTS "{slug}"."CatalogItems"
+                        ADD COLUMN IF NOT EXISTS "Discriminator"              varchar(50)  NOT NULL DEFAULT 'Product',
+                        ADD COLUMN IF NOT EXISTS "ServiceCode"                varchar(50)  NULL,
+                        ADD COLUMN IF NOT EXISTS "UnitOfMeasure"              varchar(50)  NULL,
+                        ADD COLUMN IF NOT EXISTS "EstimatedDurationMinutes"   integer      NULL;
+                    ALTER TABLE IF EXISTS "{slug}"."CatalogItems"
+                        ALTER COLUMN "Sku"           DROP NOT NULL,
+                        ALTER COLUMN "StockQuantity" DROP NOT NULL,
+                        ALTER COLUMN "ReorderPoint"  DROP NOT NULL;
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '{slug}' AND table_name = 'CatalogItems' AND column_name = 'Type')
+                           AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '{slug}' AND table_name = 'CatalogItems' AND column_name = 'Discriminator')
+                        THEN
+                            ALTER TABLE "{slug}"."CatalogItems" RENAME COLUMN "Type" TO "Discriminator";
+                        END IF;
+                    END $$;
+                    CREATE UNIQUE INDEX IF NOT EXISTS "IX_CatalogItems_ServiceCode_{slug}"
+                        ON "{slug}"."CatalogItems"("ServiceCode") WHERE "ServiceCode" IS NOT NULL;
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '{slug}' AND table_name = 'QuoteLineItems' AND column_name = 'ProductId') THEN
+                            ALTER TABLE "{slug}"."QuoteLineItems" RENAME COLUMN "ProductId" TO "CatalogItemId";
+                        END IF;
+                    END $$;
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '{slug}' AND table_name = 'QuoteLineItems' AND column_name = 'ProductName') THEN
+                            ALTER TABLE "{slug}"."QuoteLineItems" RENAME COLUMN "ProductName" TO "ItemName";
+                        END IF;
+                    END $$;
+                    ALTER TABLE IF EXISTS "{slug}"."QuoteLineItems"
+                        ADD COLUMN IF NOT EXISTS "ItemType" varchar(20) NOT NULL DEFAULT 'Product';
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '{slug}' AND table_name = 'OrderLineItems' AND column_name = 'ProductId') THEN
+                            ALTER TABLE "{slug}"."OrderLineItems" RENAME COLUMN "ProductId" TO "CatalogItemId";
+                        END IF;
+                    END $$;
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '{slug}' AND table_name = 'OrderLineItems' AND column_name = 'ProductName') THEN
+                            ALTER TABLE "{slug}"."OrderLineItems" RENAME COLUMN "ProductName" TO "ItemName";
+                        END IF;
+                    END $$;
+                    ALTER TABLE IF EXISTS "{slug}"."OrderLineItems"
+                        ADD COLUMN IF NOT EXISTS "ItemType" varchar(20) NOT NULL DEFAULT 'Product';
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+        finally
+        {
+            if (conn.State == System.Data.ConnectionState.Open)
+                await conn.CloseAsync();
+        }
+    }
+}
+
 // ── Ensure Keycloak realm & OIDC client exist (blocks startup until ready) ───
 {
     using var scope = app.Services.CreateScope();
@@ -556,6 +637,9 @@ api.MapCompanyEndpoints();
 api.MapProductEndpoints();
 api.MapCategoryEndpoints();
 api.MapProductImportEndpoint();
+api.MapServiceEndpoints();
+api.MapServiceImportEndpoint();
+api.MapCatalogEndpoints();
 api.MapUserEndpoints();
 api.MapContactEndpoints();
 api.MapOpportunityEndpoints();

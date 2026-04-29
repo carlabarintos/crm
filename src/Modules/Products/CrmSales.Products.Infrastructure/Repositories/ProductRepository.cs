@@ -12,13 +12,13 @@ internal sealed class ProductRepository(ProductsDbContext dbContext) : IProductR
         await dbContext.Products.FirstOrDefaultAsync(p => p.Id == id, ct);
 
     public async Task<IReadOnlyList<Product>> GetAllAsync(CancellationToken ct = default) =>
-        await dbContext.Products.ToListAsync(ct);
+        await dbContext.Products.AsNoTracking().ToListAsync(ct);
 
     public async Task<Product?> GetBySkuAsync(string sku, CancellationToken ct = default) =>
         await dbContext.Products.FirstOrDefaultAsync(p => p.Sku.Value == sku.ToUpperInvariant(), ct);
 
     public async Task<IReadOnlyList<Product>> GetByCategoryAsync(Guid categoryId, CancellationToken ct = default) =>
-        await dbContext.Products.Where(p => p.CategoryId == categoryId).ToListAsync(ct);
+        await dbContext.Products.AsNoTracking().Where(p => p.CategoryId == categoryId).ToListAsync(ct);
 
     public async Task<bool> IsSkuUniqueAsync(string sku, Guid? excludeProductId = null, CancellationToken ct = default)
     {
@@ -30,7 +30,7 @@ internal sealed class ProductRepository(ProductsDbContext dbContext) : IProductR
 
     public async Task<CursorPaginationResult<Product>> SearchAsync(string? term, bool? isActive, bool lowInventory, int limit, string? cursor, CancellationToken ct = default)
     {
-        var query = dbContext.Products.AsQueryable();
+        var query = dbContext.Products.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(term))
         {
@@ -64,6 +64,7 @@ internal sealed class ProductRepository(ProductsDbContext dbContext) : IProductR
     public async Task<ProductSummaryData> GetSummaryAsync(CancellationToken ct = default)
     {
         var stats = await dbContext.Products
+            .AsNoTracking()
             .GroupBy(_ => 1)
             .Select(g => new
             {
@@ -75,10 +76,12 @@ internal sealed class ProductRepository(ProductsDbContext dbContext) : IProductR
             .FirstOrDefaultAsync(ct);
 
         var inventoryValue = await dbContext.Products
+            .AsNoTracking()
             .Where(p => p.IsActive)
             .SumAsync(p => p.Price.Amount * p.StockQuantity, ct);
 
         var currency = await dbContext.Products
+            .AsNoTracking()
             .Where(p => p.IsActive)
             .Select(p => p.Price.Currency)
             .FirstOrDefaultAsync(ct) ?? "USD";
@@ -114,14 +117,14 @@ internal sealed class ProductCategoryRepository(ProductsDbContext dbContext) : I
         await dbContext.Categories.FirstOrDefaultAsync(c => c.Id == id, ct);
 
     public async Task<IReadOnlyList<ProductCategory>> GetAllAsync(CancellationToken ct = default) =>
-        await dbContext.Categories.ToListAsync(ct);
+        await dbContext.Categories.AsNoTracking().ToListAsync(ct);
 
     public async Task<bool> ExistsAsync(Guid id, CancellationToken ct = default) =>
         await dbContext.Categories.AnyAsync(c => c.Id == id, ct);
 
     public async Task<CursorPaginationResult<ProductCategory>> SearchAsync(string? term, int limit, string? cursor, CancellationToken ct = default)
     {
-        var query = dbContext.Categories.AsQueryable();
+        var query = dbContext.Categories.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(term))
         {

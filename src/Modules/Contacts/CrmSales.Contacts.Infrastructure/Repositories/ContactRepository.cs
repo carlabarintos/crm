@@ -12,11 +12,11 @@ internal sealed class ContactRepository(ContactsDbContext dbContext) : IContactR
         await dbContext.Contacts.FirstOrDefaultAsync(c => c.Id == id, ct);
 
     public async Task<IReadOnlyList<Contact>> GetAllAsync(CancellationToken ct = default) =>
-        await dbContext.Contacts.OrderBy(c => c.LastName).ThenBy(c => c.FirstName).ToListAsync(ct);
+        await dbContext.Contacts.AsNoTracking().OrderBy(c => c.LastName).ThenBy(c => c.FirstName).ToListAsync(ct);
 
     public async Task<IReadOnlyList<Contact>> SearchAsync(string? search, CancellationToken ct = default)
     {
-        var query = dbContext.Contacts.AsQueryable();
+        var query = dbContext.Contacts.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(search))
         {
             var pattern = $"%{search}%";
@@ -32,7 +32,7 @@ internal sealed class ContactRepository(ContactsDbContext dbContext) : IContactR
     public async Task<CursorPaginationResult<Contact>> SearchPagedAsync(
         string? search, int limit, string? cursor, CancellationToken ct = default)
     {
-        var query = dbContext.Contacts.AsQueryable();
+        var query = dbContext.Contacts.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(search))
         {
             var pattern = $"%{search}%";
@@ -64,6 +64,7 @@ internal sealed class ContactRepository(ContactsDbContext dbContext) : IContactR
     public async Task<ContactSummaryData> GetSummaryAsync(CancellationToken ct = default)
     {
         var stats = await dbContext.Contacts
+            .AsNoTracking()
             .GroupBy(_ => 1)
             .Select(g => new { Total = g.Count(), Active = g.Count(c => c.IsActive) })
             .FirstOrDefaultAsync(ct);

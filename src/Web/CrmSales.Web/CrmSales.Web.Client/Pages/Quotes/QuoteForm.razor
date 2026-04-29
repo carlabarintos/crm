@@ -164,29 +164,18 @@
             </div>
         </div>
 
-        <!-- Products / Line Items -->
+        <!-- Products / Services / Line Items -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h6 class="mb-0">Products</h6>
+                <h6 class="mb-0">Products &amp; Services</h6>
                 <span class="text-muted small">Optional — can also be added after creating</span>
             </div>
             <div class="card-body">
-                <!-- Add product row -->
+                <!-- Add item row -->
                 <div class="row g-2 mb-3 align-items-end">
                     <div class="col-md-5">
-                        <label class="form-label form-label-sm">Product</label>
-                        <ProductCombobox Value="selectedProduct" ValueChanged="OnProductSelected" />
-                        @if (selectedProduct is not null)
-                        {
-                            <div class="mt-1 small @StockClass(selectedProduct.StockQuantity)">
-                                @if (selectedProduct.StockQuantity == 0)
-                                { <span>⚠ Out of stock</span> }
-                                else if (selectedProduct.StockQuantity <= LowStockThreshold)
-                                { <span>⚠ Low stock: @selectedProduct.StockQuantity units available</span> }
-                                else
-                                { <span>✓ @selectedProduct.StockQuantity units available</span> }
-                            </div>
-                        }
+                        <label class="form-label form-label-sm">Product / Service</label>
+                        <CatalogCombobox Value="selectedCatalogItem" ValueChanged="OnCatalogItemSelected" />
                     </div>
                     <div class="col-md-2">
                         <label class="form-label form-label-sm">Qty</label>
@@ -201,13 +190,9 @@
                         <input type="number" class="form-control form-control-sm" @bind="newItemDiscount" min="0" max="100" />
                     </div>
                     <div class="col-md-1">
-                        <button class="btn btn-sm btn-outline-primary w-100" @onclick="AddLineItemDraft" title="Add" disabled="@(selectedProduct is null)">+</button>
+                        <button class="btn btn-sm btn-outline-primary w-100" @onclick="AddLineItemDraft" title="Add" disabled="@(selectedCatalogItem is null)">+</button>
                     </div>
                 </div>
-                @if (!string.IsNullOrEmpty(lineItemWarning))
-                {
-                    <div class="text-warning small mb-1">⚠ @lineItemWarning</div>
-                }
                 @if (!string.IsNullOrEmpty(lineItemError))
                 {
                     <div class="text-danger small mb-2">@lineItemError</div>
@@ -218,7 +203,7 @@
                     <table class="table table-sm mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>Product</th>
+                                <th>Item</th>
                                 <th class="text-end">Qty</th>
                                 <th class="text-end">Unit Price</th>
                                 <th class="text-end">Disc %</th>
@@ -231,7 +216,7 @@
                             {
                                 var lineTotal = item.Quantity * item.UnitPrice * (1 - item.DiscountPercent / 100m);
                                 <tr>
-                                    <td style="font-size:13px">@item.ProductName</td>
+                                    <td style="font-size:13px">@item.ItemName</td>
                                     <td class="text-end" style="font-size:13px">@item.Quantity</td>
                                     <td class="text-end" style="font-size:13px">@item.UnitPrice.ToString("N2")</td>
                                     <td class="text-end" style="font-size:13px">@item.DiscountPercent%</td>
@@ -272,7 +257,7 @@
                 }
                 else
                 {
-                    <div class="text-center text-muted py-3" style="font-size:13px">No products added yet.</div>
+                    <div class="text-center text-muted py-3" style="font-size:13px">No items added yet.</div>
                 }
             </div>
         </div>
@@ -317,7 +302,7 @@
     private decimal newItemDiscount;
     private string? lineItemError;
 
-    private record LineItemDraft(Guid ProductId, string ProductName, int Quantity, decimal UnitPrice, decimal DiscountPercent);
+    private record LineItemDraft(Guid CatalogItemId, string ItemName, string ItemType, int Quantity, decimal UnitPrice, decimal DiscountPercent);
     private record QuoteCreatedResult(Guid Id, string QuoteNumber);
 
     protected override async Task OnInitializedAsync()
@@ -357,34 +342,22 @@
         }
     }
 
-    private const int LowStockThreshold = 10;
-    private ProductDto? selectedProduct;
-    private string? lineItemWarning;
+    private CatalogItemDto? selectedCatalogItem;
 
-    private static string StockClass(int stock) =>
-        stock == 0 ? "text-danger" : stock <= LowStockThreshold ? "text-warning" : "text-success";
-
-    private void OnProductSelected(ProductDto? p)
+    private void OnCatalogItemSelected(CatalogItemDto? item)
     {
-        selectedProduct = p;
-        newItemUnitPrice = p?.Price ?? 0;
-        lineItemWarning = null;
+        selectedCatalogItem = item;
+        newItemUnitPrice = item?.Price ?? 0;
     }
 
     private void AddLineItemDraft()
     {
         lineItemError = null;
-        lineItemWarning = null;
-        if (selectedProduct is null) { lineItemError = "Please select a product."; return; }
+        if (selectedCatalogItem is null) { lineItemError = "Please select an item."; return; }
         if (newItemQty <= 0) { lineItemError = "Quantity must be at least 1."; return; }
         if (newItemUnitPrice < 0) { lineItemError = "Unit price cannot be negative."; return; }
 
-        if (selectedProduct.StockQuantity == 0)
-            lineItemWarning = $"{selectedProduct.Name} is currently out of stock.";
-        else if (newItemQty > selectedProduct.StockQuantity)
-            lineItemWarning = $"Only {selectedProduct.StockQuantity} units of {selectedProduct.Name} available — quoting {newItemQty}.";
-
-        var existing = lineItems.FirstOrDefault(l => l.ProductId == selectedProduct.Id);
+        var existing = lineItems.FirstOrDefault(l => l.CatalogItemId == selectedCatalogItem.Id);
         if (existing is not null)
         {
             var idx = lineItems.IndexOf(existing);
@@ -392,10 +365,10 @@
         }
         else
         {
-            lineItems.Add(new LineItemDraft(selectedProduct.Id, selectedProduct.Name, newItemQty, newItemUnitPrice, newItemDiscount));
+            lineItems.Add(new LineItemDraft(selectedCatalogItem.Id, selectedCatalogItem.Name, selectedCatalogItem.Type, newItemQty, newItemUnitPrice, newItemDiscount));
         }
 
-        selectedProduct = null;
+        selectedCatalogItem = null;
         newItemQty = 1;
         newItemUnitPrice = 0;
         newItemDiscount = 0;
@@ -495,8 +468,9 @@
                     {
                         await Api.AddLineItemAsync(created.Id, new
                         {
-                            ProductId = item.ProductId,
-                            ProductName = item.ProductName,
+                            CatalogItemId = item.CatalogItemId,
+                            ItemName = item.ItemName,
+                            ItemType = item.ItemType,
                             Quantity = item.Quantity,
                             UnitPrice = item.UnitPrice,
                             DiscountPercent = item.DiscountPercent

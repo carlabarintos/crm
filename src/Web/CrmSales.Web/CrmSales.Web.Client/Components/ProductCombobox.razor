@@ -73,12 +73,16 @@ else
     private async Task OnInput(ChangeEventArgs e)
     {
         _search = e.Value?.ToString() ?? "";
-        _cursor = null; _results = []; _open = true;
+        _open = true;
         _cts?.Cancel();
         _cts = new System.Threading.CancellationTokenSource();
         var tok = _cts.Token;
-        await Task.Delay(260);
-        if (!tok.IsCancellationRequested) await Fetch(true, tok);
+        try
+        {
+            await Task.Delay(260, tok);
+            await Fetch(true, tok);
+        }
+        catch (OperationCanceledException) { }
     }
 
     private async Task OnFocus()
@@ -93,6 +97,7 @@ else
     {
         if (reset) { _cursor = null; _results = []; _loading = true; }
         else _loadingMore = true;
+        StateHasChanged();
         try
         {
             var r = await Api.GetProductsAsync(

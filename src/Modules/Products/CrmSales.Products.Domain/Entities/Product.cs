@@ -1,27 +1,17 @@
 using CrmSales.Products.Domain.Events;
 using CrmSales.Products.Domain.ValueObjects;
-using CrmSales.SharedKernel.Domain;
 
 namespace CrmSales.Products.Domain.Entities;
 
-public sealed class Product : AggregateRoot<Guid>
+public sealed class Product : CatalogItem
 {
-    public string Name { get; private set; }
-    public string? Description { get; private set; }
     public Sku Sku { get; private set; }
-    public Money Price { get; private set; }
-    public Guid CategoryId { get; private set; }
-    public bool IsActive { get; private set; }
     public int StockQuantity { get; private set; }
     public int ReorderPoint { get; private set; }
-    public DateTime CreatedAt { get; private set; }
-    public DateTime UpdatedAt { get; private set; }
 
     private Product()
     {
-        Name = string.Empty;
         Sku = null!;
-        Price = null!;
     }
 
     public static Product Create(
@@ -59,14 +49,6 @@ public sealed class Product : AggregateRoot<Guid>
         return product;
     }
 
-    public void UpdateDetails(string name, string? description, Guid categoryId)
-    {
-        Name = name.Trim();
-        Description = description?.Trim();
-        CategoryId = categoryId;
-        UpdatedAt = DateTime.UtcNow;
-    }
-
     public void ChangePrice(decimal newAmount, string currency)
     {
         var oldPrice = Price;
@@ -86,16 +68,9 @@ public sealed class Product : AggregateRoot<Guid>
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void Activate()
+    public override void Deactivate()
     {
-        IsActive = true;
-        UpdatedAt = DateTime.UtcNow;
-    }
-
-    public void Deactivate()
-    {
-        IsActive = false;
-        UpdatedAt = DateTime.UtcNow;
+        base.Deactivate();
         RaiseDomainEvent(new ProductDeactivatedEvent(Id));
     }
 }

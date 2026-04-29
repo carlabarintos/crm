@@ -1,16 +1,12 @@
 using CrmSales.Orders.Domain.Entities;
 using CrmSales.Orders.Domain.Repositories;
+using CrmSales.SharedKernel.Catalog;
 using CrmSales.SharedKernel.Messaging;
 using CrmSales.SharedKernel.MultiTenancy;
 using Microsoft.Extensions.Logging;
 
 namespace CrmSales.Orders.Infrastructure.Messaging;
 
-/// <summary>
-/// Wolverine handler for the QuoteAcceptedMessage integration event.
-/// Wolverine delivers this message from RabbitMQ with automatic retry.
-/// The method name "Handle" is the Wolverine convention.
-/// </summary>
 public static class QuoteAcceptedHandler
 {
     public static async Task Handle(
@@ -22,7 +18,6 @@ public static class QuoteAcceptedHandler
     {
         tenantContext.TenantId = message.TenantId;
 
-        // Idempotency guard — skip if an order already exists for this quote
         var existing = await orderRepository.GetByQuoteIdAsync(message.QuoteId, ct);
         if (existing is not null)
         {
@@ -32,7 +27,10 @@ public static class QuoteAcceptedHandler
         }
 
         var items = message.LineItems.Select(l =>
-            (l.ProductId, l.ProductName, l.Quantity, l.UnitPrice));
+        {
+            var itemType = Enum.TryParse<CatalogItemType>(l.ItemType, out var t) ? t : CatalogItemType.Product;
+            return (l.CatalogItemId, l.ItemName, l.Quantity, l.UnitPrice, itemType, l.DiscountPercent);
+        });
 
         var customerId = message.ContactId ?? Guid.Empty;
         var order = Order.CreateFromQuote(
@@ -42,7 +40,8 @@ public static class QuoteAcceptedHandler
             message.Currency,
             items,
             taxRateName: message.TaxRateName,
-            taxRatePercent: message.TaxRatePercent);
+            taxRatePercent: message.TaxRatePercent,
+            quoteDiscountPercent: message.QuoteDiscountPercent);
 
         if (message.AutoComplete)
             order.Complete();

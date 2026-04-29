@@ -327,6 +327,8 @@
     private string newContactFirst = "", newContactLast = "";
     private string? newContactEmail, newContactPhone, newContactCompany, newContactJobTitle;
 
+    private record CreatedOpportunityResponse(Guid Id, string Name);
+
     private bool isSalesRep;
     private bool saving;
     private string? error;
@@ -547,7 +549,10 @@
             });
 
             if (resp.IsSuccessStatusCode)
-                Nav.NavigateTo("/opportunities");
+            {
+                var created = await resp.Content.ReadFromJsonAsync<CreatedOpportunityResponse>();
+                Nav.NavigateTo(created is not null ? $"/opportunities/{created.Id}" : "/opportunities");
+            }
             else
                 error = await resp.Content.ReadAsStringAsync();
         }

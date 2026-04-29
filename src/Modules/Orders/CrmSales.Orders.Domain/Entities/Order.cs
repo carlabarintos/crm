@@ -1,4 +1,5 @@
 using CrmSales.Orders.Domain.Events;
+using CrmSales.SharedKernel.Catalog;
 using CrmSales.SharedKernel.Domain;
 
 namespace CrmSales.Orders.Domain.Entities;
@@ -25,19 +26,26 @@ public sealed class Order : AggregateRoot<Guid>
 
     public string? TaxRateName { get; private set; }
     public decimal TaxRatePercent { get; private set; }
+    public decimal QuoteDiscountPercent { get; private set; }
 
-    public decimal TotalAmount => _lineItems.Sum(l => l.LineTotal);
-    public decimal TaxAmount => Math.Round(TotalAmount * (TaxRatePercent / 100m), 4);
-    public decimal GrandTotal => TotalAmount + TaxAmount;
+    public decimal SubTotal => _lineItems.Sum(l => l.LineTotal);
+    public decimal DiscountTotal => _lineItems.Sum(l => l.DiscountAmount);
+    public decimal TotalAmount => SubTotal - DiscountTotal;
+    public decimal QuoteDiscountAmount => Math.Round(TotalAmount * (QuoteDiscountPercent / 100m), 4);
+    public decimal TaxableAmount => TotalAmount - QuoteDiscountAmount;
+    public decimal TaxAmount => Math.Round(TaxableAmount * (TaxRatePercent / 100m), 4);
+    public decimal GrandTotal => TaxableAmount + TaxAmount;
     public bool CanBeCancelled => Status is OrderStatus.Pending or OrderStatus.Confirmed;
 
     private Order() { OrderNumber = string.Empty; Currency = string.Empty; }
 
     public static Order CreateFromQuote(
         Guid quoteId, Guid opportunityId, Guid customerId,
-        string currency, IEnumerable<(Guid ProductId, string ProductName, int Qty, decimal UnitPrice)> items,
+        string currency,
+        IEnumerable<(Guid CatalogItemId, string ItemName, int Qty, decimal UnitPrice, CatalogItemType ItemType, decimal DiscountPercent)> items,
         string? shippingAddress = null, string? notes = null,
-        string? taxRateName = null, decimal taxRatePercent = 0)
+        string? taxRateName = null, decimal taxRatePercent = 0,
+        decimal quoteDiscountPercent = 0)
     {
         var order = new Order
         {
@@ -52,14 +60,15 @@ public sealed class Order : AggregateRoot<Guid>
             Notes = notes?.Trim(),
             TaxRateName = taxRateName,
             TaxRatePercent = taxRatePercent,
+            QuoteDiscountPercent = quoteDiscountPercent,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
 
-        foreach (var (productId, productName, qty, unitPrice) in items)
-            order._lineItems.Add(OrderLineItem.Create(order.Id, productId, productName, qty, unitPrice));
+        foreach (var (catalogItemId, itemName, qty, unitPrice, itemType, discountPercent) in items)
+            order._lineItems.Add(OrderLineItem.Create(order.Id, catalogItemId, itemName, qty, unitPrice, itemType, discountPercent));
 
-        order.RaiseDomainEvent(new OrderCreatedEvent(order.Id, order.OrderNumber, quoteId, order.TotalAmount, currency));
+        order.RaiseDomainEvent(new OrderCreatedEvent(order.Id, order.OrderNumber, quoteId, order.GrandTotal, currency));
         return order;
     }
 
@@ -99,11 +108,12 @@ public sealed class Order : AggregateRoot<Guid>
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void AddLineItem(Guid productId, string productName, int quantity, decimal unitPrice)
+    public void AddLineItem(Guid catalogItemId, string itemName, int quantity, decimal unitPrice,
+        CatalogItemType itemType = CatalogItemType.Product)
     {
         if (Status != OrderStatus.Pending)
             throw new InvalidOperationException("Line items can only be added to pending orders.");
-        _lineItems.Add(OrderLineItem.Create(Id, productId, productName, quantity, unitPrice));
+        _lineItems.Add(OrderLineItem.Create(Id, catalogItemId, itemName, quantity, unitPrice, itemType));
         UpdatedAt = DateTime.UtcNow;
     }
 

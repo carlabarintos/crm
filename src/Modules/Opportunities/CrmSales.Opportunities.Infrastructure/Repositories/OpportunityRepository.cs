@@ -13,19 +13,19 @@ internal sealed class OpportunityRepository(OpportunitiesDbContext dbContext) : 
             .FirstOrDefaultAsync(o => o.Id == id, ct);
 
     public async Task<IReadOnlyList<Opportunity>> GetAllAsync(CancellationToken ct = default) =>
-        await dbContext.Opportunities.OrderByDescending(o => o.CreatedAt).ToListAsync(ct);
+        await dbContext.Opportunities.AsNoTracking().OrderByDescending(o => o.CreatedAt).ToListAsync(ct);
 
     public async Task<IReadOnlyList<Opportunity>> GetByOwnerAsync(Guid ownerId, CancellationToken ct = default) =>
-        await dbContext.Opportunities.Where(o => o.OwnerId == ownerId)
+        await dbContext.Opportunities.AsNoTracking().Where(o => o.OwnerId == ownerId)
             .OrderByDescending(o => o.UpdatedAt).ToListAsync(ct);
 
     public async Task<IReadOnlyList<Opportunity>> GetByStageAsync(OpportunityStage stage, CancellationToken ct = default) =>
-        await dbContext.Opportunities.Where(o => o.Stage == stage).ToListAsync(ct);
+        await dbContext.Opportunities.AsNoTracking().Where(o => o.Stage == stage).ToListAsync(ct);
 
     public async Task<CursorPaginationResult<Opportunity>> SearchAsync(
         string? term, OpportunityStage? stage, Guid? ownerId, int limit, string? cursor, CancellationToken ct = default)
     {
-        var query = dbContext.Opportunities.AsQueryable();
+        var query = dbContext.Opportunities.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(term))
         {
             var pattern = $"%{term}%";
@@ -54,7 +54,7 @@ internal sealed class OpportunityRepository(OpportunitiesDbContext dbContext) : 
 
     public async Task<OpportunitySummaryData> GetSummaryAsync(int? year = null, int? month = null, CancellationToken ct = default)
     {
-        var query = dbContext.Opportunities.AsQueryable();
+        var query = dbContext.Opportunities.AsNoTracking().AsQueryable();
         if (year.HasValue) query = query.Where(o => o.CreatedAt.Year == year.Value);
         if (month.HasValue) query = query.Where(o => o.CreatedAt.Month == month.Value);
 
@@ -72,7 +72,7 @@ internal sealed class OpportunityRepository(OpportunitiesDbContext dbContext) : 
             .SumAsync(o => o.EstimatedValue * o.Probability / 100m, ct);
 
         var currency = await dbContext.Opportunities
-            .Select(o => o.Currency).FirstOrDefaultAsync(ct) ?? "USD";
+            .AsNoTracking().Select(o => o.Currency).FirstOrDefaultAsync(ct) ?? "USD";
 
         var stageSummaries = byStage
             .Select(s => new StageSummaryData(s.Stage.ToString(), s.Count, s.Value))
@@ -96,6 +96,7 @@ internal sealed class OpportunityRepository(OpportunitiesDbContext dbContext) : 
     public async Task<List<TopOpportunityData>> GetTopOpportunitiesAsync(int count, CancellationToken ct = default)
     {
         var items = await dbContext.Opportunities
+            .AsNoTracking()
             .OrderByDescending(o => o.EstimatedValue)
             .Take(count)
             .Select(o => new { o.Name, o.AccountName, o.Stage, o.EstimatedValue, o.Currency })
@@ -109,6 +110,7 @@ internal sealed class OpportunityRepository(OpportunitiesDbContext dbContext) : 
     {
         var cutoff = DateTime.UtcNow.AddDays(days);
         var query = dbContext.Opportunities
+            .AsNoTracking()
             .Where(o => o.ExpectedCloseDate != null
                         && o.ExpectedCloseDate <= cutoff
                         && o.Stage != OpportunityStage.ClosedWon

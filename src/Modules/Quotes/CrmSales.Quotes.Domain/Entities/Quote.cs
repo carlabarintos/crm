@@ -1,4 +1,5 @@
 using CrmSales.Quotes.Domain.Events;
+using CrmSales.SharedKernel.Catalog;
 using CrmSales.SharedKernel.Domain;
 
 namespace CrmSales.Quotes.Domain.Entities;
@@ -22,12 +23,15 @@ public sealed class Quote : AggregateRoot<Guid>
 
     public string? TaxRateName { get; private set; }
     public decimal TaxRatePercent { get; private set; }
+    public decimal QuoteDiscountPercent { get; private set; }
 
     public decimal SubTotal => _lineItems.Sum(l => l.LineTotal);
     public decimal DiscountTotal => _lineItems.Sum(l => l.DiscountAmount);
     public decimal TotalAmount => SubTotal - DiscountTotal;
-    public decimal TaxAmount => Math.Round(TotalAmount * (TaxRatePercent / 100m), 4);
-    public decimal GrandTotal => TotalAmount + TaxAmount;
+    public decimal QuoteDiscountAmount => Math.Round(TotalAmount * (QuoteDiscountPercent / 100m), 4);
+    public decimal TaxableAmount => TotalAmount - QuoteDiscountAmount;
+    public decimal TaxAmount => Math.Round(TaxableAmount * (TaxRatePercent / 100m), 4);
+    public decimal GrandTotal => TaxableAmount + TaxAmount;
 
     private Quote() { QuoteNumber = string.Empty; Currency = string.Empty; }
 
@@ -51,16 +55,17 @@ public sealed class Quote : AggregateRoot<Guid>
         return quote;
     }
 
-    public void AddLineItem(Guid productId, string productName, int quantity, decimal unitPrice, decimal discountPercent = 0)
+    public void AddLineItem(Guid catalogItemId, string itemName, int quantity, decimal unitPrice,
+        decimal discountPercent = 0, CatalogItemType itemType = CatalogItemType.Product)
     {
         if (Status != QuoteStatus.Draft)
             throw new InvalidOperationException("Can only modify draft quotes.");
 
-        var existing = _lineItems.FirstOrDefault(l => l.ProductId == productId);
+        var existing = _lineItems.FirstOrDefault(l => l.CatalogItemId == catalogItemId);
         if (existing != null)
             existing.UpdateQuantity(existing.Quantity + quantity);
         else
-            _lineItems.Add(QuoteLineItem.Create(Id, productId, productName, quantity, unitPrice, discountPercent));
+            _lineItems.Add(QuoteLineItem.Create(Id, catalogItemId, itemName, quantity, unitPrice, discountPercent, itemType));
 
         UpdatedAt = DateTime.UtcNow;
     }
@@ -72,6 +77,34 @@ public sealed class Quote : AggregateRoot<Guid>
         var item = _lineItems.FirstOrDefault(l => l.Id == lineItemId)
             ?? throw new InvalidOperationException("Line item not found.");
         _lineItems.Remove(item);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void UpdateLineItem(Guid lineItemId, int quantity, decimal unitPrice, decimal discountPercent)
+    {
+        if (Status != QuoteStatus.Draft)
+            throw new InvalidOperationException("Can only modify draft quotes.");
+        var item = _lineItems.FirstOrDefault(l => l.Id == lineItemId)
+            ?? throw new InvalidOperationException("Line item not found.");
+        item.UpdateDetails(quantity, unitPrice, discountPercent);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetQuoteDiscount(decimal percent)
+    {
+        if (Status != QuoteStatus.Draft)
+            throw new InvalidOperationException("Can only modify draft quotes.");
+        if (percent is < 0 or > 100)
+            throw new ArgumentException("Discount must be between 0 and 100.", nameof(percent));
+        QuoteDiscountPercent = percent;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void RemoveQuoteDiscount()
+    {
+        if (Status != QuoteStatus.Draft)
+            throw new InvalidOperationException("Can only modify draft quotes.");
+        QuoteDiscountPercent = 0;
         UpdatedAt = DateTime.UtcNow;
     }
 
