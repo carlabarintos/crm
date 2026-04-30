@@ -423,7 +423,7 @@
             }
             else
             {
-                oppCreateError = await resp.Content.ReadAsStringAsync();
+                oppCreateError = await ApiErrors.ParseAsync(resp);
             }
         }
         finally { creatingOppSaving = false; }
@@ -480,7 +480,7 @@
                 Nav.NavigateTo(created is not null ? $"/quotes/{created.Id}" : "/quotes");
             }
             else
-                error = await resp.Content.ReadAsStringAsync();
+                error = await ApiErrors.ParseAsync(resp);
         }
         finally { saving = false; }
     }

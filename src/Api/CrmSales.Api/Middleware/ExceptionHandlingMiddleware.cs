@@ -1,3 +1,4 @@
+using CrmSales.Api.Auditing;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 using System.Text.Json;
@@ -6,7 +7,8 @@ namespace CrmSales.Api.Middleware;
 
 public sealed class ExceptionHandlingMiddleware(
     RequestDelegate next,
-    ILogger<ExceptionHandlingMiddleware> logger)
+    ILogger<ExceptionHandlingMiddleware> logger,
+    IServiceProvider services)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -25,7 +27,30 @@ public sealed class ExceptionHandlingMiddleware(
                 real = due.InnerException!;
 
             logger.LogError(real, "Unhandled exception: {Message}", real.Message);
+            await TryLogToAuditAsync(context, real);
             await HandleExceptionAsync(context, real);
+        }
+    }
+
+    private async Task TryLogToAuditAsync(HttpContext context, Exception ex)
+    {
+        try
+        {
+            // Use a new scope so a faulted DbContext from the failed request doesn't affect audit logging
+            using var scope = services.CreateScope();
+            var audit = scope.ServiceProvider.GetRequiredService<IAuditService>();
+            var actor = context.User.FindFirst("preferred_username")?.Value ?? "anonymous";
+            await audit.LogAsync(
+                tenantId: "system",
+                eventType: "system.error",
+                entityType: context.Request.Path,
+                entityId: context.TraceIdentifier,
+                description: $"{ex.GetType().Name}: {ex.Message}",
+                actor: actor);
+        }
+        catch (Exception logEx)
+        {
+            logger.LogWarning(logEx, "Failed to write error to audit log");
         }
     }
 

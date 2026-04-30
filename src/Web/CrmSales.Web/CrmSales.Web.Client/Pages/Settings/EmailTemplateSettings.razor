@@ -647,7 +647,7 @@ else
             }
             else
             {
-                _smtpError = await res.Content.ReadAsStringAsync();
+                _smtpError = await ApiErrors.ParseAsync(res);
             }
         }
         finally { _savingSmtp = false; }
@@ -685,7 +685,7 @@ else
             }
             else
             {
-                state.Error = await res.Content.ReadAsStringAsync();
+                state.Error = await ApiErrors.ParseAsync(res);
             }
         }
         finally { state.Saving = false; }

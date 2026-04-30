@@ -343,7 +343,7 @@ else if (opp is not null)
         {
             var resp = await Api.ChangeOpportunityStageAsync(Id, stage);
             if (resp.IsSuccessStatusCode) { stageSuccess = $"Moved to {FormatStage(stage)}."; await Load(); }
-            else stageError = await resp.Content.ReadAsStringAsync();
+            else stageError = await ApiErrors.ParseAsync(resp);
         }
         finally { stageSaving = false; }
     }
@@ -357,7 +357,7 @@ else if (opp is not null)
         {
             var resp = await Api.AddActivityAsync(Id, new { Type = actType, Notes = actNotes, PerformedById = Guid.Empty });
             if (resp.IsSuccessStatusCode) { actNotes = ""; showActivityForm = false; await Load(); }
-            else actError = await resp.Content.ReadAsStringAsync();
+            else actError = await ApiErrors.ParseAsync(resp);
         }
         finally { actSaving = false; }
     }

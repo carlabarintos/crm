@@ -108,7 +108,7 @@
             }
             else
             {
-                error = await resp.Content.ReadAsStringAsync();
+                error = await ApiErrors.ParseAsync(resp);
             }
         }
         finally { saving = false; }

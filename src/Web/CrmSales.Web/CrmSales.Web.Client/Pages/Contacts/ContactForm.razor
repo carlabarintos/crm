@@ -92,7 +92,7 @@
             if (resp.IsSuccessStatusCode)
                 Nav.NavigateTo("/contacts");
             else
-                error = await resp.Content.ReadAsStringAsync();
+                error = await ApiErrors.ParseAsync(resp);
         }
         finally { saving = false; }
     }

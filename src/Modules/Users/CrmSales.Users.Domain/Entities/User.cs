@@ -3,15 +3,12 @@ using CrmSales.Users.Domain.Events;
 
 namespace CrmSales.Users.Domain.Entities;
 
-public enum UserRole { SalesRep, SalesManager, AccountManager, Admin }
-
 public sealed class User : AggregateRoot<Guid>
 {
     public string KeycloakId { get; private set; }
     public string Email { get; private set; }
     public string FirstName { get; private set; }
     public string LastName { get; private set; }
-    public UserRole Role { get; private set; }
     public bool IsActive { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -26,7 +23,7 @@ public sealed class User : AggregateRoot<Guid>
         LastName = string.Empty;
     }
 
-    public static User Create(string keycloakId, string email, string firstName, string lastName, UserRole role)
+    public static User Create(string keycloakId, string email, string firstName, string lastName)
     {
         var user = new User
         {
@@ -35,12 +32,11 @@ public sealed class User : AggregateRoot<Guid>
             Email = email.ToLowerInvariant().Trim(),
             FirstName = firstName.Trim(),
             LastName = lastName.Trim(),
-            Role = role,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
-        user.RaiseDomainEvent(new UserCreatedEvent(user.Id, user.Email, user.FullName, user.Role));
+        user.RaiseDomainEvent(new UserCreatedEvent(user.Id, user.Email, user.FullName));
         return user;
     }
 
@@ -48,12 +44,6 @@ public sealed class User : AggregateRoot<Guid>
     {
         FirstName = firstName.Trim();
         LastName = lastName.Trim();
-        UpdatedAt = DateTime.UtcNow;
-    }
-
-    public void ChangeRole(UserRole role)
-    {
-        Role = role;
         UpdatedAt = DateTime.UtcNow;
     }
 

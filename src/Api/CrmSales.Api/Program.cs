@@ -110,7 +110,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesTransformer>();
+builder.Services.AddTransient<IClaimsTransformation, UserClaimsTransformation>();
 builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddSingleton<INotificationBroadcaster, NotificationBroadcaster>();
 builder.Services.AddScoped<IAuditService, AuditService>();
@@ -241,16 +241,20 @@ using (var scope = app.Services.CreateScope())
         auditCheckCmd.CommandText = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'master' AND table_name = 'AuditLogs')";
         var auditLogsExists = (bool)(await auditCheckCmd.ExecuteScalarAsync())!;
 
+        await using var arCheckCmd = masterConn.CreateCommand();
+        arCheckCmd.CommandText = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'master' AND table_name = 'AccessRequests')";
+        var accessRequestsExists = (bool)(await arCheckCmd.ExecuteScalarAsync())!;
+
         if (!companiesExists)
         {
-            // Fresh install — let EF Core create all master tables at once
+            // Fresh install — let EF Core create all master tables at once (including AccessRequests)
             app.Logger.LogInformation("master schema tables missing — creating tables.");
             await masterConn.CloseAsync();
             await masterCtx.GetService<IRelationalDatabaseCreator>().CreateTablesAsync();
         }
         else if (!auditLogsExists)
         {
-            // Existing install being upgraded — create only the new AuditLogs table
+            // Existing install being upgraded — create AuditLogs and AccessRequests
             app.Logger.LogInformation("AuditLogs table missing — creating it.");
             await using var createAuditCmd = masterConn.CreateCommand();
             createAuditCmd.CommandText = """
@@ -267,8 +271,49 @@ using (var scope = app.Services.CreateScope())
                 );
                 CREATE INDEX IF NOT EXISTS "IX_AuditLogs_TenantId_OccurredAt"
                     ON master."AuditLogs" ("TenantId", "OccurredAt");
+                CREATE TABLE IF NOT EXISTS master."AccessRequests" (
+                    "Id"          uuid          NOT NULL,
+                    "Name"        varchar(200)  NOT NULL,
+                    "Company"     varchar(200)  NOT NULL,
+                    "Email"       varchar(254)  NOT NULL,
+                    "Phone"       varchar(50)   NULL,
+                    "Message"     varchar(2000) NULL,
+                    "Status"      varchar(20)   NOT NULL DEFAULT 'Pending',
+                    "RequestedAt" timestamp     NOT NULL,
+                    "ReviewedAt"  timestamp     NULL,
+                    CONSTRAINT "PK_AccessRequests" PRIMARY KEY ("Id")
+                );
+                CREATE INDEX IF NOT EXISTS "IX_AccessRequests_Status"
+                    ON master."AccessRequests" ("Status");
+                CREATE INDEX IF NOT EXISTS "IX_AccessRequests_RequestedAt"
+                    ON master."AccessRequests" ("RequestedAt");
                 """;
             await createAuditCmd.ExecuteNonQueryAsync();
+        }
+        else if (!accessRequestsExists)
+        {
+            // Existing install with Companies + AuditLogs — add new AccessRequests table
+            app.Logger.LogInformation("AccessRequests table missing — creating it.");
+            await using var createArCmd = masterConn.CreateCommand();
+            createArCmd.CommandText = """
+                CREATE TABLE IF NOT EXISTS master."AccessRequests" (
+                    "Id"          uuid          NOT NULL,
+                    "Name"        varchar(200)  NOT NULL,
+                    "Company"     varchar(200)  NOT NULL,
+                    "Email"       varchar(254)  NOT NULL,
+                    "Phone"       varchar(50)   NULL,
+                    "Message"     varchar(2000) NULL,
+                    "Status"      varchar(20)   NOT NULL DEFAULT 'Pending',
+                    "RequestedAt" timestamp     NOT NULL,
+                    "ReviewedAt"  timestamp     NULL,
+                    CONSTRAINT "PK_AccessRequests" PRIMARY KEY ("Id")
+                );
+                CREATE INDEX IF NOT EXISTS "IX_AccessRequests_Status"
+                    ON master."AccessRequests" ("Status");
+                CREATE INDEX IF NOT EXISTS "IX_AccessRequests_RequestedAt"
+                    ON master."AccessRequests" ("RequestedAt");
+                """;
+            await createArCmd.ExecuteNonQueryAsync();
         }
     }
     finally
@@ -594,6 +639,70 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// ── Ensure Roles/RolePermissions/UserRoles tables exist in every tenant schema ─
+{
+    using var scope = app.Services.CreateScope();
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var companySlugs = await masterCtx.Companies.Select(c => c.Slug).ToListAsync();
+
+    if (companySlugs.Count > 0)
+    {
+        var conn = scope.ServiceProvider.GetRequiredService<ProductsDbContext>().Database.GetDbConnection();
+        await conn.OpenAsync();
+        try
+        {
+            foreach (var slug in companySlugs)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    CREATE TABLE IF NOT EXISTS "{slug}"."Roles" (
+                        "Id"          uuid         NOT NULL,
+                        "Version"     integer      NOT NULL DEFAULT 0,
+                        "Name"        varchar(100) NOT NULL,
+                        "Description" varchar(500) NULL,
+                        "CreatedAt"   timestamp    NOT NULL,
+                        "UpdatedAt"   timestamp    NOT NULL,
+                        CONSTRAINT "PK_Roles_{slug}" PRIMARY KEY ("Id")
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS "IX_Roles_Name_{slug}"
+                        ON "{slug}"."Roles" ("Name");
+
+                    CREATE TABLE IF NOT EXISTS "{slug}"."RolePermissions" (
+                        "Id"         uuid         NOT NULL,
+                        "RoleId"     uuid         NOT NULL,
+                        "Permission" varchar(100) NOT NULL,
+                        CONSTRAINT "PK_RolePermissions_{slug}" PRIMARY KEY ("Id"),
+                        CONSTRAINT "FK_RolePerm_Role_{slug}" FOREIGN KEY ("RoleId")
+                            REFERENCES "{slug}"."Roles" ("Id") ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS "IX_RolePerm_RoleId_{slug}"
+                        ON "{slug}"."RolePermissions" ("RoleId");
+
+                    CREATE TABLE IF NOT EXISTS "{slug}"."UserRoles" (
+                        "Id"         uuid      NOT NULL,
+                        "UserId"     uuid      NOT NULL,
+                        "RoleId"     uuid      NOT NULL,
+                        "AssignedAt" timestamp NOT NULL,
+                        CONSTRAINT "PK_UserRoles_{slug}" PRIMARY KEY ("Id"),
+                        CONSTRAINT "FK_UserRoles_User_{slug}" FOREIGN KEY ("UserId")
+                            REFERENCES "{slug}"."Users" ("Id") ON DELETE CASCADE,
+                        CONSTRAINT "FK_UserRoles_Role_{slug}" FOREIGN KEY ("RoleId")
+                            REFERENCES "{slug}"."Roles" ("Id") ON DELETE CASCADE
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS "IX_UserRoles_User_Role_{slug}"
+                        ON "{slug}"."UserRoles" ("UserId", "RoleId");
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+        finally
+        {
+            if (conn.State == System.Data.ConnectionState.Open)
+                await conn.CloseAsync();
+        }
+    }
+}
+
 // ── Ensure Keycloak realm & OIDC client exist (blocks startup until ready) ───
 {
     using var scope = app.Services.CreateScope();
@@ -632,6 +741,10 @@ app.UseMiddleware<TenantMiddleware>();
 app.UseAuthorization();
 
 // ── Map endpoint groups ────────────────────────────────────────────────────
+// Access requests: public submit + SuperAdmin management — registered on app directly
+// so the anonymous POST bypasses the authenticated rate-limit group
+app.MapAccessRequestEndpoints();
+
 var api = app.MapGroup("/").RequireRateLimiting("authenticated");
 api.MapCompanyEndpoints();
 api.MapProductEndpoints();
@@ -641,6 +754,8 @@ api.MapServiceEndpoints();
 api.MapServiceImportEndpoint();
 api.MapCatalogEndpoints();
 api.MapUserEndpoints();
+api.MapRoleEndpoints();
+api.MapUserRoleEndpoints();
 api.MapContactEndpoints();
 api.MapOpportunityEndpoints();
 api.MapQuoteEndpoints();

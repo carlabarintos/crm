@@ -1,4 +1,3 @@
-using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Users.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +7,9 @@ public sealed class UsersDbContext(DbContextOptions<UsersDbContext> options)
     : DbContext(options)
 {
     public DbSet<User> Users => Set<User>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<UserRoleAssignment> UserRoles => Set<UserRoleAssignment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -386,7 +386,7 @@ else
             }
             else
             {
-                _importParseError = $"Import failed: {await resp.Content.ReadAsStringAsync()}";
+                _importParseError = $"Import failed: {await ApiErrors.ParseAsync(resp)}";
             }
         }
         finally { _importing = false; }

@@ -178,7 +178,7 @@
                 showNewCategory = false;
             }
             else
-                newCategoryError = await resp.Content.ReadAsStringAsync();
+                newCategoryError = await ApiErrors.ParseAsync(resp);
         }
         finally { newCategorySaving = false; }
     }
@@ -226,7 +226,7 @@
             if (resp.IsSuccessStatusCode)
                 Nav.NavigateTo("/products");
             else
-                error = await resp.Content.ReadAsStringAsync();
+                error = await ApiErrors.ParseAsync(resp);
         }
         finally { saving = false; }
     }

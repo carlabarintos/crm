@@ -384,7 +384,7 @@ else if (contact is not null)
                 contact = await Api.GetContactAsync(Id);
                 editing = false;
             }
-            else editError = await resp.Content.ReadAsStringAsync();
+            else editError = await ApiErrors.ParseAsync(resp);
         }
         finally { saving = false; }
     }
@@ -396,7 +396,7 @@ else if (contact is not null)
         {
             var resp = await Api.DeleteContactAsync(Id);
             if (resp.IsSuccessStatusCode) Nav.NavigateTo("/contacts");
-            else error = await resp.Content.ReadAsStringAsync();
+            else error = await ApiErrors.ParseAsync(resp);
         }
         finally { saving = false; }
     }

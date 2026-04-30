@@ -1,0 +1,57 @@
+@inherits LayoutComponentBase
+
+<div class="landing-wrap">
+    <nav class="landing-nav">
+        <a href="/" class="landing-brand">
+            <div class="brand-icon">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 12L6 7L9.5 10L13 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                    <circle cx="13" cy="5" r="1.5" fill="white" />
+                </svg>
+            </div>
+            <span style="font-size:20px;font-weight:800;color:#111827;letter-spacing:-.5px">ZoeIly</span>
+        </a>
+        <a href="authentication/login" class="btn btn-primary btn-sm px-4">Sign In</a>
+    </nav>
+    <main>
+        @Body
+    </main>
+    <footer class="landing-footer">
+        <span>&copy; @DateTime.Now.Year ZoeIly · Modern CRM for growing teams</span>
+    </footer>
+</div>
+
+<style>
+    html, body { background: #F9FAFB !important; }
+
+    .landing-wrap { min-height: 100svh; background: #F9FAFB; display: flex; flex-direction: column; }
+    .landing-wrap main { flex: 1; }
+
+    .landing-nav {
+        position: sticky; top: 0; z-index: 100;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 2rem; height: 62px;
+        background: rgba(255,255,255,.94);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid #E5E7EB;
+    }
+    .landing-brand {
+        display: flex; align-items: center; gap: 10px;
+        text-decoration: none;
+    }
+    .brand-icon {
+        width: 34px; height: 34px; border-radius: 9px;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .landing-footer {
+        text-align: center;
+        padding: 2rem 1.5rem;
+        font-size: 13px;
+        color: #9CA3AF;
+        border-top: 1px solid #E5E7EB;
+        background: #fff;
+    }
+</style>

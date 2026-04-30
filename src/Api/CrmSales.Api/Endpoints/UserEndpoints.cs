@@ -1,4 +1,5 @@
 using CrmSales.Api.Services;
+using CrmSales.SharedKernel.Authorization;
 using CrmSales.Users.Domain.Entities;
 using CrmSales.Users.Domain.Repositories;
 using Microsoft.AspNetCore.Mvc;
@@ -11,15 +12,14 @@ public static class UserEndpoints
     {
         var group = app.MapGroup("/api/users")
             .WithTags("Users")
-            .RequireAuthorization(p => p.RequireRole("Admin"));
+            .RequireAuthorization(p => p.RequireClaim("permission", Permissions.ManageUsers));
 
         group.MapGet("/", async (IUserRepository repo, CancellationToken ct) =>
         {
             var users = await repo.GetAllAsync(ct);
             return Results.Ok(users.Select(u => new
             {
-                u.Id, u.Email, u.FirstName, u.LastName, u.FullName,
-                Role = u.Role.ToString(), u.IsActive
+                u.Id, u.Email, u.FirstName, u.LastName, u.FullName, u.IsActive
             }));
         });
 
@@ -29,8 +29,7 @@ public static class UserEndpoints
             return user is null ? Results.NotFound() : Results.Ok(new
             {
                 user.Id, user.Email, user.FirstName, user.LastName,
-                user.FullName, Role = user.Role.ToString(),
-                user.IsActive, user.CreatedAt
+                user.FullName, user.IsActive, user.CreatedAt
             });
         });
 
@@ -66,10 +65,8 @@ public static class UserEndpoints
                 // Password set failure is non-fatal — user can be reset later
             }
 
-            var user = User.Create(keycloakId, req.Email, req.FirstName, req.LastName, req.Role);
+            var user = User.Create(keycloakId, req.Email, req.FirstName, req.LastName);
             await repo.AddAsync(user, ct);
-
-            try { await keycloak.AssignRoleAsync(keycloakId, req.Role.ToString()); } catch { }
 
             var companyId = httpContext.User.FindFirst("company_id")?.Value;
             if (!string.IsNullOrEmpty(companyId))
@@ -92,12 +89,9 @@ public static class UserEndpoints
             if (user is null) return Results.NotFound();
 
             user.UpdateProfile(req.FirstName, req.LastName);
-            if (req.Role.HasValue) user.ChangeRole(req.Role.Value);
             await repo.UpdateAsync(user, ct);
 
             try { await keycloak.UpdateUserAsync(user.KeycloakId, req.FirstName, req.LastName); } catch { }
-            if (req.Role.HasValue)
-                try { await keycloak.AssignRoleAsync(user.KeycloakId, req.Role.Value.ToString()); } catch { }
 
             return Results.NoContent();
         });
@@ -138,5 +132,5 @@ public static class UserEndpoints
     }
 }
 
-record CreateUserRequest(string Email, string FirstName, string LastName, UserRole Role);
-record UpdateUserRequest(string FirstName, string LastName, UserRole? Role);
+record CreateUserRequest(string Email, string FirstName, string LastName);
+record UpdateUserRequest(string FirstName, string LastName);

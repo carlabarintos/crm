@@ -1,0 +1,330 @@
+@page "/users/roles"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+
+<PageTitle>Roles</PageTitle>
+
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="/users" class="text-muted small">← Users</a>
+        <h1 class="h3 mb-0">Roles</h1>
+    </div>
+    <button class="btn btn-primary" @onclick="ShowCreate">+ New Role</button>
+</div>
+
+@if (!string.IsNullOrEmpty(globalError))
+{
+    <div class="alert alert-danger">@globalError</div>
+}
+
+@if (_loading)
+{
+    <div class="text-center py-5"><div class="spinner-border" role="status"></div></div>
+}
+else
+{
+    <!-- Stat card -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card stat-card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Total Roles</div>
+                    <div class="fs-3 fw-bold">@(roles?.Count ?? 0)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Roles grid -->
+    @if (roles is null || roles.Count == 0)
+    {
+        <div class="text-muted text-center py-5">No roles defined yet. Create your first role.</div>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var role in roles)
+            {
+                <div class="col-12 col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0">@role.Name</h6>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEdit(role)">Edit</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDelete(role)">Delete</button>
+                                </div>
+                            </div>
+                            @if (!string.IsNullOrEmpty(role.Description))
+                            {
+                                <p class="text-muted small mb-2">@role.Description</p>
+                            }
+                            <div class="mt-2">
+                                <span class="text-muted small">@role.Permissions.Count permission(s)</span>
+                                <div class="mt-1 d-flex flex-wrap gap-1">
+                                    @foreach (var perm in role.Permissions.Take(5))
+                                    {
+                                        <span class="badge bg-light text-dark border small">@perm</span>
+                                    }
+                                    @if (role.Permissions.Count > 5)
+                                    {
+                                        <span class="badge bg-light text-muted border small">+@(role.Permissions.Count - 5) more</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+<!-- Create / Edit modal -->
+@if (showForm)
+{
+    <div class="modal-backdrop show" style="opacity:.4;"></div>
+    <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editingId.HasValue ? "Edit Role" : "New Role")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseForm"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(formError))
+                    {
+                        <div class="alert alert-danger">@formError</div>
+                    }
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="formName" placeholder="e.g. Doctor, Order Manager" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" rows="2" @bind="formDescription" placeholder="Optional description"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Permissions</label>
+                        <div class="d-flex flex-wrap gap-2 mt-1">
+                            <span class="perm-level-badge perm-manage">
+                                <strong>manage</strong> — create, edit, and delete
+                            </span>
+                            <span class="perm-level-badge perm-view">
+                                <strong>view</strong> — read all records in this area
+                            </span>
+                            <span class="perm-level-badge perm-view-own">
+                                <strong>view_own</strong> — read only records assigned to this user
+                            </span>
+                        </div>
+                    </div>
+                    @if (availablePermissions is not null)
+                    {
+                        var groups = availablePermissions
+                            .Select(p => p.Name)
+                            .GroupBy(p => p.Contains('.') ? p.Split('.')[0] : "other")
+                            .OrderBy(g => g.Key)
+                            .ToList();
+
+                        <div class="row g-3">
+                            @foreach (var group in groups)
+                            {
+                                <div class="col-md-4">
+                                    <div class="card border-0 bg-light p-2">
+                                        <div class="fw-semibold small text-uppercase text-muted mb-2">@group.Key</div>
+                                        @foreach (var perm in group)
+                                        {
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="perm_@perm"
+                                                       checked="@selectedPermissions.Contains(perm)"
+                                                       @onchange="e => TogglePermission(perm, (bool)(e.Value ?? false))" />
+                                                <label class="form-check-label small" for="perm_@perm">
+                                                    @(perm.Contains('.') ? perm.Split('.')[1] : perm)
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-muted small">Loading permissions...</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="CloseForm">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveForm" disabled="@formSaving">
+                        @if (formSaving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        @(editingId.HasValue ? "Update" : "Create")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete confirmation -->
+@if (deletingRole is not null)
+{
+    <div class="modal-backdrop show" style="opacity:.4;"></div>
+    <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete Role</h5>
+                    <button type="button" class="btn-close" @onclick="() => deletingRole = null"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Delete role <strong>@deletingRole.Name</strong>? Users will lose this role immediately.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => deletingRole = null">Cancel</button>
+                    <button class="btn btn-danger" @onclick="ExecuteDelete" disabled="@deleting">
+                        @if (deleting) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .perm-level-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-size: 11.5px;
+        line-height: 1.5;
+    }
+    .perm-manage  { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+    .perm-view    { background: #DBEAFE; color: #1E40AF; border: 1px solid #BFDBFE; }
+    .perm-view-own { background: #F3F4F6; color: #374151; border: 1px solid #E5E7EB; }
+</style>
+
+@code {
+    private bool _loading = true;
+    private List<RoleDto>? roles;
+    private List<AvailablePermissionDto>? availablePermissions;
+    private string? globalError;
+
+    // Form
+    private bool showForm;
+    private Guid? editingId;
+    private string formName = "";
+    private string formDescription = "";
+    private HashSet<string> selectedPermissions = new();
+    private bool formSaving;
+    private string? formError;
+
+    // Delete
+    private RoleDto? deletingRole;
+    private bool deleting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = Api.GetRolesAsync();
+        var t2 = Api.GetAvailablePermissionsAsync();
+        roles = await t1;
+        availablePermissions = await t2;
+        _loading = false;
+    }
+
+    private void ShowCreate()
+    {
+        editingId = null;
+        formName = "";
+        formDescription = "";
+        selectedPermissions.Clear();
+        formError = null;
+        showForm = true;
+    }
+
+    private void StartEdit(RoleDto role)
+    {
+        editingId = role.Id;
+        formName = role.Name;
+        formDescription = role.Description ?? "";
+        selectedPermissions = role.Permissions.ToHashSet();
+        formError = null;
+        showForm = true;
+    }
+
+    private void CloseForm() { showForm = false; formError = null; }
+
+    private void TogglePermission(string perm, bool value)
+    {
+        if (value) selectedPermissions.Add(perm);
+        else selectedPermissions.Remove(perm);
+    }
+
+    private async Task SaveForm()
+    {
+        if (string.IsNullOrWhiteSpace(formName))
+        {
+            formError = "Role name is required.";
+            return;
+        }
+
+        formSaving = true;
+        formError = null;
+        try
+        {
+            HttpResponseMessage resp;
+            if (editingId.HasValue)
+                resp = await Api.UpdateRoleAsync(editingId.Value, new
+                {
+                    Name = formName.Trim(),
+                    Description = string.IsNullOrWhiteSpace(formDescription) ? (string?)null : formDescription.Trim(),
+                    Permissions = selectedPermissions.ToList()
+                });
+            else
+                resp = await Api.CreateRoleAsync(new
+                {
+                    Name = formName.Trim(),
+                    Description = string.IsNullOrWhiteSpace(formDescription) ? (string?)null : formDescription.Trim(),
+                    Permissions = selectedPermissions.ToList()
+                });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                showForm = false;
+                roles = await Api.GetRolesAsync();
+            }
+            else
+            {
+                formError = await ApiErrors.ParseAsync(resp);
+            }
+        }
+        finally { formSaving = false; }
+    }
+
+    private void ConfirmDelete(RoleDto role) { deletingRole = role; }
+
+    private async Task ExecuteDelete()
+    {
+        if (deletingRole is null) return;
+        deleting = true;
+        try
+        {
+            var resp = await Api.DeleteRoleAsync(deletingRole.Id);
+            if (resp.IsSuccessStatusCode)
+            {
+                deletingRole = null;
+                roles = await Api.GetRolesAsync();
+            }
+            else
+            {
+                globalError = await ApiErrors.ParseAsync(resp);
+                deletingRole = null;
+            }
+        }
+        finally { deleting = false; }
+    }
+}

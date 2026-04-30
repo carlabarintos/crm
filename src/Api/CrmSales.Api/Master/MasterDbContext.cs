@@ -9,6 +9,7 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
 
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +31,18 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
             e.Property(a => a.Description).IsRequired().HasMaxLength(500);
             e.Property(a => a.Actor).IsRequired().HasMaxLength(200);
             e.HasIndex(a => new { a.TenantId, a.OccurredAt });
+        });
+        modelBuilder.Entity<AccessRequest>(e =>
+        {
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Name).IsRequired().HasMaxLength(200);
+            e.Property(a => a.Company).IsRequired().HasMaxLength(200);
+            e.Property(a => a.Email).IsRequired().HasMaxLength(254);
+            e.Property(a => a.Phone).HasMaxLength(50);
+            e.Property(a => a.Message).HasMaxLength(2000);
+            e.Property(a => a.Status).IsRequired().HasMaxLength(20);
+            e.HasIndex(a => a.Status);
+            e.HasIndex(a => a.RequestedAt);
         });
     }
 }

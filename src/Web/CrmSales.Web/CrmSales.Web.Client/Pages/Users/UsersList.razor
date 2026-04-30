@@ -1,14 +1,17 @@
 @page "/users"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize]
 @using CrmSales.Web.Client.Services
 @inject CrmApiClient Api
 
 <PageTitle>Users</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3">Users</h1>
-    <button class="btn btn-primary" @onclick="() => { showCreateForm = !showCreateForm; createError = null; tempPassword = null; }">+ New User</button>
+    <div class="d-flex gap-2">
+        <a href="/users/roles" class="btn btn-outline-secondary">Manage Roles</a>
+        <button class="btn btn-primary" @onclick="() => { showCreateForm = !showCreateForm; createError = null; tempPassword = null; }">+ New User</button>
+    </div>
 </div>
 
 @if (showCreateForm)
@@ -17,26 +20,17 @@
         <div class="card-header"><h6 class="mb-0">Create User</h6></div>
         <div class="card-body">
             <div class="row g-3">
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="form-label">First Name <span class="text-danger">*</span></label>
                     <input class="form-control" @bind="newFirstName" placeholder="First name" />
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="form-label">Last Name <span class="text-danger">*</span></label>
                     <input class="form-control" @bind="newLastName" placeholder="Last name" />
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Email <span class="text-danger">*</span></label>
                     <input class="form-control" type="email" @bind="newEmail" placeholder="user@example.com" />
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Role</label>
-                    <select class="form-select" @bind="newRole">
-                        <option value="SalesRep">Sales Rep</option>
-                        <option value="SalesManager">Sales Manager</option>
-                        <option value="AccountManager">Account Manager</option>
-                        <option value="Admin">Admin</option>
-                    </select>
                 </div>
                 <div class="col-md-1 d-flex align-items-end">
                     <button class="btn btn-primary w-100" @onclick="CreateUser" disabled="@creating">
@@ -82,8 +76,8 @@ else
                 <tr>
                     <th>Name</th>
                     <th>Email</th>
-                    <th>Role</th>
                     <th>Status</th>
+                    <th>Roles</th>
                     <th></th>
                 </tr>
             </thead>
@@ -97,12 +91,6 @@ else
                                 <div class="d-flex gap-2 align-items-center flex-wrap py-1">
                                     <input class="form-control form-control-sm" style="max-width:140px" @bind="editFirst" placeholder="First name" />
                                     <input class="form-control form-control-sm" style="max-width:140px" @bind="editLast" placeholder="Last name" />
-                                    <select class="form-select form-select-sm" style="max-width:160px" @bind="editRole">
-                                        <option value="SalesRep">Sales Rep</option>
-                                        <option value="SalesManager">Sales Manager</option>
-                                        <option value="AccountManager">Account Manager</option>
-                                        <option value="Admin">Admin</option>
-                                    </select>
                                     <button class="btn btn-sm btn-primary" @onclick="() => SaveEdit(u.Id)" disabled="@saving">
                                         @if (saving) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Save</span> }
                                     </button>
@@ -120,39 +108,79 @@ else
                         <tr class="@(!u.IsActive ? "text-muted" : "")">
                             <td>@u.FullName</td>
                             <td>@u.Email</td>
-                            <td><span class="badge bg-secondary">@u.Role</span></td>
                             <td>
                                 @if (u.IsActive)
+                                { <span class="badge bg-success">Active</span> }
+                                else
+                                { <span class="badge bg-secondary">Inactive</span> }
+                            </td>
+                            <td>
+                                @if (userRoles.TryGetValue(u.Id, out var roles))
                                 {
-                                    <span class="badge bg-success">Active</span>
+                                    @if (roles.Count == 0)
+                                    {
+                                        <span class="text-muted small">—</span>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var r in roles)
+                                        {
+                                            <span class="badge bg-info me-1">@r.Name</span>
+                                        }
+                                    }
                                 }
                                 else
                                 {
-                                    <span class="badge bg-secondary">Inactive</span>
+                                    <button class="btn btn-sm btn-link p-0" @onclick="() => LoadUserRoles(u.Id)">Show roles</button>
                                 }
                             </td>
                             <td>
                                 <div class="d-flex gap-2">
                                     <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEdit(u)">Edit</button>
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenRolePanel(u.Id)">Roles</button>
                                     @if (u.IsActive)
                                     {
-                                        <button class="btn btn-sm btn-outline-warning"
-                                                @onclick="() => Deactivate(u.Id)"
-                                                disabled="@(actionId == u.Id)">
+                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => Deactivate(u.Id)" disabled="@(actionId == u.Id)">
                                             @if (actionId == u.Id) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Deactivate</span> }
                                         </button>
                                     }
                                     else
                                     {
-                                        <button class="btn btn-sm btn-outline-success"
-                                                @onclick="() => Activate(u.Id)"
-                                                disabled="@(actionId == u.Id)">
+                                        <button class="btn btn-sm btn-outline-success" @onclick="() => Activate(u.Id)" disabled="@(actionId == u.Id)">
                                             @if (actionId == u.Id) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Activate</span> }
                                         </button>
                                     }
                                 </div>
                             </td>
                         </tr>
+                        @if (rolePanelUserId == u.Id)
+                        {
+                            <tr>
+                                <td colspan="5" class="bg-light">
+                                    <div class="p-2">
+                                        <strong class="small">Assign / Remove Roles for @u.FullName</strong>
+                                        <div class="d-flex gap-2 mt-2 flex-wrap">
+                                            @if (availableRoles is not null)
+                                            {
+                                                foreach (var role in availableRoles)
+                                                {
+                                                    var isAssigned = userRoles.TryGetValue(u.Id, out var cur) && cur.Any(r => r.RoleId == role.Id);
+                                                    <button class="btn btn-sm @(isAssigned ? "btn-danger" : "btn-outline-primary")"
+                                                            @onclick="() => ToggleRole(u.Id, role.Id, isAssigned)">
+                                                        @(isAssigned ? "- " : "+ ")@role.Name
+                                                    </button>
+                                                }
+                                            }
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => rolePanelUserId = null">Close</button>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(roleError))
+                                        {
+                                            <div class="text-danger small mt-1">@roleError</div>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
                     }
                 }
                 @if (!filtered.Any())
@@ -167,13 +195,16 @@ else
 @code {
     private List<UserDto>? users;
     private string filter = "";
+    private Dictionary<Guid, List<UserRoleDto>> userRoles = new();
+    private List<RoleDto>? availableRoles;
+    private Guid? rolePanelUserId;
+    private string? roleError;
 
     // Create form
     private bool showCreateForm;
     private string newFirstName = "";
     private string newLastName = "";
     private string newEmail = "";
-    private string newRole = "SalesRep";
     private bool creating;
     private string? createError;
     private string? tempPassword;
@@ -182,16 +213,49 @@ else
     private Guid? editingId;
     private string editFirst = "";
     private string editLast = "";
-    private string editRole = "SalesRep";
     private bool saving;
     private string? editError;
 
     // Deactivate / Activate
     private Guid? actionId;
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = Api.GetUsersAsync();
+        var t2 = Api.GetRolesAsync();
+        users = await t1;
+        availableRoles = await t2;
+    }
 
-    private async Task Load() => users = await Api.GetUsersAsync();
+    private async Task LoadUserRoles(Guid userId)
+    {
+        var roles = await Api.GetUserRolesAsync(userId);
+        userRoles[userId] = roles ?? [];
+    }
+
+    private async Task OpenRolePanel(Guid userId)
+    {
+        if (rolePanelUserId == userId) { rolePanelUserId = null; return; }
+        rolePanelUserId = userId;
+        roleError = null;
+        if (!userRoles.ContainsKey(userId))
+            await LoadUserRoles(userId);
+    }
+
+    private async Task ToggleRole(Guid userId, Guid roleId, bool isAssigned)
+    {
+        roleError = null;
+        HttpResponseMessage resp;
+        if (isAssigned)
+            resp = await Api.RemoveRoleFromUserAsync(userId, roleId);
+        else
+            resp = await Api.AssignRoleToUserAsync(userId, roleId);
+
+        if (resp.IsSuccessStatusCode)
+            await LoadUserRoles(userId);
+        else
+            roleError = await ApiErrors.ParseAsync(resp);
+    }
 
     private async Task CreateUser()
     {
@@ -210,8 +274,7 @@ else
             {
                 Email = newEmail,
                 FirstName = newFirstName,
-                LastName = newLastName,
-                Role = newRole
+                LastName = newLastName
             });
 
             if (resp.IsSuccessStatusCode)
@@ -219,13 +282,12 @@ else
                 var result = await resp.Content.ReadFromJsonAsync<CreateUserResult>();
                 tempPassword = result?.TempPassword;
                 newFirstName = newLastName = newEmail = "";
-                newRole = "SalesRep";
                 showCreateForm = false;
-                await Load();
+                users = await Api.GetUsersAsync();
             }
             else
             {
-                createError = await resp.Content.ReadAsStringAsync();
+                createError = await ApiErrors.ParseAsync(resp);
             }
         }
         finally { creating = false; }
@@ -236,15 +298,10 @@ else
         editingId = u.Id;
         editFirst = u.FirstName;
         editLast = u.LastName;
-        editRole = u.Role;
         editError = null;
     }
 
-    private void CancelEdit()
-    {
-        editingId = null;
-        editError = null;
-    }
+    private void CancelEdit() { editingId = null; editError = null; }
 
     private async Task SaveEdit(Guid id)
     {
@@ -258,22 +315,9 @@ else
         saving = true;
         try
         {
-            var resp = await Api.UpdateUserAsync(id, new
-            {
-                FirstName = editFirst,
-                LastName = editLast,
-                Role = editRole
-            });
-
-            if (resp.IsSuccessStatusCode)
-            {
-                editingId = null;
-                await Load();
-            }
-            else
-            {
-                editError = await resp.Content.ReadAsStringAsync();
-            }
+            var resp = await Api.UpdateUserAsync(id, new { FirstName = editFirst, LastName = editLast });
+            if (resp.IsSuccessStatusCode) { editingId = null; users = await Api.GetUsersAsync(); }
+            else editError = await ApiErrors.ParseAsync(resp);
         }
         finally { saving = false; }
     }
@@ -281,22 +325,14 @@ else
     private async Task Deactivate(Guid id)
     {
         actionId = id;
-        try
-        {
-            var resp = await Api.DeactivateUserAsync(id);
-            if (resp.IsSuccessStatusCode) await Load();
-        }
+        try { var resp = await Api.DeactivateUserAsync(id); if (resp.IsSuccessStatusCode) users = await Api.GetUsersAsync(); }
         finally { actionId = null; }
     }
 
     private async Task Activate(Guid id)
     {
         actionId = id;
-        try
-        {
-            var resp = await Api.ActivateUserAsync(id);
-            if (resp.IsSuccessStatusCode) await Load();
-        }
+        try { var resp = await Api.ActivateUserAsync(id); if (resp.IsSuccessStatusCode) users = await Api.GetUsersAsync(); }
         finally { actionId = null; }
     }
 

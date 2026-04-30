@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using CrmSales.Api.Auditing;
+using CrmSales.Api.Extensions;
 using CrmSales.SharedKernel.Catalog;
 using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
@@ -92,7 +93,7 @@ public static class QuoteEndpoints
             [FromQuery] int days = 14,
             [FromQuery] int limit = 5) =>
         {
-            var isSales = http.User.IsInRole("SalesRep") && !http.User.IsInRole("SalesManager") && !http.User.IsInRole("Admin");
+            var isSales = http.User.HasPermission(CrmSales.SharedKernel.Authorization.Permissions.ViewOwnOpportunities);
             Guid? ownerId = null;
             if (isSales)
             {
@@ -323,7 +324,7 @@ public static class QuoteEndpoints
             }
 
             return Results.Ok(new { quote.Id, Status = quote.Status.ToString(), EmailSent = emailSent, EmailNote = emailNote });
-        }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager", "SalesRep"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.SendQuotes));
 
         group.MapPost("/{id:guid}/accept", async (
             Guid id,
@@ -372,7 +373,7 @@ public static class QuoteEndpoints
                 quote.Id.ToString(), msg, actor, ct);
 
             return Results.Ok(new { quote.Id, Status = quote.Status.ToString() });
-        }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager", "SalesRep"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.SendQuotes));
 
         group.MapPost("/{id:guid}/reject", async (
             Guid id,
@@ -407,7 +408,7 @@ public static class QuoteEndpoints
                 quote.Id.ToString(), msg, actor, ct);
 
             return Results.Ok(new { quote.Id, Status = quote.Status.ToString() });
-        }).RequireAuthorization(p => p.RequireRole("Admin", "SalesManager"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.ApproveQuotes));
 
         group.MapDelete("/{id:guid}/tax-rate", async (
             Guid id, IQuoteRepository repo, CancellationToken ct) =>

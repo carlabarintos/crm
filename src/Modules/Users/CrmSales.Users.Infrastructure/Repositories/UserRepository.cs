@@ -19,9 +19,6 @@ internal sealed class UserRepository(UsersDbContext dbContext) : IUserRepository
     public async Task<User?> GetByKeycloakIdAsync(string keycloakId, CancellationToken ct = default) =>
         await dbContext.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
 
-    public async Task<IReadOnlyList<User>> GetByRoleAsync(UserRole role, CancellationToken ct = default) =>
-        await dbContext.Users.AsNoTracking().Where(u => u.Role == role && u.IsActive).ToListAsync(ct);
-
     public async Task<bool> EmailExistsAsync(string email, Guid? excludeId = null, CancellationToken ct = default) =>
         await dbContext.Users.AnyAsync(u => u.Email == email.ToLowerInvariant()
             && (excludeId == null || u.Id != excludeId), ct);

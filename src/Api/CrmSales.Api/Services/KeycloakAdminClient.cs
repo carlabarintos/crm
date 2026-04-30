@@ -248,7 +248,7 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
         await httpClient.SendAsync(req); // 204 on success, 409 if already assigned — both are fine
     }
 
-    private static readonly string[] CrmRoles = ["SuperAdmin", "Admin", "SalesManager", "SalesRep", "AccountManager"];
+    private static readonly string[] CrmRoles = ["SuperAdmin", "Admin"];
 
     private async Task EnsureRolesExistAsync(string token)
     {

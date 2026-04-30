@@ -687,7 +687,7 @@ else if (quote is not null)
                 _liCatalogItem = null; liQuantity = 1; liUnitPrice = 0; liDiscount = 0;
                 await Load();
             }
-            else liError = await resp.Content.ReadAsStringAsync();
+            else liError = await ApiErrors.ParseAsync(resp);
         }
         finally { liSaving = false; }
     }
@@ -769,7 +769,7 @@ else if (quote is not null)
                     actionWarning = $"Email not delivered — {result.EmailNote}";
                 await Load();
             }
-            else actionError = await resp.Content.ReadAsStringAsync();
+            else actionError = await ApiErrors.ParseAsync(resp);
         }
         finally { actionSaving = false; }
     }
@@ -785,7 +785,7 @@ else if (quote is not null)
                 actionSuccess = "Quote accepted. Order created automatically.";
                 await Load();
             }
-            else actionError = await resp.Content.ReadAsStringAsync();
+            else actionError = await ApiErrors.ParseAsync(resp);
         }
         finally { actionSaving = false; }
     }
@@ -797,7 +797,7 @@ else if (quote is not null)
         {
             var resp = await Api.RejectQuoteAsync(Id, rejectReason);
             if (resp.IsSuccessStatusCode) { showRejectForm = false; actionSuccess = "Quote rejected."; await Load(); }
-            else actionError = await resp.Content.ReadAsStringAsync();
+            else actionError = await ApiErrors.ParseAsync(resp);
         }
         finally { actionSaving = false; }
     }

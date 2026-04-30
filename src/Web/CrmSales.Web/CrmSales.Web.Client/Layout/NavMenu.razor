@@ -31,11 +31,23 @@
                 Companies
             </NavLink>
         </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="access-requests">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="1" y="3" width="13" height="10" rx="1.5"/>
+                        <path d="M5 3V2a2 2 0 014 0v1" stroke-linecap="round"/>
+                        <path d="M5 8h5M5 10.5h3" stroke-linecap="round"/>
+                    </svg>
+                </span>
+                Access Requests
+            </NavLink>
+        </div>
         </AuthorizeView>
 
         <AuthorizeView Roles="Admin,SalesManager,SalesRep,AccountManager">
         <div class="nav-item">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+            <NavLink class="nav-link" href="dashboard" Match="NavLinkMatch.All">
                 <span class="nav-icon">
                     <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor">
                         <path d="M7.5 1.5L1 6v8h4v-4h5v4h4V6L7.5 1.5z" />
@@ -177,6 +189,18 @@
                     </svg>
                 </span>
                 Users
+            </NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="users/roles">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="2" y="4" width="11" height="8" rx="1.5"/>
+                        <path d="M5 4V3a2 2 0 0 1 4 0v1" stroke-linecap="round"/>
+                        <circle cx="7.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/>
+                    </svg>
+                </span>
+                Roles
             </NavLink>
         </div>
         </AuthorizeView>

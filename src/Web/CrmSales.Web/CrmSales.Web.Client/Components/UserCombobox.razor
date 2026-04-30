@@ -7,7 +7,7 @@
         <div class="cb-avatar cb-avatar-sm">@Initials(Value)</div>
         <div class="cb-chip-body">
             <div class="cb-chip-name">@Value.FullName</div>
-            <div class="cb-chip-sub">@Value.Role</div>
+            <div class="cb-chip-sub">@Value.Email</div>
         </div>
         <button type="button" class="cb-chip-clear" @onclick="Clear" title="Remove">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg>
@@ -40,7 +40,7 @@ else
                         <div class="cb-avatar cb-avatar-xs">@Initials(u)</div>
                         <div class="cb-item-body">
                             <div class="cb-item-name">@u.FullName</div>
-                            <div class="cb-item-sub">@u.Role</div>
+                            <div class="cb-item-sub">@u.Email</div>
                         </div>
                     </div>
                 }
@@ -69,7 +69,6 @@ else
             ? _allUsers
             : _allUsers.Where(u =>
                 u.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                u.Role.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
                 u.Email.Contains(_search, StringComparison.OrdinalIgnoreCase));
 
     private void OnInput(ChangeEventArgs e) { _search = e.Value?.ToString() ?? ""; _open = true; }

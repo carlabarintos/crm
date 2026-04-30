@@ -449,7 +449,7 @@ else if (order is not null)
         {
             var resp = await Api.ConfirmOrderAsync(Id);
             if (resp.IsSuccessStatusCode) { actionSuccess = "Order confirmed."; await Load(); }
-            else actionError = await resp.Content.ReadAsStringAsync();
+            else actionError = await ApiErrors.ParseAsync(resp);
         }
         finally { actionSaving = false; }
     }
@@ -461,7 +461,7 @@ else if (order is not null)
         {
             var resp = await Api.ProcessOrderAsync(Id);
             if (resp.IsSuccessStatusCode) { actionSuccess = "Order is now processing."; await Load(); }
-            else actionError = await resp.Content.ReadAsStringAsync();
+            else actionError = await ApiErrors.ParseAsync(resp);
         }
         finally { actionSaving = false; }
     }
@@ -473,7 +473,7 @@ else if (order is not null)
         {
             var resp = await Api.ShipOrderAsync(Id, trackingInfo);
             if (resp.IsSuccessStatusCode) { showShipForm = false; actionSuccess = "Order shipped."; await Load(); }
-            else actionError = await resp.Content.ReadAsStringAsync();
+            else actionError = await ApiErrors.ParseAsync(resp);
         }
         finally { actionSaving = false; }
     }
@@ -485,7 +485,7 @@ else if (order is not null)
         {
             var resp = await Api.DeliverOrderAsync(Id);
             if (resp.IsSuccessStatusCode) { actionSuccess = "Order marked as delivered."; await Load(); }
-            else actionError = await resp.Content.ReadAsStringAsync();
+            else actionError = await ApiErrors.ParseAsync(resp);
         }
         finally { actionSaving = false; }
     }
@@ -499,7 +499,7 @@ else if (order is not null)
         {
             var resp = await Api.CancelOrderAsync(Id, cancelReason);
             if (resp.IsSuccessStatusCode) { showCancelForm = false; actionSuccess = "Order cancelled."; await Load(); }
-            else actionError = await resp.Content.ReadAsStringAsync();
+            else actionError = await ApiErrors.ParseAsync(resp);
         }
         finally { actionSaving = false; }
     }
@@ -520,7 +520,7 @@ else if (order is not null)
         {
             var resp = await Api.UpdateOrderLineItemAsync(Id, lineItemId, new { Quantity = editQty, UnitPrice = editUnitPrice });
             if (resp.IsSuccessStatusCode) { editingLineItemId = null; await Load(); }
-            else lineItemError = await resp.Content.ReadAsStringAsync();
+            else lineItemError = await ApiErrors.ParseAsync(resp);
         }
         finally { lineItemSaving = false; }
     }
@@ -558,7 +558,7 @@ else if (order is not null)
                 _newCatalogItem = null; newQty = 1; newUnitPrice = 0;
                 await Load();
             }
-            else lineItemError = await resp.Content.ReadAsStringAsync();
+            else lineItemError = await ApiErrors.ParseAsync(resp);
         }
         finally { lineItemSaving = false; }
     }
@@ -570,7 +570,7 @@ else if (order is not null)
         {
             var resp = await Api.DeleteOrderLineItemAsync(Id, lineItemId);
             if (resp.IsSuccessStatusCode) await Load();
-            else lineItemError = await resp.Content.ReadAsStringAsync();
+            else lineItemError = await ApiErrors.ParseAsync(resp);
         }
         finally { lineItemSaving = false; }
     }

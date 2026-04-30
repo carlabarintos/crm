@@ -1,10 +1,9 @@
 using CrmSales.SharedKernel.Domain;
-using CrmSales.Users.Domain.Entities;
 
 namespace CrmSales.Users.Domain.Events;
 
 public sealed record UserCreatedEvent(
-    Guid UserId, string Email, string FullName, UserRole Role) : IDomainEvent
+    Guid UserId, string Email, string FullName) : IDomainEvent
 {
     public Guid EventId { get; } = Guid.NewGuid();
     public DateTime OccurredOn { get; } = DateTime.UtcNow;

@@ -1,3 +1,4 @@
+using CrmSales.Api.Extensions;
 using CrmSales.Api.Master;
 using CrmSales.SharedKernel.MultiTenancy;
 using Microsoft.AspNetCore.Mvc;
@@ -31,9 +32,7 @@ public static class AuditEndpoints
             page = Math.Max(1, page);
 
             // SalesReps can only see their own events — ignore any actor filter from the client
-            var isSalesRepOnly = http.User.IsInRole("SalesRep") &&
-                                 !http.User.IsInRole("Admin") &&
-                                 !http.User.IsInRole("SalesManager");
+            var isSalesRepOnly = http.User.HasPermission(CrmSales.SharedKernel.Authorization.Permissions.ViewOwnAudit);
 
             if (isSalesRepOnly)
                 actor = http.User.FindFirst("preferred_username")?.Value;
@@ -89,9 +88,7 @@ public static class AuditEndpoints
             var todayUtc = DateTime.UtcNow.Date;
             var weekUtc = todayUtc.AddDays(-6);
 
-            var isSalesRepOnly = http.User.IsInRole("SalesRep") &&
-                                 !http.User.IsInRole("Admin") &&
-                                 !http.User.IsInRole("SalesManager");
+            var isSalesRepOnly = http.User.HasPermission(CrmSales.SharedKernel.Authorization.Permissions.ViewOwnAudit);
 
             var selfActor = http.User.FindFirst("preferred_username")?.Value;
 
@@ -141,6 +138,41 @@ public static class AuditEndpoints
                 EventTypes = eventTypes
             });
         });
+
+        group.MapGet("/errors", async (
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            [FromQuery] string? search = null,
+            [FromQuery] DateTime? from = null,
+            [FromQuery] DateTime? to = null,
+            MasterDbContext db = default!,
+            CancellationToken ct = default) =>
+        {
+            pageSize = Math.Clamp(pageSize, 1, 100);
+            page = Math.Max(1, page);
+
+            var query = db.AuditLogs.Where(a => a.EventType == "system.error");
+
+            if (!string.IsNullOrWhiteSpace(search))
+                query = query.Where(a => EF.Functions.ILike(a.Description, $"%{search}%") ||
+                                         EF.Functions.ILike(a.EntityType, $"%{search}%") ||
+                                         EF.Functions.ILike(a.Actor, $"%{search}%"));
+
+            if (from.HasValue) query = query.Where(a => a.OccurredAt >= from.Value);
+            if (to.HasValue)   query = query.Where(a => a.OccurredAt <= to.Value);
+
+            query = query.OrderByDescending(a => a.OccurredAt);
+
+            var total = await query.CountAsync(ct);
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(a => new { a.Id, a.EntityType, a.EntityId, a.Description, a.Actor, a.TenantId, a.OccurredAt })
+                .ToListAsync(ct);
+
+            return Results.Ok(new { Total = total, Page = page, PageSize = pageSize, Items = items });
+        })
+        .RequireAuthorization(p => p.RequireRole("SuperAdmin"));
 
         return app;
     }

@@ -1,4 +1,5 @@
 using CrmSales.Api.Auditing;
+using CrmSales.Api.Extensions;
 using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
 using CrmSales.Opportunities.Domain.Entities;
@@ -69,7 +70,7 @@ public static class OpportunityEndpoints
             [FromQuery] int days = 14,
             [FromQuery] int limit = 5) =>
         {
-            var isSales = http.User.IsInRole("SalesRep") && !http.User.IsInRole("SalesManager") && !http.User.IsInRole("Admin");
+            var isSales = http.User.HasPermission(CrmSales.SharedKernel.Authorization.Permissions.ViewOwnOpportunities);
             Guid? ownerId = null;
             if (isSales)
             {

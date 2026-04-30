@@ -29,6 +29,9 @@ builder.Services.AddHttpClient<CrmApiClient>(client => client.BaseAddress = new 
             authorizedUrls: [apiBaseUrl],
             scopes: ["crm-web-api-scope"]));
 
+// Unauthenticated HttpClient for public endpoints (e.g. access request form)
+builder.Services.AddHttpClient("anon", client => client.BaseAddress = new Uri(apiBaseUrl));
+
 builder.Services.AddScoped<NotificationService>();
 
 await builder.Build().RunAsync();

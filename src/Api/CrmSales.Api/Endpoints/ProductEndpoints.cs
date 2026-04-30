@@ -76,7 +76,7 @@ public static class ProductEndpoints
             return result.IsSuccess
                 ? Results.CreatedAtRoute("GetProductById", new { id = result.Value }, result.Value)
                 : Results.Problem(result.Error.Description, statusCode: StatusCodes.Status400BadRequest);
-        }).RequireAuthorization(p => p.RequireRole("Admin"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.ManageProducts));
 
         group.MapPut("/{id:guid}", async (
             Guid id,
@@ -87,7 +87,7 @@ public static class ProductEndpoints
             if (id != cmd.Id) return Results.BadRequest("ID mismatch.");
             var result = await bus.InvokeAsync<Result>(cmd, ct);
             return result.IsSuccess ? Results.NoContent() : Results.Problem(result.Error.Description);
-        }).RequireAuthorization(p => p.RequireRole("Admin"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.ManageProducts));
 
         return app;
     }
@@ -114,7 +114,7 @@ public static class ProductEndpoints
             var category = ProductCategory.Create(req.Name, req.Description);
             await repo.AddAsync(category, ct);
             return Results.Created($"/api/categories/{category.Id}", new { category.Id, category.Name });
-        }).RequireAuthorization(p => p.RequireRole("Admin"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.ManageProducts));
 
         group.MapPost("/import", async (
             List<ImportCategoryRow> rows,
@@ -156,7 +156,7 @@ public static class ProductEndpoints
             }
 
             return Results.Ok(new ImportResult(created, skipped, errors));
-        }).RequireAuthorization(p => p.RequireRole("Admin"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.ManageProducts));
 
         return app;
     }
@@ -192,7 +192,7 @@ public static class ProductEndpoints
             return result.IsSuccess
                 ? Results.CreatedAtRoute("GetServiceById", new { id = result.Value }, result.Value)
                 : Results.Problem(result.Error.Description, statusCode: StatusCodes.Status400BadRequest);
-        }).RequireAuthorization(p => p.RequireRole("Admin"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.ManageProducts));
 
         group.MapPut("/{id:guid}", async (
             Guid id,
@@ -203,7 +203,7 @@ public static class ProductEndpoints
             if (id != cmd.Id) return Results.BadRequest("ID mismatch.");
             var result = await bus.InvokeAsync<Result>(cmd, ct);
             return result.IsSuccess ? Results.NoContent() : Results.Problem(result.Error.Description);
-        }).RequireAuthorization(p => p.RequireRole("Admin"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.ManageProducts));
 
         return app;
     }
@@ -285,7 +285,7 @@ public static class ProductEndpoints
             }
 
             return Results.Ok(new ImportResult(created, skipped, errors));
-        }).WithTags("Services").RequireAuthorization(p => p.RequireRole("Admin"));
+        }).WithTags("Services").RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.ManageProducts));
 
         return app;
     }
@@ -368,7 +368,7 @@ public static class ProductEndpoints
             }
 
             return Results.Ok(new ImportResult(created, skipped, errors));
-        }).WithTags("Products").RequireAuthorization(p => p.RequireRole("Admin"));
+        }).WithTags("Products").RequireAuthorization(p => p.RequireClaim("permission", CrmSales.SharedKernel.Authorization.Permissions.ManageProducts));
 
         return app;
     }

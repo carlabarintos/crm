@@ -1,28 +1,61 @@
 using System.Security.Claims;
 using System.Text.Json;
+using CrmSales.SharedKernel.Authorization;
+using CrmSales.SharedKernel.MultiTenancy;
+using CrmSales.Users.Domain.Repositories;
 using Microsoft.AspNetCore.Authentication;
 
 namespace CrmSales.Api.Services;
 
-public class KeycloakRolesTransformer : IClaimsTransformation
+public class UserClaimsTransformation(IServiceProvider sp) : IClaimsTransformation
 {
-    public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
+    public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
-        var realmAccess = principal.FindFirst("realm_access")?.Value;
-        if (realmAccess is null) return Task.FromResult(principal);
+        if (principal.Identity?.IsAuthenticated is not true)
+            return principal;
 
         var identity = (ClaimsIdentity)principal.Identity!;
-        using var doc = JsonDocument.Parse(realmAccess);
-        if (!doc.RootElement.TryGetProperty("roles", out var rolesEl))
-            return Task.FromResult(principal);
 
-        foreach (var role in rolesEl.EnumerateArray())
+        // Keycloak system roles (SuperAdmin, Admin)
+        var realmAccess = principal.FindFirst("realm_access")?.Value;
+        if (realmAccess is not null)
         {
-            var roleName = role.GetString();
-            if (roleName is not null)
-                identity.AddClaim(new Claim(ClaimTypes.Role, roleName));
+            using var doc = JsonDocument.Parse(realmAccess);
+            if (doc.RootElement.TryGetProperty("roles", out var rolesEl))
+            {
+                foreach (var role in rolesEl.EnumerateArray())
+                {
+                    var roleName = role.GetString();
+                    if (roleName is not null)
+                        identity.AddClaim(new Claim(ClaimTypes.Role, roleName));
+                }
+            }
         }
 
-        return Task.FromResult(principal);
+        // Admin gets all permissions automatically — no DB lookup needed
+        if (principal.IsInRole("Admin"))
+        {
+            foreach (var perm in Permissions.All)
+                identity.AddClaim(new Claim("permission", perm));
+            return principal;
+        }
+
+        // DB-backed permission claims for regular users
+        var keycloakId = principal.FindFirst("sub")?.Value;
+        var tenantId = principal.FindFirst("company_id")?.Value;
+
+        if (keycloakId is not null && tenantId is not null)
+        {
+            using var scope = sp.CreateScope();
+            var tenantCtx = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+            tenantCtx.TenantId = tenantId;
+
+            var roleRepo = scope.ServiceProvider.GetRequiredService<IRoleRepository>();
+            var permissions = await roleRepo.GetPermissionsForUserAsync(keycloakId);
+            foreach (var perm in permissions)
+                identity.AddClaim(new Claim("permission", perm));
+        }
+
+        return principal;
     }
 }

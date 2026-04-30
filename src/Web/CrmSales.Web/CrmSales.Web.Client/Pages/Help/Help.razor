@@ -348,28 +348,69 @@
         <span>Users &amp; Roles</span>
     </div>
     <div class="card-body help-body">
-        <p>Access is controlled by roles. Your role determines which sections you can see and what actions you can perform.</p>
+        <p>Access is controlled by <strong>roles</strong>. Each role carries a set of <strong>permissions</strong> that determine exactly what a user can see and do. Admins can create any number of custom roles tailored to your organisation — for example <em>Doctor</em>, <em>Order Manager</em>, or <em>Sales Rep</em>.</p>
+
+        <h4 class="help-h4">System roles</h4>
         <div class="help-roles">
             <div class="help-role-card">
                 <div class="help-role-name">Admin</div>
-                <p>Full access to all modules including Products, Categories, Users, and Reports. Can manage other users' roles and view all records regardless of owner.</p>
+                <p>Full access to everything within the company — all modules, all records, and all settings. Admins can create users, define roles, and assign permissions. This role is granted at company setup and cannot be removed through the app.</p>
             </div>
             <div class="help-role-card">
-                <div class="help-role-name">Sales Manager</div>
-                <p>Access to all sales records (Opportunities, Quotes, Orders, Contacts), can view Reports, but cannot manage products or users.</p>
-            </div>
-            <div class="help-role-card">
-                <div class="help-role-name">Sales Rep</div>
-                <p>Can create and manage their own Opportunities, Quotes, Orders, and Contacts. Does not have access to Products or Reports.</p>
-            </div>
-            <div class="help-role-card">
-                <div class="help-role-name">Account Manager</div>
-                <p>Similar access to Sales Rep. Focused on managing existing customer relationships and coordinating orders.</p>
+                <div class="help-role-name">SuperAdmin</div>
+                <p>System-level only. Can create and manage companies across the platform. Has no access to individual company data — a SuperAdmin must also be given an Admin role inside a company to see its records.</p>
             </div>
         </div>
+
+        <h4 class="help-h4">Custom roles</h4>
+        <p>Admins can create any role under <strong>Users → Roles</strong> and choose exactly which permissions it carries. Users can be assigned multiple roles — their effective access is the union of all permissions across their roles.</p>
+
+        <h4 class="help-h4">Permission levels explained</h4>
+        <div class="help-perm-levels">
+            <div class="help-perm-row">
+                <span class="help-perm-badge" style="background:#FEF3C7;color:#92400E;border-color:#FDE68A">manage</span>
+                <div>
+                    <strong>Full write access.</strong> The user can create new records, edit existing ones, and delete them. For example, <em>products.manage</em> allows adding products to the catalogue, changing prices, and removing discontinued items.
+                </div>
+            </div>
+            <div class="help-perm-row">
+                <span class="help-perm-badge" style="background:#DBEAFE;color:#1E40AF;border-color:#BFDBFE">view</span>
+                <div>
+                    <strong>Read-only access to all records.</strong> The user can see every record in that area regardless of who created it, but cannot make changes. For example, <em>opportunities.view</em> lets a user browse the full pipeline without being able to edit any deal.
+                </div>
+            </div>
+            <div class="help-perm-row">
+                <span class="help-perm-badge" style="background:#F3F4F6;color:#374151;border-color:#E5E7EB">view_own</span>
+                <div>
+                    <strong>Read-only access restricted to the user's own records.</strong> The user can only see records where they are the assigned owner. For example, <em>opportunities.view_own</em> means a sales rep sees their own deals but not their colleagues'. Useful when you want to protect commercially sensitive pipeline data between team members.
+                </div>
+            </div>
+        </div>
+
+        <h4 class="help-h4">Available permissions</h4>
+        <div class="help-field-table">
+            <div class="help-field-row"><span>products.manage</span><span>Add, edit, and delete products and services in the catalogue</span></div>
+            <div class="help-field-row"><span>products.view</span><span>Browse the product and service catalogue</span></div>
+            <div class="help-field-row"><span>contacts.manage</span><span>Create, edit, and delete contacts</span></div>
+            <div class="help-field-row"><span>contacts.view</span><span>View all contacts</span></div>
+            <div class="help-field-row"><span>opportunities.manage</span><span>Create, edit, and delete opportunities</span></div>
+            <div class="help-field-row"><span>opportunities.view</span><span>View all opportunities across the team</span></div>
+            <div class="help-field-row"><span>opportunities.view_own</span><span>View only opportunities assigned to this user</span></div>
+            <div class="help-field-row"><span>quotes.manage</span><span>Create and edit quotes</span></div>
+            <div class="help-field-row"><span>quotes.send</span><span>Mark a quote as Sent (share with prospect)</span></div>
+            <div class="help-field-row"><span>quotes.approve</span><span>Accept or reject quotes on behalf of the company</span></div>
+            <div class="help-field-row"><span>orders.manage</span><span>Create and progress orders through their lifecycle</span></div>
+            <div class="help-field-row"><span>orders.view</span><span>View all orders</span></div>
+            <div class="help-field-row"><span>users.manage</span><span>Create, edit, activate, and deactivate user accounts</span></div>
+            <div class="help-field-row"><span>roles.manage</span><span>Create and edit roles, assign permissions, and assign roles to users</span></div>
+            <div class="help-field-row"><span>settings.manage</span><span>Change company settings including tax rates, SMTP, and email templates</span></div>
+            <div class="help-field-row"><span>audit.view</span><span>View the full event log for all users</span></div>
+            <div class="help-field-row"><span>audit.view_own</span><span>View only the event log entries for this user</span></div>
+        </div>
+
         <div class="help-tip">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" stroke-width="1.5"><circle cx="7" cy="7" r="6"/><path d="M7 5v3M7 10v.5" stroke-linecap="round"/></svg>
-            <span>User accounts are provisioned through <strong>Keycloak</strong>. Contact your Admin to create or deactivate users.</span>
+            <span>A user with both <em>opportunities.view_own</em> and <em>opportunities.view</em> on different roles will effectively have <em>view</em> — the broader permission always wins.</span>
         </div>
     </div>
 </div>
@@ -684,6 +725,30 @@
     }
     .help-role-name { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: .3rem; }
     .help-role-card p { font-size: 12.5px; color: #6B7280; margin: 0; line-height: 1.55; }
+
+    .help-perm-levels { display: flex; flex-direction: column; gap: .75rem; margin-bottom: .75rem; }
+    .help-perm-row {
+        display: flex;
+        align-items: flex-start;
+        gap: .875rem;
+        font-size: 13px;
+        color: #374151;
+        line-height: 1.6;
+    }
+    .help-perm-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        border: 1px solid;
+        white-space: nowrap;
+        flex-shrink: 0;
+        margin-top: 2px;
+        min-width: 78px;
+        text-align: center;
+    }
+    .help-perm-row strong { display: block; font-size: 13px; color: #111827; margin-bottom: .1rem; }
 
     .help-list { padding-left: 1.25rem; margin: 0; }
     .help-list li { font-size: 13.5px; color: #374151; line-height: 1.65; margin-bottom: .5rem; }

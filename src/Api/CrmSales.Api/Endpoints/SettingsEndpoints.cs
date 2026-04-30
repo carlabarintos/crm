@@ -11,6 +11,7 @@ using CrmSales.Settings.Application.TaxRates.DTOs;
 using CrmSales.Settings.Application.TaxRates.Queries.GetTaxRateById;
 using CrmSales.Settings.Application.TaxRates.Queries.GetTaxRates;
 using CrmSales.SharedKernel;
+using CrmSales.SharedKernel.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wolverine;
 
@@ -48,7 +49,7 @@ public static class SettingsEndpoints
             return result.IsSuccess
                 ? Results.CreatedAtRoute("GetTaxRateById", new { id = result.Value }, result.Value)
                 : Results.Problem(result.Error.Description, statusCode: StatusCodes.Status400BadRequest);
-        }).RequireAuthorization(p => p.RequireRole("Admin"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", Permissions.ManageSettings));
 
         taxGroup.MapPut("/{id:guid}", async (
             Guid id,
@@ -59,24 +60,24 @@ public static class SettingsEndpoints
             if (id != cmd.Id) return Results.BadRequest("ID mismatch.");
             var result = await bus.InvokeAsync<Result>(cmd, ct);
             return result.IsSuccess ? Results.NoContent() : Results.Problem(result.Error.Description);
-        }).RequireAuthorization(p => p.RequireRole("Admin"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", Permissions.ManageSettings));
 
         taxGroup.MapDelete("/{id:guid}", async (Guid id, IMessageBus bus, CancellationToken ct) =>
         {
             var result = await bus.InvokeAsync<Result>(new DeleteTaxRateCommand(id), ct);
             return result.IsSuccess ? Results.NoContent() : Results.Problem(result.Error.Description);
-        }).RequireAuthorization(p => p.RequireRole("Admin"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", Permissions.ManageSettings));
 
         taxGroup.MapPost("/{id:guid}/set-default", async (Guid id, IMessageBus bus, CancellationToken ct) =>
         {
             var result = await bus.InvokeAsync<Result>(new SetDefaultTaxRateCommand(id), ct);
             return result.IsSuccess ? Results.NoContent() : Results.Problem(result.Error.Description);
-        }).RequireAuthorization(p => p.RequireRole("Admin"));
+        }).RequireAuthorization(p => p.RequireClaim("permission", Permissions.ManageSettings));
 
         // ── Email Templates ────────────────────────────────────────────────────
         var emailGroup = app.MapGroup("/api/settings/email-templates")
             .WithTags("Settings")
-            .RequireAuthorization(p => p.RequireRole("Admin"));
+            .RequireAuthorization(p => p.RequireClaim("permission", Permissions.ManageSettings));
 
         emailGroup.MapGet("/", async (IMessageBus bus, CancellationToken ct) =>
         {
@@ -101,7 +102,7 @@ public static class SettingsEndpoints
         // ── Email Config (SMTP) ────────────────────────────────────────────────
         var emailConfigGroup = app.MapGroup("/api/settings/email-config")
             .WithTags("Settings")
-            .RequireAuthorization(p => p.RequireRole("Admin"));
+            .RequireAuthorization(p => p.RequireClaim("permission", Permissions.ManageSettings));
 
         emailConfigGroup.MapGet("/", async (IMessageBus bus, CancellationToken ct) =>
         {

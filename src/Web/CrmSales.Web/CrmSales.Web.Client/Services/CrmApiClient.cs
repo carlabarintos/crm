@@ -299,6 +299,15 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<AuditSummaryDto?> GetAuditSummaryAsync()
         => _http.GetFromJsonAsync<AuditSummaryDto>("/api/audit/summary");
 
+    public Task<ErrorLogPageDto?> GetErrorLogsAsync(int page = 1, int pageSize = 50, string? search = null, DateTime? from = null, DateTime? to = null)
+    {
+        var q = $"page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(search)) q += $"&search={Uri.EscapeDataString(search)}";
+        if (from.HasValue) q += $"&from={from.Value:O}";
+        if (to.HasValue)   q += $"&to={to.Value:O}";
+        return _http.GetFromJsonAsync<ErrorLogPageDto>($"/api/audit/errors?{q}");
+    }
+
     // ── Companies ─────────────────────────────────────────────────────────
     public Task<List<CompanyDto>?> GetCompaniesAsync()
         => _http.GetFromJsonAsync<List<CompanyDto>>("/api/companies");
@@ -308,6 +317,20 @@ public class CrmApiClient(HttpClient httpClient)
 
     public Task<HttpResponseMessage> CreateCompanyAdminAsync(Guid companyId, object body)
         => _http.PostAsJsonAsync($"/api/companies/{companyId}/admin", body);
+
+    // ── Access Requests ────────────────────────────────────────────────
+    public Task<List<AccessRequestDto>?> GetAccessRequestsAsync(string? status = null)
+    {
+        var url = "/api/access-requests";
+        if (!string.IsNullOrEmpty(status)) url += $"?status={Uri.EscapeDataString(status)}";
+        return _http.GetFromJsonAsync<List<AccessRequestDto>>(url);
+    }
+
+    public Task<HttpResponseMessage> ApproveAccessRequestAsync(Guid id)
+        => _http.PostAsync($"/api/access-requests/{id}/approve", null);
+
+    public Task<HttpResponseMessage> RejectAccessRequestAsync(Guid id)
+        => _http.PostAsync($"/api/access-requests/{id}/reject", null);
 
     // ── Settings / Tax Rates ──────────────────────────────────────────────
     public Task<List<TaxRateDto>?> GetTaxRatesAsync(bool? isActive = null)
@@ -361,6 +384,34 @@ public class CrmApiClient(HttpClient httpClient)
 
     public Task<HttpResponseMessage> ActivateUserAsync(Guid id)
         => _http.PostAsync($"/api/users/{id}/activate", null);
+
+    // ── Roles ──────────────────────────────────────────────────────────────
+    public Task<List<RoleDto>?> GetRolesAsync()
+        => _http.GetFromJsonAsync<List<RoleDto>>("/api/roles");
+
+    public Task<RoleDetailDto?> GetRoleAsync(Guid id)
+        => _http.GetFromJsonAsync<RoleDetailDto>($"/api/roles/{id}");
+
+    public Task<List<AvailablePermissionDto>?> GetAvailablePermissionsAsync()
+        => _http.GetFromJsonAsync<List<AvailablePermissionDto>>("/api/roles/available-permissions");
+
+    public Task<HttpResponseMessage> CreateRoleAsync(object body)
+        => _http.PostAsJsonAsync("/api/roles", body);
+
+    public Task<HttpResponseMessage> UpdateRoleAsync(Guid id, object body)
+        => _http.PutAsJsonAsync($"/api/roles/{id}", body);
+
+    public Task<HttpResponseMessage> DeleteRoleAsync(Guid id)
+        => _http.DeleteAsync($"/api/roles/{id}");
+
+    public Task<List<UserRoleDto>?> GetUserRolesAsync(Guid userId)
+        => _http.GetFromJsonAsync<List<UserRoleDto>>($"/api/users/{userId}/roles");
+
+    public Task<HttpResponseMessage> AssignRoleToUserAsync(Guid userId, Guid roleId)
+        => _http.PostAsJsonAsync($"/api/users/{userId}/roles", new { roleId });
+
+    public Task<HttpResponseMessage> RemoveRoleFromUserAsync(Guid userId, Guid roleId)
+        => _http.DeleteAsync($"/api/users/{userId}/roles/{roleId}");
 }
 
 // ── DTOs ──────────────────────────────────────────────────────────────────
@@ -439,9 +490,18 @@ public record ContactOrderDto(
 
 public record ContactOrderLineItemDto(Guid Id, string ItemName, int Quantity, decimal UnitPrice, decimal DiscountPercent, decimal LineTotal, decimal DiscountAmount);
 
-public record UserDto(Guid Id, string Email, string FirstName, string LastName, string FullName, string Role, bool IsActive);
+public record UserDto(Guid Id, string Email, string FirstName, string LastName, string FullName, bool IsActive);
+public record RoleDto(Guid Id, string Name, string? Description, List<string> Permissions, DateTime CreatedAt, DateTime UpdatedAt);
+public record RoleDetailDto(Guid Id, string Name, string? Description, List<string> Permissions, DateTime CreatedAt, DateTime UpdatedAt);
+public record UserRoleDto(Guid RoleId, string Name, string? Description, DateTime AssignedAt);
+public record AvailablePermissionDto(string Name);
 
 public record CompanyDto(Guid Id, string Name, string Slug, bool IsActive, DateTime CreatedAt);
+
+public record AccessRequestDto(
+    Guid Id, string Name, string Company, string Email,
+    string? Phone, string? Message, string Status,
+    DateTime RequestedAt, DateTime? ReviewedAt);
 
 public record TaxRateDto(
     Guid Id, string Name, decimal Rate, string? Description, string? Region,
@@ -465,6 +525,9 @@ public record AuditLogDto(
     string Description, string Actor, DateTime OccurredAt);
 
 public record AuditPageDto(int Total, int Page, int PageSize, List<AuditLogDto> Items, bool ScopedToSelf = false);
+
+public record ErrorLogDto(Guid Id, string EntityType, string EntityId, string Description, string Actor, string TenantId, DateTime OccurredAt);
+public record ErrorLogPageDto(int Total, int Page, int PageSize, List<ErrorLogDto> Items);
 
 public record AuditSummaryDto(
     int TotalAll, int TotalToday, int TotalWeek,

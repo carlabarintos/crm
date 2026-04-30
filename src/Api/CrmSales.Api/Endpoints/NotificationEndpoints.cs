@@ -23,7 +23,9 @@ public static class NotificationEndpoints
             // Disable ASP.NET Core response buffering so events reach the client immediately
             http.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
 
-            var (channelId, reader) = broadcaster.Subscribe(tenant.TenantId);
+            var isSuperAdmin = http.User.IsInRole("SuperAdmin");
+            var subscribeAs = isSuperAdmin ? "master" : tenant.TenantId;
+            var (channelId, reader) = broadcaster.Subscribe(subscribeAs);
             try
             {
                 // Confirm connection is open
