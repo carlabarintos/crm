@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0\.."
+cd /d "%~dp0"
 
 REM =============================================================================
 REM  add-domain.bat — Add zoeily.com SSL + CORS to the running Hetzner server
@@ -25,14 +25,22 @@ echo   Server: %HETZNER_USER%@%HETZNER_HOST%
 echo  ==========================================
 echo.
 
-echo Connecting to server...
+REM ── Step 1: Upload script to /tmp (avoids any git conflict) ──────────────────
+echo [1/2] Uploading add-domain.sh to server...
+scp -i "%SSH_KEY%" -o StrictHostKeyChecking=no add-domain.sh %HETZNER_USER%@%HETZNER_HOST%:/tmp/add-domain.sh
+if %errorlevel% neq 0 (
+    echo ERROR: Upload failed. Check HETZNER_HOST and SSH_KEY above.
+    exit /b 1
+)
+
+REM ── Step 2: Fix line endings, run script ─────────────────────────────────────
+echo [2/2] Running on server...
 echo (This will take a few minutes for the SSL certificate)
 echo.
 
-set REMOTE_CMD=cd /opt/crm ^&^& git pull ^&^& chmod +x scripts/add-domain.sh ^&^& bash scripts/add-domain.sh %NEW_DOMAIN%
+set REMOTE_CMD=sed -i 's/\r//' /tmp/add-domain.sh ^&^& chmod +x /tmp/add-domain.sh ^&^& bash /tmp/add-domain.sh %NEW_DOMAIN%
 
 ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no %HETZNER_USER%@%HETZNER_HOST% "%REMOTE_CMD%"
-
 if %errorlevel% neq 0 (
     echo.
     echo ERROR: add-domain failed. Check the output above.
