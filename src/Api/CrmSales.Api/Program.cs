@@ -186,7 +186,9 @@ builder.Services.AddOpenApi(options =>
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.WithOrigins(builder.Configuration["AllowedOrigins"] ?? "http://localhost:5001")
+        policy.WithOrigins(
+                  (builder.Configuration["AllowedOrigins"] ?? "http://localhost:5001")
+                  .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
               .AllowAnyMethod().AllowAnyHeader()));
 
 builder.Services.AddRateLimiter(options =>

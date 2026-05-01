@@ -107,7 +107,7 @@ services:
       Keycloak__Realm: crm
       Keycloak__AdminUsername: ${KEYCLOAK_ADMIN}
       Keycloak__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD}
-      AllowedOrigins: https://${DOMAIN}
+      AllowedOrigins: "https://${DOMAIN}${EXTRA_ALLOWED_ORIGINS:+,${EXTRA_ALLOWED_ORIGINS}}"
     depends_on:
       postgres:
         condition: service_healthy
