@@ -48,7 +48,9 @@ else
   # returns 404 for the challenge path on a dead container
   iptables  -t nat -F DOCKER-INGRESS 2>/dev/null || true
   ip6tables -t nat -F DOCKER-INGRESS 2>/dev/null || true
-  fuser -k 80/tcp 2>/dev/null || true
+  fuser -k 80/tcp  2>/dev/null || true
+  fuser -k 80/tcp6 2>/dev/null || true
+  pkill -f 'docker-proxy.*:80' 2>/dev/null || true
 
   # Wait until port 80 is confirmed free (up to 30 s)
   echo "  Waiting for port 80 to be free..."
