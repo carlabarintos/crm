@@ -9,7 +9,7 @@
 set -euo pipefail
 
 NEW_DOMAIN="${1:?ERROR: pass the new domain as the first argument, e.g.: bash add-domain.sh zoeily.com}"
-APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+APP_DIR="/opt/crm"
 NGINX_CONF="$APP_DIR/nginx/nginx.conf"
 ENV_FILE="$APP_DIR/.env.production"
 
