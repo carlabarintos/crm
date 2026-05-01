@@ -19,17 +19,27 @@ echo "=========================================="
 echo ""
 
 # ── 1. System update ──────────────────────────────────────────────────────────
-echo "[1/6] Updating system packages..."
+echo "[1/7] Updating system packages..."
 apt-get update -qq && apt-get upgrade -y -qq
 
-# ── 2. Install Docker ─────────────────────────────────────────────────────────
-echo "[2/6] Installing Docker..."
+# ── 2. Open firewall ports ────────────────────────────────────────────────────
+echo "[2/7] Configuring UFW firewall..."
+apt-get install -y -qq ufw
+ufw allow OpenSSH
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw --force enable
+ufw reload
+echo "  Ports 22, 80, 443 open."
+
+# ── 3. Install Docker ─────────────────────────────────────────────────────────
+echo "[3/7] Installing Docker..."
 curl -fsSL https://get.docker.com | sh
 systemctl enable --now docker
 echo "Docker $(docker --version) installed."
 
 # ── 3. Clone the repo ─────────────────────────────────────────────────────────
-echo "[3/6] Cloning repo to $APP_DIR..."
+echo "[4/7] Cloning repo to $APP_DIR..."
 if [ -d "$APP_DIR" ]; then
   echo "  Directory already exists — pulling latest..."
   git -C "$APP_DIR" pull
@@ -39,7 +49,7 @@ fi
 cd "$APP_DIR"
 
 # ── 4. Create .env.production ─────────────────────────────────────────────────
-echo "[4/6] Setting up .env.production..."
+echo "[5/7] Setting up .env.production..."
 if [ ! -f ".env.production" ]; then
   cp .env.production.example .env.production
   sed -i "s|DOMAIN=.*|DOMAIN=$DOMAIN|" .env.production
@@ -58,7 +68,7 @@ else
 fi
 
 # ── 5. SSL certificate via Let's Encrypt ──────────────────────────────────────
-echo "[5/6] Getting SSL certificate for $DOMAIN..."
+echo "[6/7] Getting SSL certificate for $DOMAIN..."
 apt-get install -y -qq certbot
 
 # Stop nginx if running (port 80 must be free for standalone challenge)
@@ -76,7 +86,7 @@ sed -i "s|DOMAIN_PLACEHOLDER|$DOMAIN|g" nginx/nginx.conf
 echo "  SSL certificate obtained."
 
 # ── 6. Start all services ─────────────────────────────────────────────────────
-echo "[6/6] Starting services..."
+echo "[7/7] Starting services..."
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 
 echo ""

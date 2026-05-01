@@ -3,14 +3,13 @@
 # add-domain.sh — Add an extra domain (e.g. zoeily.com) to a running CRM server
 # Usage:  bash add-domain.sh <new-domain>
 # Example: bash add-domain.sh zoeily.com
-#
-# Run from /opt/crm (the repo root on the server).
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 NEW_DOMAIN="${1:?ERROR: pass the new domain as the first argument, e.g.: bash add-domain.sh zoeily.com}"
 APP_DIR="/opt/crm"
 NGINX_CONF="$APP_DIR/nginx/nginx.conf"
+COMPOSE_FILE="$APP_DIR/docker-compose.prod.yml"
 ENV_FILE="$APP_DIR/.env.production"
 
 echo ""
@@ -22,7 +21,6 @@ echo ""
 
 # ── Guard: already done? ──────────────────────────────────────────────────────
 if grep -q "$NEW_DOMAIN" "$NGINX_CONF" 2>/dev/null; then
-  echo "  $NEW_DOMAIN already present in nginx.conf — nothing to do for nginx."
   NGINX_ALREADY_SET=1
 else
   NGINX_ALREADY_SET=0
@@ -33,10 +31,41 @@ if [ -d "/etc/letsencrypt/live/$NEW_DOMAIN" ]; then
   echo "[1/4] Certificate already exists for $NEW_DOMAIN — skipping certbot."
 else
   echo "[1/4] Obtaining SSL certificate for $NEW_DOMAIN..."
-  # Create the webroot dir nginx serves ACME challenges from
+
+  # Open firewall ports
+  ufw allow 80/tcp  2>/dev/null || true
+  ufw allow 443/tcp 2>/dev/null || true
+  ufw reload        2>/dev/null || true
+
+  # Patch nginx.conf: add IPv6 listeners if missing
+  if ! grep -q '\[::]:80' "$NGINX_CONF"; then
+    sed -i 's/listen 80;/listen 80;\n        listen [::]:80;/' "$NGINX_CONF"
+    echo "  Added IPv6 listen [::]:80 to nginx."
+  fi
+  if ! grep -q '\[::]:443' "$NGINX_CONF"; then
+    sed -i '/listen 443 ssl;/a\        listen [::]:443 ssl;' "$NGINX_CONF"
+    echo "  Added IPv6 listen [::]:443 ssl to nginx."
+  fi
+
+  # Patch docker-compose: add IPv6 port bindings if missing
+  if ! grep -q '":::80:80"' "$COMPOSE_FILE"; then
+    sed -i 's|- "80:80"|- "0.0.0.0:80:80"\n      - ":::80:80"|' "$COMPOSE_FILE"
+    echo "  Added IPv6 port 80 to docker-compose."
+  fi
+  if ! grep -q '":::443:443"' "$COMPOSE_FILE"; then
+    sed -i 's|- "443:443"|- "0.0.0.0:443:443"\n      - ":::443:443"|' "$COMPOSE_FILE"
+    echo "  Added IPv6 port 443 to docker-compose."
+  fi
+
+  # Patch docker-compose: add certbot webroot volume if missing
+  if ! grep -q '/var/www/certbot' "$COMPOSE_FILE"; then
+    sed -i 's|- /etc/letsencrypt:/etc/letsencrypt:ro|- /etc/letsencrypt:/etc/letsencrypt:ro\n      - /var/www/certbot:/var/www/certbot:ro|' "$COMPOSE_FILE"
+    echo "  Added certbot webroot volume to docker-compose."
+  fi
+
+  # Create webroot dir and recreate nginx with all patches applied
   mkdir -p /var/www/certbot
-  # Recreate nginx so it picks up the /var/www/certbot volume mount
-  docker compose -f "$APP_DIR/docker-compose.prod.yml" --env-file "$APP_DIR/.env.production" up -d --force-recreate nginx
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate nginx
   sleep 3
 
   certbot certonly \
@@ -54,8 +83,6 @@ fi
 if [ "$NGINX_ALREADY_SET" -eq 0 ]; then
   echo "[2/4] Adding nginx HTTPS block for $NEW_DOMAIN..."
 
-  # Insert a new server block before the closing brace of the http { } block.
-  # We find the last lone `}` in the file and insert our block before it.
   NEW_BLOCK="
     # ── HTTPS: $NEW_DOMAIN ────────────────────────────────────────────────────
     server {
@@ -113,10 +140,8 @@ if [ "$NGINX_ALREADY_SET" -eq 0 ]; then
     }
 "
 
-  # Append new block before the final closing brace of the http block
-  # (uses a temp file to avoid in-place issues)
   python3 - "$NGINX_CONF" "$NEW_BLOCK" <<'PYEOF'
-import sys, re
+import sys
 
 conf_path = sys.argv[1]
 new_block  = sys.argv[2]
@@ -124,7 +149,6 @@ new_block  = sys.argv[2]
 with open(conf_path, 'r') as f:
     content = f.read()
 
-# Find the last top-level closing brace and insert before it
 last_brace = content.rfind('\n}')
 if last_brace == -1:
     print("ERROR: could not find closing brace in nginx.conf", file=sys.stderr)
@@ -144,7 +168,6 @@ fi
 echo "[3/4] Updating CORS origins in $ENV_FILE..."
 
 if grep -q "EXTRA_ALLOWED_ORIGINS" "$ENV_FILE" 2>/dev/null; then
-  # Already has the key — update it
   CURRENT=$(grep "^EXTRA_ALLOWED_ORIGINS=" "$ENV_FILE" | cut -d= -f2-)
   if echo "$CURRENT" | grep -q "https://$NEW_DOMAIN"; then
     echo "  https://$NEW_DOMAIN already in EXTRA_ALLOWED_ORIGINS."
@@ -154,7 +177,6 @@ if grep -q "EXTRA_ALLOWED_ORIGINS" "$ENV_FILE" 2>/dev/null; then
     echo "  EXTRA_ALLOWED_ORIGINS updated to: $NEW_ORIGINS"
   fi
 else
-  # Add new key
   echo "EXTRA_ALLOWED_ORIGINS=https://$NEW_DOMAIN" >> "$ENV_FILE"
   echo "  Added EXTRA_ALLOWED_ORIGINS=https://$NEW_DOMAIN"
 fi
