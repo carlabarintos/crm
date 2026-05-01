@@ -33,12 +33,15 @@ if [ -d "/etc/letsencrypt/live/$NEW_DOMAIN" ]; then
   echo "[1/4] Certificate already exists for $NEW_DOMAIN — skipping certbot."
 else
   echo "[1/4] Obtaining SSL certificate for $NEW_DOMAIN..."
-  # Fully remove nginx container so Docker clears its iptables rules and port 80 is truly free
-  docker compose -f "$APP_DIR/docker-compose.prod.yml" rm -sf nginx 2>/dev/null || true
+  # Create the webroot dir nginx serves ACME challenges from
+  mkdir -p /var/www/certbot
+  # Recreate nginx so it picks up the /var/www/certbot volume mount
+  docker compose -f "$APP_DIR/docker-compose.prod.yml" --env-file "$APP_DIR/.env.production" up -d --force-recreate nginx
   sleep 3
 
   certbot certonly \
-    --standalone \
+    --webroot \
+    -w /var/www/certbot \
     --non-interactive \
     --agree-tos \
     --email "admin@$NEW_DOMAIN" \

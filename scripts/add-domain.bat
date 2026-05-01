@@ -25,16 +25,24 @@ echo   Server: %HETZNER_USER%@%HETZNER_HOST%
 echo  ==========================================
 echo.
 
-REM ── Step 1: Upload script to /tmp (avoids any git conflict) ──────────────────
-echo [1/2] Uploading add-domain.sh to server...
+REM ── Step 1: Pull latest code on server ───────────────────────────────────────
+echo [1/3] Pulling latest code on server...
+ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no %HETZNER_USER%@%HETZNER_HOST% "cd /opt/crm && git pull"
+if %errorlevel% neq 0 (
+    echo ERROR: git pull failed on server.
+    exit /b 1
+)
+
+REM ── Step 2: Upload script to /tmp (avoids any git conflict) ──────────────────
+echo [2/3] Uploading add-domain.sh to server...
 scp -i "%SSH_KEY%" -o StrictHostKeyChecking=no add-domain.sh %HETZNER_USER%@%HETZNER_HOST%:/tmp/add-domain.sh
 if %errorlevel% neq 0 (
     echo ERROR: Upload failed. Check HETZNER_HOST and SSH_KEY above.
     exit /b 1
 )
 
-REM ── Step 2: Fix line endings, run script ─────────────────────────────────────
-echo [2/2] Running on server...
+REM ── Step 3: Fix line endings, run script ─────────────────────────────────────
+echo [3/3] Running on server...
 echo (This will take a few minutes for the SSL certificate)
 echo.
 
@@ -43,7 +51,7 @@ set REMOTE_CMD=sed -i 's/\r//' /tmp/add-domain.sh ^&^& chmod +x /tmp/add-domain.
 ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no %HETZNER_USER%@%HETZNER_HOST% "%REMOTE_CMD%"
 if %errorlevel% neq 0 (
     echo.
-    echo ERROR: add-domain failed. Check the output above.
+    echo ERROR: add-domain failed. Check output above.
     exit /b 1
 )
 
