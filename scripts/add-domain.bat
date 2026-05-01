@@ -25,38 +25,19 @@ echo   Target: %HETZNER_USER%@%HETZNER_HOST%
 echo  ==========================================
 echo.
 
-REM ── Step 1: Upload add-domain.sh and fix line endings ────────────────────────
-echo [1/3] Uploading scripts\add-domain.sh to server...
-scp -i "%SSH_KEY%" -o StrictHostKeyChecking=no ^
-  "scripts\add-domain.sh" ^
-  "%HETZNER_USER%@%HETZNER_HOST%:/opt/crm/scripts/add-domain.sh"
-if %errorlevel% neq 0 (
-    echo.
-    echo ERROR: SCP failed. Check HETZNER_HOST and SSH_KEY above.
-    pause & exit /b 1
-)
-
+REM ── Step 1: Pull latest code + images ───────────────────────────────────────
+echo [1/2] Pulling latest code and images on server...
 ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no %HETZNER_USER%@%HETZNER_HOST% ^
-  "sed -i 's/\r//' /opt/crm/scripts/add-domain.sh && chmod +x /opt/crm/scripts/add-domain.sh"
-if %errorlevel% neq 0 (
-    echo ERROR: Could not fix line endings on server.
-    pause & exit /b 1
-)
-
-REM ── Step 2: Pull latest code + images (picks up the multi-origin CORS fix) ───
-echo.
-echo [2/3] Pulling latest code and images on server...
-ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no %HETZNER_USER%@%HETZNER_HOST% ^
-  "cd /opt/crm && git pull && docker compose -f docker-compose.prod.yml pull crm-api crm-web"
+  "cd /opt/crm && rm -f scripts/add-domain.sh && git pull && sed -i 's/\r//' scripts/add-domain.sh && chmod +x scripts/add-domain.sh && docker compose -f docker-compose.prod.yml --env-file .env.production pull crm-api crm-web"
 if %errorlevel% neq 0 (
     echo.
     echo ERROR: git pull or docker pull failed on the server.
     pause & exit /b 1
 )
 
-REM ── Step 3: Run add-domain.sh on the server ───────────────────────────────────
+REM ── Step 2: Run add-domain.sh on the server ──────────────────────────────────
 echo.
-echo [3/3] Running add-domain.sh %NEW_DOMAIN% on server...
+echo [2/2] Running add-domain.sh %NEW_DOMAIN% on server...
 ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no %HETZNER_USER%@%HETZNER_HOST% ^
   "bash /opt/crm/scripts/add-domain.sh %NEW_DOMAIN%"
 if %errorlevel% neq 0 (
