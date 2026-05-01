@@ -63,7 +63,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo  ==========================================
-echo   Done! App is live at https://%HETZNER_HOST%.nip.io
+echo   Done! App is live at https://zoeily.com
 echo  ==========================================
 echo.
 endlocal
