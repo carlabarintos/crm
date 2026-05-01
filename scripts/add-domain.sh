@@ -32,45 +32,40 @@ if [ -d "/etc/letsencrypt/live/$NEW_DOMAIN" ]; then
 else
   echo "[1/4] Obtaining SSL certificate for $NEW_DOMAIN..."
 
-  # Open firewall ports
+  # Open firewall ports (UFW + Hetzner-level if ufw is active)
   ufw allow 80/tcp  2>/dev/null || true
   ufw allow 443/tcp 2>/dev/null || true
   ufw reload        2>/dev/null || true
 
-  # Patch nginx.conf: add IPv6 listeners if missing
-  if ! grep -q '\[::]:80' "$NGINX_CONF"; then
-    sed -i 's/listen 80;/listen 80;\n        listen [::]:80;/' "$NGINX_CONF"
-    echo "  Added IPv6 listen [::]:80 to nginx."
-  fi
-  if ! grep -q '\[::]:443' "$NGINX_CONF"; then
-    sed -i '/listen 443 ssl;/a\        listen [::]:443 ssl;' "$NGINX_CONF"
-    echo "  Added IPv6 listen [::]:443 ssl to nginx."
-  fi
+  # Stop Docker nginx container
+  docker compose -f "$COMPOSE_FILE" rm -sf nginx 2>/dev/null || true
 
-  # Patch docker-compose: add IPv6 port bindings if missing
-  if ! grep -q '":::80:80"' "$COMPOSE_FILE"; then
-    sed -i 's|- "80:80"|- "0.0.0.0:80:80"\n      - ":::80:80"|' "$COMPOSE_FILE"
-    echo "  Added IPv6 port 80 to docker-compose."
-  fi
-  if ! grep -q '":::443:443"' "$COMPOSE_FILE"; then
-    sed -i 's|- "443:443"|- "0.0.0.0:443:443"\n      - ":::443:443"|' "$COMPOSE_FILE"
-    echo "  Added IPv6 port 443 to docker-compose."
-  fi
+  # Stop any system-level web servers that may hold port 80
+  systemctl stop nginx  2>/dev/null || true
+  systemctl stop apache2 2>/dev/null || true
 
-  # Patch docker-compose: add certbot webroot volume if missing
-  if ! grep -q '/var/www/certbot' "$COMPOSE_FILE"; then
-    sed -i 's|- /etc/letsencrypt:/etc/letsencrypt:ro|- /etc/letsencrypt:/etc/letsencrypt:ro\n      - /var/www/certbot:/var/www/certbot:ro|' "$COMPOSE_FILE"
-    echo "  Added certbot webroot volume to docker-compose."
-  fi
+  # Flush Docker's IPv4 and IPv6 NAT rules so no stale iptables entry
+  # returns 404 for the challenge path on a dead container
+  iptables  -t nat -F DOCKER-INGRESS 2>/dev/null || true
+  ip6tables -t nat -F DOCKER-INGRESS 2>/dev/null || true
+  fuser -k 80/tcp 2>/dev/null || true
 
-  # Create webroot dir and recreate nginx with all patches applied
-  mkdir -p /var/www/certbot
-  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate nginx
-  sleep 3
+  # Wait until port 80 is confirmed free (up to 30 s)
+  echo "  Waiting for port 80 to be free..."
+  for i in $(seq 1 30); do
+    if ! ss -tlnp | grep -q ':80 '; then
+      echo "  Port 80 is free after ${i}s."
+      break
+    fi
+    sleep 1
+  done
+
+  # Show what is still on port 80 (helps diagnose if certbot fails again)
+  echo "  Processes on port 80 right now:"
+  ss -tlnp | grep ':80 ' || echo "  (none)"
 
   certbot certonly \
-    --webroot \
-    -w /var/www/certbot \
+    --standalone \
     --non-interactive \
     --agree-tos \
     --email "admin@$NEW_DOMAIN" \
