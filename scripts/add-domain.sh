@@ -60,6 +60,7 @@ if [ "$NGINX_ALREADY_SET" -eq 0 ]; then
     # ── HTTPS: $NEW_DOMAIN ────────────────────────────────────────────────────
     server {
         listen 443 ssl;
+        listen [::]:443 ssl;
         server_name $NEW_DOMAIN www.$NEW_DOMAIN;
 
         ssl_certificate     /etc/letsencrypt/live/$NEW_DOMAIN/fullchain.pem;
