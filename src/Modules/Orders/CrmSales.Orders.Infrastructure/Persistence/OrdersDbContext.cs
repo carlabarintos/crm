@@ -9,6 +9,7 @@ public sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options)
 {
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderLineItem> LineItems => Set<OrderLineItem>();
+    public DbSet<OrderDocument> OrderDocuments => Set<OrderDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

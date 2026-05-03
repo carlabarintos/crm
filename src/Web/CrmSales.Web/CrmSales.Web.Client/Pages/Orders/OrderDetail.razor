@@ -3,6 +3,7 @@
 @using CrmSales.Web.Client.Services
 @inject CrmApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>@(order?.OrderNumber ?? "Order")</PageTitle>
 
@@ -291,6 +292,83 @@ else if (order is not null)
         </div>
     </div>
 
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Documents</h6>
+            <button class="btn btn-outline-primary btn-sm" @onclick="ToggleUploadForm">
+                @(_showUploadForm ? "Cancel" : "+ Upload")
+            </button>
+        </div>
+        @if (_showUploadForm)
+        {
+            <div class="card-body border-bottom">
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md">
+                        <label class="form-label form-label-sm">File (JPEG, PNG, WebP, PDF)</label>
+                        <InputFile OnChange="OnDocFileSelected" accept=".jpg,.jpeg,.png,.webp,.pdf" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-12 col-md-auto">
+                        <label class="form-label form-label-sm">Type</label>
+                        <select class="form-select form-select-sm" @bind="_docType">
+                            <option value="Other">Other</option>
+                            <option value="Receipt">Receipt</option>
+                            <option value="DeliveryPhoto">Delivery Photo</option>
+                            <option value="Invoice">Invoice</option>
+                            <option value="PackingSlip">Packing Slip</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md">
+                        <label class="form-label form-label-sm">Notes (optional)</label>
+                        <input class="form-control form-control-sm" @bind="_docNotes" placeholder="Notes..." />
+                    </div>
+                    <div class="col-12 col-md-auto">
+                        <button class="btn btn-primary btn-sm" @onclick="UploadDocument" disabled="@_docUploading">
+                            Upload
+                        </button>
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(_docUploadError))
+                {
+                    <div class="text-danger small mt-2">@_docUploadError</div>
+                }
+            </div>
+        }
+        @if (_docsLoading)
+        {
+            <div class="card-body text-center py-3">
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+            </div>
+        }
+        @if (!_docsLoading && _documents.Count == 0)
+        {
+            <div class="card-body text-muted small">No documents attached to this order.</div>
+        }
+        @if (!_docsLoading && _documents.Count > 0)
+        {
+            <ul class="list-group list-group-flush">
+                @foreach (var doc in _documents)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
+                        <div class="d-flex align-items-start gap-2 flex-grow-1">
+                            <div>
+                                <div class="fw-semibold small">@doc.FileName</div>
+                                <div class="text-muted" style="font-size:11px">@doc.Type &middot; @FormatFileSize(doc.FileSizeBytes) &middot; @doc.UploadedAt.ToString("MMM dd, yyyy")</div>
+                                @if (!string.IsNullOrEmpty(doc.Notes))
+                                {
+                                    <div class="text-muted fst-italic" style="font-size:11px">@doc.Notes</div>
+                                }
+                            </div>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-outline-secondary btn-sm py-0 px-2" @onclick="() => DownloadDocument(doc)" title="Download">&#x2B07;</button>
+                            <button class="btn btn-outline-danger btn-sm py-0 px-2" @onclick="() => DeleteDocument(doc.Id)" title="Delete">&#x2715;</button>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
     @if (_showPreview)
     {
         <div class="card mt-4 preview-doc shadow-sm">
@@ -434,7 +512,18 @@ else if (order is not null)
     private int editQty;
     private decimal editUnitPrice;
 
-    protected override async Task OnInitializedAsync() => await Load();
+    // Documents
+    private List<OrderDocumentDto> _documents = new();
+    private bool _docsLoading;
+    private bool _showUploadForm;
+    private IBrowserFile? _selectedFile;
+    private string _docType = "Other";
+    private string? _docNotes;
+    private bool _docUploading;
+    private string? _docUploadError;
+    private Guid? _docDeletingId;
+
+    protected override async Task OnInitializedAsync() => await Task.WhenAll(Load(), LoadDocuments());
 
     private async Task Load()
     {
@@ -574,6 +663,72 @@ else if (order is not null)
         }
         finally { lineItemSaving = false; }
     }
+
+    private async Task LoadDocuments()
+    {
+        _docsLoading = true;
+        try { _documents = await Api.GetOrderDocumentsAsync(Id) ?? new List<OrderDocumentDto>(); }
+        catch { }
+        finally { _docsLoading = false; }
+    }
+
+    private void ToggleUploadForm()
+    {
+        _showUploadForm = !_showUploadForm;
+        if (!_showUploadForm) { _selectedFile = null; _docNotes = null; _docUploadError = null; _docType = "Other"; }
+    }
+
+    private void OnDocFileSelected(InputFileChangeEventArgs e) => _selectedFile = e.File;
+
+    private async Task UploadDocument()
+    {
+        if (_selectedFile is null) return;
+        _docUploadError = null; _docUploading = true;
+        try
+        {
+            using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+            var resp = await Api.UploadOrderDocumentAsync(Id, stream, _selectedFile.Name, _selectedFile.ContentType, _docType, _docNotes);
+            if (resp.IsSuccessStatusCode)
+            {
+                _selectedFile = null; _docNotes = null; _showUploadForm = false; _docType = "Other";
+                await LoadDocuments();
+            }
+            else
+                _docUploadError = await ApiErrors.ParseAsync(resp);
+        }
+        catch (Exception ex) { _docUploadError = ex.Message; }
+        finally { _docUploading = false; }
+    }
+
+    private async Task DeleteDocument(Guid docId)
+    {
+        _docDeletingId = docId;
+        try
+        {
+            var resp = await Api.DeleteOrderDocumentAsync(Id, docId);
+            if (resp.IsSuccessStatusCode) await LoadDocuments();
+        }
+        finally { _docDeletingId = null; }
+    }
+
+    private async Task DownloadDocument(OrderDocumentDto doc)
+    {
+        var bytes = await Api.DownloadOrderDocumentAsync(Id, doc.Id);
+        if (bytes is not null)
+            await JS.InvokeVoidAsync("downloadBlob", bytes, doc.FileName, doc.ContentType);
+    }
+
+    private static string DocIcon(string contentType) => contentType switch
+    {
+        "application/pdf" => "📄",
+        var c when c.StartsWith("image/") => "🖼",
+        _ => "📎"
+    };
+
+    private static string FormatFileSize(long bytes) =>
+        bytes < 1024 ? $"{bytes} B" :
+        bytes < 1024 * 1024 ? $"{bytes / 1024} KB" :
+        $"{bytes / (1024 * 1024)} MB";
 
     private static string GetStatusBadge(string status) => status switch
     {

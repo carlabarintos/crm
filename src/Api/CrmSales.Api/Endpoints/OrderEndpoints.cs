@@ -3,10 +3,12 @@ using CrmSales.SharedKernel.Catalog;
 using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
 using CrmSales.Contacts.Domain.Repositories;
+using CrmSales.Orders.Application.Services;
 using CrmSales.Orders.Domain.Entities;
 using CrmSales.Orders.Domain.Repositories;
 using CrmSales.Products.Domain.Repositories;
 using CrmSales.Settings.Application.Services;
+using CrmSales.Settings.Domain.Entities;
 using CrmSales.Settings.Domain.Enums;
 using CrmSales.Settings.Domain.Repositories;
 using CrmSales.SharedKernel.Application;
@@ -402,6 +404,100 @@ public static class OrderEndpoints
             order.RemoveLineItem(lineItemId);
             await repo.UpdateAsync(order, ct);
             return Results.Ok(new { order.Id, order.TotalAmount });
+        });
+
+        // ── Order Documents ────────────────────────────────────────────────────
+        var docs = group.MapGroup("/{id:guid}/documents");
+
+        docs.MapPost("/", async (
+            Guid id,
+            IFormFile file,
+            IOrderRepository repo,
+            IOrderDocumentStorage storage,
+            IVirusScanService virusScanner,
+            IStorageSettingsRepository settingsRepo,
+            CancellationToken ct,
+            [FromQuery] OrderDocumentType type = OrderDocumentType.Other,
+            [FromQuery] string? notes = null) =>
+        {
+            var settings = await settingsRepo.GetAsync(ct);
+            var maxFileSize = settings?.MaxFileSizeBytes ?? StorageSettings.DefaultMaxFileSizeBytes;
+            var maxFiles = settings?.MaxFilesPerOrder ?? StorageSettings.DefaultMaxFilesPerOrder;
+
+            if (file.Length > maxFileSize)
+                return Results.Problem($"File size exceeds limit of {maxFileSize / (1024 * 1024)} MB.", statusCode: 400);
+
+            string[] allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+            if (!allowedTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
+                return Results.Problem("File type not allowed. Accepted: JPEG, PNG, WebP, PDF.", statusCode: 400);
+
+            var order = await repo.GetByIdAsync(id, ct);
+            if (order is null) return Results.NotFound();
+
+            if (order.Documents.Count >= maxFiles)
+                return Results.Problem($"Order already has the maximum of {maxFiles} documents.", statusCode: 400);
+
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms, ct);
+            ms.Position = 0;
+
+            var scanResult = await virusScanner.ScanAsync(ms, ct);
+            if (scanResult is ScanResult.InfectedResult infected)
+                return Results.Problem($"File rejected: virus detected ({infected.VirusName}).", statusCode: 400);
+            if (scanResult is ScanResult.ErrorResult)
+                return Results.Problem("File could not be scanned. Upload rejected.", statusCode: 503);
+
+            ms.Position = 0;
+            var key = await storage.UploadAsync(id, file.FileName, ms, file.ContentType, ct);
+            var doc = OrderDocument.Create(id, type, file.FileName, key, file.ContentType, file.Length, notes);
+            order.AttachDocument(doc);
+            await repo.UpdateAsync(order, ct);
+
+            return Results.Created($"/api/orders/{id}/documents/{doc.Id}", new
+            {
+                doc.Id, doc.FileName, Type = doc.Type.ToString(), doc.FileSizeBytes, doc.UploadedAt
+            });
+        }).DisableAntiforgery();
+
+        docs.MapGet("/", async (Guid id, IOrderRepository repo, CancellationToken ct) =>
+        {
+            var order = await repo.GetByIdAsync(id, ct);
+            if (order is null) return Results.NotFound();
+            return Results.Ok(order.Documents.Select(d => new
+            {
+                d.Id, d.FileName, Type = d.Type.ToString(), d.ContentType, d.FileSizeBytes, d.Notes, d.UploadedAt
+            }));
+        });
+
+        docs.MapGet("/{docId:guid}/download", async (
+            Guid id, Guid docId,
+            IOrderRepository repo,
+            IOrderDocumentStorage storage,
+            CancellationToken ct) =>
+        {
+            var order = await repo.GetByIdAsync(id, ct);
+            var doc = order?.Documents.FirstOrDefault(d => d.Id == docId);
+            if (doc is null) return Results.NotFound();
+
+            var stream = await storage.DownloadAsync(doc.StorageKey, ct);
+            return Results.Stream(stream, doc.ContentType, doc.FileName);
+        });
+
+        docs.MapDelete("/{docId:guid}", async (
+            Guid id, Guid docId,
+            IOrderRepository repo,
+            IOrderDocumentStorage storage,
+            CancellationToken ct) =>
+        {
+            var order = await repo.GetByIdAsync(id, ct);
+            if (order is null) return Results.NotFound();
+
+            var removed = order.RemoveDocument(docId);
+            if (removed is null) return Results.NotFound();
+
+            await storage.DeleteAsync(removed.StorageKey, ct);
+            await repo.UpdateAsync(order, ct);
+            return Results.NoContent();
         });
 
         return app;

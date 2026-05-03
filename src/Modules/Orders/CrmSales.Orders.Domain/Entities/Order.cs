@@ -24,6 +24,9 @@ public sealed class Order : AggregateRoot<Guid>
     private readonly List<OrderLineItem> _lineItems = [];
     public IReadOnlyCollection<OrderLineItem> LineItems => _lineItems.AsReadOnly();
 
+    private readonly List<OrderDocument> _documents = [];
+    public IReadOnlyCollection<OrderDocument> Documents => _documents.AsReadOnly();
+
     public string? TaxRateName { get; private set; }
     public decimal TaxRatePercent { get; private set; }
     public decimal QuoteDiscountPercent { get; private set; }
@@ -143,6 +146,15 @@ public sealed class Order : AggregateRoot<Guid>
         if (Status == OrderStatus.Confirmed) StartProcessing();
         if (Status == OrderStatus.Processing) Ship();
         if (Status == OrderStatus.Shipped) Deliver();
+    }
+
+    public void AttachDocument(OrderDocument doc) => _documents.Add(doc);
+
+    public OrderDocument? RemoveDocument(Guid docId)
+    {
+        var doc = _documents.FirstOrDefault(d => d.Id == docId);
+        if (doc is not null) _documents.Remove(doc);
+        return doc;
     }
 
     public void Cancel(string reason)

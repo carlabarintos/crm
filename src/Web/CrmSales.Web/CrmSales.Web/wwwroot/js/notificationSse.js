@@ -30,6 +30,19 @@ window.downloadCsv = function (filename, content) {
     URL.revokeObjectURL(url);
 };
 
+// Binary blob download helper (used for order document downloads)
+window.downloadBlob = function (bytes, fileName, contentType) {
+    var blob = new Blob([new Uint8Array(bytes)], { type: contentType });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
 // Native EventSource wrapper for SSE notifications
 window.notifSse = (function () {
     let _src = null;

@@ -133,7 +133,7 @@ builder.Services
     .AddQuotesApplication()
     .AddQuotesInfrastructure(connectionString)
     .AddOrdersApplication()
-    .AddOrdersInfrastructure(connectionString)
+    .AddOrdersInfrastructure(connectionString, builder.Configuration)
     .AddSettingsApplication()
     .AddSettingsInfrastructure(connectionString);
 
@@ -717,6 +717,59 @@ using (var scope = app.Services.CreateScope())
                     );
                     CREATE UNIQUE INDEX IF NOT EXISTS "IX_UserRoles_User_Role_{slug}"
                         ON "{slug}"."UserRoles" ("UserId", "RoleId");
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+        finally
+        {
+            if (conn.State == System.Data.ConnectionState.Open)
+                await conn.CloseAsync();
+        }
+    }
+}
+
+// ── Ensure OrderDocuments and StorageSettings tables exist per tenant schema ─
+{
+    using var scope = app.Services.CreateScope();
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var companySlugs = await masterCtx.Companies.Select(c => c.Slug).ToListAsync();
+
+    if (companySlugs.Count > 0)
+    {
+        var conn = scope.ServiceProvider.GetRequiredService<ProductsDbContext>().Database.GetDbConnection();
+        await conn.OpenAsync();
+        try
+        {
+            foreach (var slug in companySlugs)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    CREATE TABLE IF NOT EXISTS "{slug}"."OrderDocuments" (
+                        "Id"            uuid          NOT NULL,
+                        "Version"       integer       NOT NULL DEFAULT 0,
+                        "OrderId"       uuid          NOT NULL,
+                        "Type"          varchar(50)   NOT NULL,
+                        "FileName"      varchar(500)  NOT NULL,
+                        "StorageKey"    varchar(1000) NOT NULL,
+                        "ContentType"   varchar(200)  NOT NULL,
+                        "FileSizeBytes" bigint        NOT NULL,
+                        "Notes"         varchar(1000) NULL,
+                        "UploadedAt"    timestamptz   NOT NULL,
+                        CONSTRAINT "PK_OrderDocuments_{slug}" PRIMARY KEY ("Id"),
+                        CONSTRAINT "FK_OrderDocuments_Orders_{slug}" FOREIGN KEY ("OrderId")
+                            REFERENCES "{slug}"."Orders" ("Id") ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS "IX_OrderDocuments_OrderId_{slug}"
+                        ON "{slug}"."OrderDocuments" ("OrderId");
+                    CREATE TABLE IF NOT EXISTS "{slug}"."StorageSettings" (
+                        "Id"                uuid        NOT NULL,
+                        "Version"           integer     NOT NULL DEFAULT 0,
+                        "MaxFileSizeBytes"  bigint      NOT NULL DEFAULT 10485760,
+                        "MaxFilesPerOrder"  integer     NOT NULL DEFAULT 10,
+                        "UpdatedAt"         timestamptz NOT NULL,
+                        CONSTRAINT "PK_StorageSettings_{slug}" PRIMARY KEY ("Id")
+                    );
                     """;
                 await cmd.ExecuteNonQueryAsync();
             }

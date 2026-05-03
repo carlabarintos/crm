@@ -3,6 +3,9 @@ using CrmSales.Settings.Application.EmailTemplates.Commands.UpsertEmailTemplate;
 using CrmSales.Settings.Application.EmailTemplates.DTOs;
 using CrmSales.Settings.Application.EmailTemplates.Queries.GetEmailSettings;
 using CrmSales.Settings.Application.EmailTemplates.Queries.GetEmailTemplates;
+using CrmSales.Settings.Application.StorageSettings.Commands.UpsertStorageSettings;
+using CrmSales.Settings.Application.StorageSettings.DTOs;
+using CrmSales.Settings.Application.StorageSettings.Queries.GetStorageSettings;
 using CrmSales.Settings.Application.TaxRates.Commands.CreateTaxRate;
 using CrmSales.Settings.Application.TaxRates.Commands.DeleteTaxRate;
 using CrmSales.Settings.Application.TaxRates.Commands.SetDefaultTaxRate;
@@ -112,6 +115,26 @@ public static class SettingsEndpoints
 
         emailConfigGroup.MapPut("/", async (
             [FromBody] SaveEmailSettingsCommand cmd,
+            IMessageBus bus,
+            CancellationToken ct) =>
+        {
+            var result = await bus.InvokeAsync<Result>(cmd, ct);
+            return result.IsSuccess ? Results.NoContent() : Results.Problem(result.Error.Description);
+        });
+
+        // ── Storage Settings ───────────────────────────────────────────────────
+        var storageGroup = app.MapGroup("/api/settings/storage")
+            .WithTags("Settings")
+            .RequireAuthorization(p => p.RequireClaim("permission", Permissions.ManageSettings));
+
+        storageGroup.MapGet("/", async (IMessageBus bus, CancellationToken ct) =>
+        {
+            var result = await bus.InvokeAsync<Result<StorageSettingsDto>>(new GetStorageSettingsQuery(), ct);
+            return result.IsSuccess ? Results.Ok(result.Value) : Results.Problem(result.Error.Description);
+        });
+
+        storageGroup.MapPut("/", async (
+            [FromBody] UpsertStorageSettingsCommand cmd,
             IMessageBus bus,
             CancellationToken ct) =>
         {

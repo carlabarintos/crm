@@ -40,6 +40,10 @@ if (keycloakImage == "quay.io/keycloak/keycloak")
 
 var keycloakEndpoint = keycloak.GetEndpoint("http");
 
+// ClamAV — virus scanning for file uploads
+var clamav = builder.AddContainer("clamav", "clamav/clamav")
+    .WithEndpoint(port: 3310, targetPort: 3310, name: "tcp");
+
 // ── Services ───────────────────────────────────────────────────────────────
 
 // Web API
@@ -47,8 +51,12 @@ var api = builder.AddProject<Projects.CrmSales_Api>("crm-api")
     .WithReference(crmDb)
     .WithReference(rabbitmq)
     .WithEnvironment("Keycloak__AdminUrl", keycloakEndpoint)
+    .WithEnvironment("ClamAv__Host", clamav.GetEndpoint("tcp").Property(EndpointProperty.Host))
+    .WithEnvironment("ClamAv__Port", "3310")
     .WaitFor(crmDb)
     .WaitFor(rabbitmq);
+    // NOTE: No .WaitFor(clamav) — ClamAV downloads definitions on first start (takes minutes).
+    // The upload endpoint returns 503 if ClamAV is unavailable, which is safe.
 
 // Forward encryption key from host environment when set (overrides appsettings dev default).
 // Production: set Encryption__Key=<base64-32-bytes> in the host or container environment.

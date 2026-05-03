@@ -9,7 +9,7 @@ namespace CrmSales.Orders.Infrastructure.Repositories;
 internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderRepository
 {
     public async Task<Order?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-        await dbContext.Orders.Include(o => o.LineItems)
+        await dbContext.Orders.Include(o => o.LineItems).Include(o => o.Documents)
             .FirstOrDefaultAsync(o => o.Id == id, ct);
 
     public async Task<IReadOnlyList<Order>> GetAllAsync(CancellationToken ct = default) =>
@@ -21,7 +21,7 @@ internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderReposit
             .FirstOrDefaultAsync(o => o.OrderNumber == orderNumber, ct);
 
     public async Task<Order?> GetByQuoteIdAsync(Guid quoteId, CancellationToken ct = default) =>
-        await dbContext.Orders.Include(o => o.LineItems)
+        await dbContext.Orders.Include(o => o.LineItems).Include(o => o.Documents)
             .FirstOrDefaultAsync(o => o.QuoteId == quoteId, ct);
 
     public async Task<IReadOnlyList<Order>> GetByCustomerAsync(Guid customerId, CancellationToken ct = default) =>

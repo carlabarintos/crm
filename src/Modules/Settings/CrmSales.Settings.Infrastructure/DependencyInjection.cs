@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<ITaxRateRepository, TaxRateRepository>();
         services.AddScoped<IEmailTemplateRepository, EmailTemplateRepository>();
         services.AddScoped<IEmailSettingsRepository, EmailSettingsRepository>();
+        services.AddScoped<IStorageSettingsRepository, StorageSettingsRepository>();
         services.AddSingleton<IEncryptionService, AesEncryptionService>();
         services.AddScoped<IEmailService, SmtpEmailService>();
         return services;

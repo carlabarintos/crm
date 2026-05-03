@@ -275,6 +275,29 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<List<ContactOrderDto>?> GetContactOrdersAsync(Guid contactId)
         => _http.GetFromJsonAsync<List<ContactOrderDto>>($"/api/orders/customer/{contactId}");
 
+    public Task<List<OrderDocumentDto>?> GetOrderDocumentsAsync(Guid id)
+        => _http.GetFromJsonAsync<List<OrderDocumentDto>>($"/api/orders/{id}/documents");
+
+    public async Task<HttpResponseMessage> UploadOrderDocumentAsync(Guid id, Stream fileStream, string fileName, string contentType, string type, string? notes)
+    {
+        var content = new MultipartFormDataContent();
+        var sc = new StreamContent(fileStream);
+        sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        content.Add(sc, "file", fileName);
+        var url = $"/api/orders/{id}/documents?type={Uri.EscapeDataString(type)}";
+        if (!string.IsNullOrEmpty(notes)) url += $"&notes={Uri.EscapeDataString(notes)}";
+        return await _http.PostAsync(url, content);
+    }
+
+    public Task<HttpResponseMessage> DeleteOrderDocumentAsync(Guid id, Guid docId)
+        => _http.DeleteAsync($"/api/orders/{id}/documents/{docId}");
+
+    public async Task<byte[]?> DownloadOrderDocumentAsync(Guid id, Guid docId)
+    {
+        var resp = await _http.GetAsync($"/api/orders/{id}/documents/{docId}/download");
+        return resp.IsSuccessStatusCode ? await resp.Content.ReadAsByteArrayAsync() : null;
+    }
+
     // ── Notifications ─────────────────────────────────────────────────────
     public Task<HttpResponseMessage> GetNotificationStreamAsync(CancellationToken ct)
         => _http.GetAsync("/api/notifications/stream", HttpCompletionOption.ResponseHeadersRead, ct);
@@ -484,6 +507,8 @@ public record OrderDetailDto(Guid Id, string OrderNumber, Guid QuoteId, string S
 
 public record OrderLineItemDto(Guid Id, Guid CatalogItemId, string ItemName, string ItemType,
     int Quantity, decimal UnitPrice, decimal DiscountPercent, decimal LineTotal, decimal DiscountAmount);
+
+public record OrderDocumentDto(Guid Id, string FileName, string Type, string ContentType, long FileSizeBytes, string? Notes, DateTime UploadedAt);
 
 public record ContactOrderDto(
     Guid Id, string OrderNumber, Guid QuoteId, string Status,
