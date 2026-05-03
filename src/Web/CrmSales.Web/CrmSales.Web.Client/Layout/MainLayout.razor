@@ -76,7 +76,9 @@
                     </svg>
                 </a>
                 <div class="topbar-divider"></div>
-                <a href="/opportunities/new" class="btn-new-deal">+ New Deal</a>
+                <AuthorizeView Roles="Admin,SalesManager,SalesRep,AccountManager">
+                    <a href="/opportunities/new" class="btn-new-deal">+ New Deal</a>
+                </AuthorizeView>
             </div>
         </header>
         <main>

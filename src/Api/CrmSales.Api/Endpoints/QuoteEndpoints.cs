@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using CrmSales.Api.Auditing;
 using CrmSales.Api.Extensions;
+using CrmSales.Api.Services;
 using CrmSales.SharedKernel.Catalog;
 using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
@@ -149,8 +150,16 @@ public static class QuoteEndpoints
             INotificationBroadcaster broadcaster,
             IAuditService audit,
             ITenantContext tenant,
+            ICompanyLimitsService limits,
             CancellationToken ct) =>
         {
+            var companyLimits = await limits.GetForCurrentTenantAsync(ct);
+            if (companyLimits?.MaxQuotes is int max)
+            {
+                var count = await repo.CountAsync(ct);
+                if (count >= max)
+                    return Results.Problem($"Quote limit of {max} reached for your plan.", statusCode: StatusCodes.Status429TooManyRequests);
+            }
             var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var quote = Quote.Create(req.OpportunityId, req.OwnerId, req.Currency, req.ExpiryDate, req.Notes);
 

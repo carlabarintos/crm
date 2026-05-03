@@ -10,6 +10,24 @@
 
 <PageTitle>ZoeIly CRM — Modern Sales Platform</PageTitle>
 
+@if (_showOopsToast)
+{
+    <div class="oops-toast @(_oopsVisible ? "oops-toast-in" : "")">
+        <span class="oops-icon">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M7.5 2v5M7.5 10v.5" />
+                <circle cx="7.5" cy="7.5" r="6.5" />
+            </svg>
+        </span>
+        <span>Our login server is having an existential crisis. Give it a moment.</span>
+        <button class="oops-close" @onclick="DismissOops" aria-label="Dismiss">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M2 2l8 8M10 2l-8 8" />
+            </svg>
+        </button>
+    </div>
+}
+
 <!-- ── Hero ──────────────────────────────────────────────────────── -->
 <section class="hero">
     <div class="hero-inner">
@@ -677,9 +695,35 @@
         .hero-actions { flex-direction: column; align-items: center; }
         .request-card { padding: 1.75rem 1.25rem; }
     }
+
+    /* ── Oops toast ──────────────────────────────────────────────────── */
+    .oops-toast {
+        position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(20px);
+        display: flex; align-items: center; gap: .6rem;
+        background: #1f2937; color: #f9fafb;
+        font-size: 13px; font-weight: 500;
+        padding: .65rem 1rem .65rem .85rem;
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.25);
+        opacity: 0; transition: opacity .3s ease, transform .3s ease;
+        z-index: 9999; max-width: calc(100vw - 2rem);
+        white-space: nowrap;
+    }
+    .oops-toast-in { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .oops-icon { color: #fbbf24; display: flex; flex-shrink: 0; }
+    .oops-close {
+        background: none; border: none; padding: 0;
+        color: #9ca3af; cursor: pointer; display: flex; margin-left: .25rem;
+        flex-shrink: 0;
+    }
+    .oops-close:hover { color: #f9fafb; }
 </style>
 
 @code {
+    // ── Oops toast ───────────────────────────────────────────────────
+    private bool _showOopsToast;
+    private bool _oopsVisible;
+
     // ── Form state ────────────────────────────────────────────────────
     private string _name = "";
     private string _company = "";
@@ -707,12 +751,6 @@
         "Proposal sent",
         "Quote accepted!",
     ];
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender) return;
-        _ = RunPipelineAnimationAsync(_cts.Token);
-    }
 
     private async Task RunPipelineAnimationAsync(CancellationToken ct)
     {
@@ -758,6 +796,29 @@
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)
             Navigation.NavigateTo("/dashboard", replace: true);
+
+        var uri = new Uri(Navigation.Uri);
+        if (System.Web.HttpUtility.ParseQueryString(uri.Query)["oops"] == "1")
+            _showOopsToast = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _ = RunPipelineAnimationAsync(_cts.Token);
+
+        if (_showOopsToast)
+        {
+            await Task.Delay(80);
+            _oopsVisible = true;
+            StateHasChanged();
+        }
+    }
+
+    private void DismissOops()
+    {
+        _oopsVisible = false;
+        _showOopsToast = false;
     }
 
     private async Task SubmitAsync()

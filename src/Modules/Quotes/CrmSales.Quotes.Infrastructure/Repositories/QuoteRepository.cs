@@ -133,4 +133,7 @@ internal sealed class QuoteRepository(QuotesDbContext dbContext) : IQuoteReposit
         dbContext.Quotes.Remove(aggregate);
         await dbContext.SaveChangesAsync(ct);
     }
+
+    public Task<int> CountAsync(CancellationToken ct = default) =>
+        dbContext.Quotes.CountAsync(ct);
 }

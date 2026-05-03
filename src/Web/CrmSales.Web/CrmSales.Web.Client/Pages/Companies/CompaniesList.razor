@@ -76,10 +76,16 @@ else
                         </td>
                         <td class="text-muted small">@c.CreatedAt.ToString("MMM d, yyyy")</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-primary"
-                                    @onclick="@(() => Navigation.NavigateTo($"/companies/{c.Id}/setup"))">
-                                Add Admin
-                            </button>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-primary"
+                                        @onclick="@(() => Navigation.NavigateTo($"/companies/{c.Id}/setup"))">
+                                    Add Admin
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary"
+                                        @onclick="@(() => Navigation.NavigateTo($"/companies/{c.Id}/limits"))">
+                                    Set Limits
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 }

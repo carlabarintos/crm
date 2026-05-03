@@ -109,6 +109,9 @@ internal sealed class ProductRepository(ProductsDbContext dbContext) : IProductR
         dbContext.Products.Remove(aggregate);
         await dbContext.SaveChangesAsync(ct);
     }
+
+    public Task<int> CountAsync(CancellationToken ct = default) =>
+        dbContext.Products.CountAsync(ct);
 }
 
 internal sealed class ProductCategoryRepository(ProductsDbContext dbContext) : IProductCategoryRepository
@@ -167,4 +170,7 @@ internal sealed class ProductCategoryRepository(ProductsDbContext dbContext) : I
         dbContext.Categories.Remove(aggregate);
         await dbContext.SaveChangesAsync(ct);
     }
+
+    public Task<int> CountAsync(CancellationToken ct = default) =>
+        dbContext.Categories.CountAsync(ct);
 }

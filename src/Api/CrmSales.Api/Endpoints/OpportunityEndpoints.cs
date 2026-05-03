@@ -1,5 +1,6 @@
 using CrmSales.Api.Auditing;
 using CrmSales.Api.Extensions;
+using CrmSales.Api.Services;
 using CrmSales.SharedKernel.MultiTenancy;
 using CrmSales.Api.Notifications;
 using CrmSales.Opportunities.Domain.Entities;
@@ -118,8 +119,16 @@ public static class OpportunityEndpoints
             INotificationBroadcaster broadcaster,
             IAuditService audit,
             ITenantContext tenant,
+            ICompanyLimitsService limits,
             CancellationToken ct) =>
         {
+            var companyLimits = await limits.GetForCurrentTenantAsync(ct);
+            if (companyLimits?.MaxOpportunities is int max)
+            {
+                var count = await repo.CountAsync(ct);
+                if (count >= max)
+                    return Results.Problem($"Opportunity limit of {max} reached for your plan.", statusCode: StatusCodes.Status429TooManyRequests);
+            }
             var actor = http.User.FindFirst("preferred_username")?.Value ?? "system";
             var opp = Opportunity.Create(
                 req.Name, req.AccountName, req.ContactName,

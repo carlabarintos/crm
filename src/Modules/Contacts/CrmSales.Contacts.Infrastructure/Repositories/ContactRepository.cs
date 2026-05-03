@@ -88,4 +88,7 @@ internal sealed class ContactRepository(ContactsDbContext dbContext) : IContactR
         dbContext.Contacts.Remove(aggregate);
         await dbContext.SaveChangesAsync(ct);
     }
+
+    public Task<int> CountAsync(CancellationToken ct = default) =>
+        dbContext.Contacts.CountAsync(ct);
 }

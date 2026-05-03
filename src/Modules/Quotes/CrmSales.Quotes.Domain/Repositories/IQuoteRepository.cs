@@ -16,4 +16,5 @@ public interface IQuoteRepository : IRepository<Quote, Guid>
     Task<CursorPaginationResult<Quote>> SearchPagedAsync(string? search, string? status, Guid? opportunityId, int limit, string? cursor, CancellationToken ct = default);
     Task<QuoteSummaryData> GetSummaryAsync(int? year = null, int? month = null, CancellationToken ct = default);
     Task<List<Quote>> GetExpiringSoonAsync(int days, int limit, Guid? ownerId = null, CancellationToken ct = default);
+    Task<int> CountAsync(CancellationToken ct = default);
 }

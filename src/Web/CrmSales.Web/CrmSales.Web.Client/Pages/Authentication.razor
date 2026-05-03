@@ -1,6 +1,7 @@
 @page "/authentication/{action}"
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @attribute [AllowAnonymous]
+@inject NavigationManager Navigation
 
 <RemoteAuthenticatorView Action="@Action">
     <LoggingIn>
@@ -15,6 +16,9 @@
     <CompletingLogOut>
         <AuthSplash Message="Authenticating" Sub="Finishing up your session…" Icon="logout" />
     </CompletingLogOut>
+    <LogInFailed>
+        <GoHome />
+    </LogInFailed>
 </RemoteAuthenticatorView>
 
 @code {

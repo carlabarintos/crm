@@ -43,6 +43,18 @@
                 Access Requests
             </NavLink>
         </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="admin/error-log">
+                <span class="nav-icon">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="7.5" cy="7.5" r="6"/>
+                        <path d="M7.5 4.5v3.5" stroke-linecap="round"/>
+                        <circle cx="7.5" cy="10.5" r=".5" fill="currentColor" stroke="none"/>
+                    </svg>
+                </span>
+                Error Log
+            </NavLink>
+        </div>
         </AuthorizeView>
 
         <AuthorizeView Roles="Admin,SalesManager,SalesRep,AccountManager">
@@ -259,7 +271,7 @@
                 <span>@_userEmail</span>
             </div>
         </div>
-        <button @onclick="async () => await SignOut()" class="nav-logout">
+        <button @onclick="SignOut" class="nav-logout">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M5 2H2a1 1 0 00-1 1v8a1 1 0 001 1h3M9 10l3-3-3-3M12 7H5" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
@@ -288,7 +300,6 @@
 
 @inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
-@inject SignOutSessionStateManager SignOutManager
 @implements IDisposable
 
 @code {
@@ -328,11 +339,8 @@
     private bool _menuOpen;
     private void CloseMenu() => _menuOpen = false;
 
-    private async Task SignOut()
-    {
-        await SignOutManager.SetSignOutState();
-        Navigation.NavigateTo("authentication/logout");
-    }
+    private void SignOut()
+        => Navigation.NavigateToLogout("authentication/logout");
 
     public void Dispose()
         => AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;

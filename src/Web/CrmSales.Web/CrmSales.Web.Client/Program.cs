@@ -19,7 +19,8 @@ builder.Services.AddOidcAuthentication(options =>
     options.ProviderOptions.ClientId = "crm-web-app-client";
     options.ProviderOptions.ResponseType = "code";
     options.ProviderOptions.DefaultScopes.Add("crm-web-api-scope");
-    options.AuthenticationPaths.LogOutSucceededPath = "authentication/login";
+    options.AuthenticationPaths.LogOutSucceededPath = "";
+    options.AuthenticationPaths.LogInFailedPath = "";
 }).AddAccountClaimsPrincipalFactory<KeycloakAccountFactory>();
 
 // HttpClient for API — AuthorizationMessageHandler attaches Bearer token automatically

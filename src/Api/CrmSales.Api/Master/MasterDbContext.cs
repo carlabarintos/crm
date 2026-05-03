@@ -10,6 +10,7 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
+    public DbSet<CompanyLimits> CompanyLimits => Set<CompanyLimits>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,6 +21,12 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
             e.Property(c => c.Name).IsRequired().HasMaxLength(200);
             e.Property(c => c.Slug).IsRequired().HasMaxLength(63);
             e.HasIndex(c => c.Slug).IsUnique();
+        });
+        modelBuilder.Entity<CompanyLimits>(e =>
+        {
+            e.HasKey(l => l.Id);
+            e.Property(l => l.UpdatedBy).IsRequired().HasMaxLength(200);
+            e.HasIndex(l => l.CompanyId).IsUnique();
         });
         modelBuilder.Entity<AuditLog>(e =>
         {

@@ -11,4 +11,5 @@ public interface IContactRepository : IRepository<Contact, Guid>
     Task<IReadOnlyList<Contact>> SearchAsync(string? search, CancellationToken ct = default);
     Task<CursorPaginationResult<Contact>> SearchPagedAsync(string? search, int limit, string? cursor, CancellationToken ct = default);
     Task<ContactSummaryData> GetSummaryAsync(CancellationToken ct = default);
+    Task<int> CountAsync(CancellationToken ct = default);
 }

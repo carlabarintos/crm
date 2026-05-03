@@ -22,4 +22,5 @@ public interface IOpportunityRepository : IRepository<Opportunity, Guid>
     Task<OpportunitySummaryData> GetSummaryAsync(int? year = null, int? month = null, CancellationToken ct = default);
     Task<List<TopOpportunityData>> GetTopOpportunitiesAsync(int count, CancellationToken ct = default);
     Task<List<Opportunity>> GetExpiringSoonAsync(int days, int limit, Guid? ownerId = null, CancellationToken ct = default);
+    Task<int> CountAsync(CancellationToken ct = default);
 }

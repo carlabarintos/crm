@@ -71,4 +71,7 @@ internal sealed class ServiceRepository(ProductsDbContext dbContext) : IServiceR
         dbContext.Services.Remove(aggregate);
         await dbContext.SaveChangesAsync(ct);
     }
+
+    public Task<int> CountAsync(CancellationToken ct = default) =>
+        dbContext.Services.CountAsync(ct);
 }

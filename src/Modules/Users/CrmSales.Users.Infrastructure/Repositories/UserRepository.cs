@@ -40,4 +40,7 @@ internal sealed class UserRepository(UsersDbContext dbContext) : IUserRepository
         dbContext.Users.Remove(aggregate);
         await dbContext.SaveChangesAsync(ct);
     }
+
+    public Task<int> CountAsync(CancellationToken ct = default) =>
+        dbContext.Users.CountAsync(ct);
 }

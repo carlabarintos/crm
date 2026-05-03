@@ -14,12 +14,14 @@ public interface IProductRepository : IRepository<Product, Guid>
     Task<bool> IsSkuUniqueAsync(string sku, Guid? excludeProductId = null, CancellationToken ct = default);
     Task<CursorPaginationResult<Product>> SearchAsync(string? term, bool? isActive, bool lowInventory, int limit, string? cursor, CancellationToken ct = default);
     Task<ProductSummaryData> GetSummaryAsync(CancellationToken ct = default);
+    Task<int> CountAsync(CancellationToken ct = default);
 }
 
 public interface IProductCategoryRepository : IRepository<ProductCategory, Guid>
 {
     Task<bool> ExistsAsync(Guid id, CancellationToken ct = default);
     Task<CursorPaginationResult<ProductCategory>> SearchAsync(string? term, int limit, string? cursor, CancellationToken ct = default);
+    Task<int> CountAsync(CancellationToken ct = default);
 }
 
 public interface IServiceRepository : IRepository<Service, Guid>
@@ -27,6 +29,7 @@ public interface IServiceRepository : IRepository<Service, Guid>
     Task<Service?> GetByServiceCodeAsync(string serviceCode, CancellationToken ct = default);
     Task<bool> IsServiceCodeUniqueAsync(string serviceCode, Guid? excludeId = null, CancellationToken ct = default);
     Task<CursorPaginationResult<Service>> SearchAsync(string? term, bool? isActive, int limit, string? cursor, CancellationToken ct = default);
+    Task<int> CountAsync(CancellationToken ct = default);
 }
 
 public record CatalogItemLookup(Guid Id, string Name, decimal Price, string Currency, CatalogItemType Type, bool IsActive);

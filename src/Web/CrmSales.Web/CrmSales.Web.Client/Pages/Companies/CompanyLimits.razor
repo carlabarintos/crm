@@ -1,0 +1,176 @@
+@page "/companies/{CompanyId:guid}/limits"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize(Roles = "SuperAdmin")]
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Company Limits</PageTitle>
+
+<div class="page-header mb-4">
+    <div>
+        <h1 class="h3 mb-1">Plan Limits — @(_limits?.CompanyName ?? "...")</h1>
+        <p class="text-muted small mb-0">Set resource caps for this company. Leave blank for unlimited.</p>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/companies")'>
+        ← Back to Companies
+    </button>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+            @if (_saved)
+            {
+                <div class="alert alert-success">Limits saved successfully.</div>
+            }
+
+            <div class="row g-3">
+                <div class="col-md-6 col-lg-4">
+                    <label class="form-label fw-semibold">Products</label>
+                    <input type="number" class="form-control" min="0" placeholder="Unlimited"
+                           @bind="_maxProducts" />
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <label class="form-label fw-semibold">Categories</label>
+                    <input type="number" class="form-control" min="0" placeholder="Unlimited"
+                           @bind="_maxCategories" />
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <label class="form-label fw-semibold">Services</label>
+                    <input type="number" class="form-control" min="0" placeholder="Unlimited"
+                           @bind="_maxServices" />
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <label class="form-label fw-semibold">Contacts</label>
+                    <input type="number" class="form-control" min="0" placeholder="Unlimited"
+                           @bind="_maxContacts" />
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <label class="form-label fw-semibold">Opportunities</label>
+                    <input type="number" class="form-control" min="0" placeholder="Unlimited"
+                           @bind="_maxOpportunities" />
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <label class="form-label fw-semibold">Quotes</label>
+                    <input type="number" class="form-control" min="0" placeholder="Unlimited"
+                           @bind="_maxQuotes" />
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <label class="form-label fw-semibold">Orders</label>
+                    <input type="number" class="form-control" min="0" placeholder="Unlimited"
+                           @bind="_maxOrders" />
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <label class="form-label fw-semibold">Users</label>
+                    <input type="number" class="form-control" min="0" placeholder="Unlimited"
+                           @bind="_maxUsers" />
+                </div>
+            </div>
+
+            @if (_limits?.UpdatedAt != null)
+            {
+                <p class="text-muted small mt-3 mb-0">
+                    Last updated @_limits.UpdatedAt.Value.ToString("MMM d, yyyy HH:mm") by @_limits.UpdatedBy
+                </p>
+            }
+
+            <div class="mt-4">
+                <button class="btn btn-primary" @onclick="SaveLimits" disabled="@_saving">
+                    @if (_saving) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                    Save Limits
+                </button>
+                <button class="btn btn-link text-muted" @onclick="ClearAll">Clear All (Unlimited)</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid CompanyId { get; set; }
+
+    private CompanyLimitsDto? _limits;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _saved;
+    private string? _error;
+
+    private int? _maxProducts;
+    private int? _maxCategories;
+    private int? _maxServices;
+    private int? _maxContacts;
+    private int? _maxOpportunities;
+    private int? _maxQuotes;
+    private int? _maxOrders;
+    private int? _maxUsers;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _limits = await Api.GetCompanyLimitsAsync(CompanyId);
+        if (_limits is not null)
+        {
+            _maxProducts      = _limits.MaxProducts;
+            _maxCategories    = _limits.MaxCategories;
+            _maxServices      = _limits.MaxServices;
+            _maxContacts      = _limits.MaxContacts;
+            _maxOpportunities = _limits.MaxOpportunities;
+            _maxQuotes        = _limits.MaxQuotes;
+            _maxOrders        = _limits.MaxOrders;
+            _maxUsers         = _limits.MaxUsers;
+        }
+        _loading = false;
+    }
+
+    private async Task SaveLimits()
+    {
+        _error = null;
+        _saved = false;
+        _saving = true;
+        try
+        {
+            var resp = await Api.SetCompanyLimitsAsync(CompanyId, new
+            {
+                MaxProducts      = _maxProducts,
+                MaxCategories    = _maxCategories,
+                MaxServices      = _maxServices,
+                MaxContacts      = _maxContacts,
+                MaxOpportunities = _maxOpportunities,
+                MaxQuotes        = _maxQuotes,
+                MaxOrders        = _maxOrders,
+                MaxUsers         = _maxUsers
+            });
+            if (resp.IsSuccessStatusCode)
+            {
+                _saved = true;
+                _limits = await Api.GetCompanyLimitsAsync(CompanyId);
+            }
+            else
+            {
+                _error = $"Failed to save limits ({(int)resp.StatusCode}).";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally { _saving = false; }
+    }
+
+    private void ClearAll()
+    {
+        _maxProducts = _maxCategories = _maxServices =
+        _maxContacts = _maxOpportunities = _maxQuotes =
+        _maxOrders   = _maxUsers = null;
+    }
+}

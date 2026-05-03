@@ -1,3 +1,4 @@
+using CrmSales.Api.Services;
 using CrmSales.Contacts.Domain.Entities;
 using CrmSales.Contacts.Domain.Repositories;
 using Microsoft.AspNetCore.Mvc;
@@ -50,8 +51,15 @@ public static class ContactEndpoints
             });
         });
 
-        group.MapPost("/", async (CreateContactRequest req, IContactRepository repo, CancellationToken ct) =>
+        group.MapPost("/", async (CreateContactRequest req, IContactRepository repo, ICompanyLimitsService limits, CancellationToken ct) =>
         {
+            var companyLimits = await limits.GetForCurrentTenantAsync(ct);
+            if (companyLimits?.MaxContacts is int max)
+            {
+                var count = await repo.CountAsync(ct);
+                if (count >= max)
+                    return Results.Problem($"Contact limit of {max} reached for your plan.", statusCode: StatusCodes.Status429TooManyRequests);
+            }
             var contact = Contact.Create(
                 req.FirstName, req.LastName,
                 req.Email, req.Phone,

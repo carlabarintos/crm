@@ -318,6 +318,12 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> CreateCompanyAdminAsync(Guid companyId, object body)
         => _http.PostAsJsonAsync($"/api/companies/{companyId}/admin", body);
 
+    public Task<CompanyLimitsDto?> GetCompanyLimitsAsync(Guid companyId)
+        => _http.GetFromJsonAsync<CompanyLimitsDto>($"/api/companies/{companyId}/limits");
+
+    public Task<HttpResponseMessage> SetCompanyLimitsAsync(Guid companyId, object body)
+        => _http.PutAsJsonAsync($"/api/companies/{companyId}/limits", body);
+
     // ── Access Requests ────────────────────────────────────────────────
     public Task<List<AccessRequestDto>?> GetAccessRequestsAsync(string? status = null)
     {
@@ -497,6 +503,12 @@ public record UserRoleDto(Guid RoleId, string Name, string? Description, DateTim
 public record AvailablePermissionDto(string Name);
 
 public record CompanyDto(Guid Id, string Name, string Slug, bool IsActive, DateTime CreatedAt);
+
+public record CompanyLimitsDto(
+    Guid CompanyId, string CompanyName,
+    int? MaxProducts, int? MaxCategories, int? MaxServices,
+    int? MaxContacts, int? MaxOpportunities, int? MaxQuotes, int? MaxOrders, int? MaxUsers,
+    DateTime? UpdatedAt, string? UpdatedBy);
 
 public record AccessRequestDto(
     Guid Id, string Name, string Company, string Email,

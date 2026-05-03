@@ -140,4 +140,7 @@ internal sealed class OpportunityRepository(OpportunitiesDbContext dbContext) : 
         dbContext.Opportunities.Remove(aggregate);
         await dbContext.SaveChangesAsync(ct);
     }
+
+    public Task<int> CountAsync(CancellationToken ct = default) =>
+        dbContext.Opportunities.CountAsync(ct);
 }

@@ -38,8 +38,16 @@ public static class UserEndpoints
             IUserRepository repo,
             KeycloakAdminClient keycloak,
             HttpContext httpContext,
+            ICompanyLimitsService limits,
             CancellationToken ct) =>
         {
+            var companyLimits = await limits.GetForCurrentTenantAsync(ct);
+            if (companyLimits?.MaxUsers is int max)
+            {
+                var count = await repo.CountAsync(ct);
+                if (count >= max)
+                    return Results.Problem($"User limit of {max} reached for your plan.", statusCode: StatusCodes.Status429TooManyRequests);
+            }
             if (await repo.EmailExistsAsync(req.Email, null, ct))
                 return Results.Conflict($"Email '{req.Email}' is already registered.");
 

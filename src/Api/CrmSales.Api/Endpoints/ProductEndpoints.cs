@@ -1,3 +1,4 @@
+using CrmSales.Api.Services;
 using CrmSales.Products.Application.Products.Commands.CreateProduct;
 using CrmSales.Products.Application.Products.Commands.UpdateProduct;
 using CrmSales.Products.Application.Products.Queries.GetProductById;
@@ -70,8 +71,15 @@ public static class ProductEndpoints
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error.Description);
         }).WithName("GetProductById");
 
-        group.MapPost("/", async (CreateProductCommand cmd, IMessageBus bus, CancellationToken ct) =>
+        group.MapPost("/", async (CreateProductCommand cmd, IProductRepository repo, ICompanyLimitsService limits, IMessageBus bus, CancellationToken ct) =>
         {
+            var companyLimits = await limits.GetForCurrentTenantAsync(ct);
+            if (companyLimits?.MaxProducts is int max)
+            {
+                var count = await repo.CountAsync(ct);
+                if (count >= max)
+                    return Results.Problem($"Product limit of {max} reached for your plan.", statusCode: StatusCodes.Status429TooManyRequests);
+            }
             var result = await bus.InvokeAsync<Result<Guid>>(cmd, ct);
             return result.IsSuccess
                 ? Results.CreatedAtRoute("GetProductById", new { id = result.Value }, result.Value)
@@ -107,10 +115,17 @@ public static class ProductEndpoints
             return Results.Ok(new { items = result.Items.Select(c => new { c.Id, c.Name, c.Description, c.IsActive }), result.NextCursor, result.HasMore });
         });
 
-        group.MapPost("/", async (CreateCategoryRequest req, IProductCategoryRepository repo, CancellationToken ct) =>
+        group.MapPost("/", async (CreateCategoryRequest req, IProductCategoryRepository repo, ICompanyLimitsService limits, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.Problem("Category name is required.", statusCode: StatusCodes.Status400BadRequest);
+            var companyLimits = await limits.GetForCurrentTenantAsync(ct);
+            if (companyLimits?.MaxCategories is int max)
+            {
+                var count = await repo.CountAsync(ct);
+                if (count >= max)
+                    return Results.Problem($"Category limit of {max} reached for your plan.", statusCode: StatusCodes.Status429TooManyRequests);
+            }
             var category = ProductCategory.Create(req.Name, req.Description);
             await repo.AddAsync(category, ct);
             return Results.Created($"/api/categories/{category.Id}", new { category.Id, category.Name });
@@ -119,11 +134,16 @@ public static class ProductEndpoints
         group.MapPost("/import", async (
             List<ImportCategoryRow> rows,
             IProductCategoryRepository repo,
+            ICompanyLimitsService limits,
             CancellationToken ct) =>
         {
             const int MaxRows = 100;
             if (rows.Count > MaxRows)
                 return Results.Problem($"Import limited to {MaxRows} rows.", statusCode: StatusCodes.Status400BadRequest);
+
+            var companyLimits = await limits.GetForCurrentTenantAsync(ct);
+            int? maxCategories = companyLimits?.MaxCategories;
+            int currentCount = maxCategories.HasValue ? await repo.CountAsync(ct) : 0;
 
             var existing = (await repo.GetAllAsync(ct))
                 .ToDictionary(c => c.Name.Trim().ToLowerInvariant());
@@ -146,6 +166,12 @@ public static class ProductEndpoints
                 if (existing.ContainsKey(key))
                 {
                     skipped++;
+                    continue;
+                }
+
+                if (maxCategories is int catMax && currentCount + created >= catMax)
+                {
+                    errors.Add(new(rowNum, $"Category limit of {catMax} reached for your plan."));
                     continue;
                 }
 
@@ -186,8 +212,15 @@ public static class ProductEndpoints
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error.Description);
         }).WithName("GetServiceById");
 
-        group.MapPost("/", async (CreateServiceCommand cmd, IMessageBus bus, CancellationToken ct) =>
+        group.MapPost("/", async (CreateServiceCommand cmd, IServiceRepository serviceRepo, ICompanyLimitsService limits, IMessageBus bus, CancellationToken ct) =>
         {
+            var companyLimits = await limits.GetForCurrentTenantAsync(ct);
+            if (companyLimits?.MaxServices is int max)
+            {
+                var count = await serviceRepo.CountAsync(ct);
+                if (count >= max)
+                    return Results.Problem($"Service limit of {max} reached for your plan.", statusCode: StatusCodes.Status429TooManyRequests);
+            }
             var result = await bus.InvokeAsync<Result<Guid>>(cmd, ct);
             return result.IsSuccess
                 ? Results.CreatedAtRoute("GetServiceById", new { id = result.Value }, result.Value)
@@ -214,11 +247,16 @@ public static class ProductEndpoints
             List<ImportServiceRow> rows,
             IServiceRepository serviceRepo,
             IProductCategoryRepository categoryRepo,
+            ICompanyLimitsService limits,
             CancellationToken ct) =>
         {
             const int MaxRows = 200;
             if (rows.Count > MaxRows)
                 return Results.Problem($"Import limited to {MaxRows} rows.", statusCode: StatusCodes.Status400BadRequest);
+
+            var companyLimits = await limits.GetForCurrentTenantAsync(ct);
+            int? maxServices = companyLimits?.MaxServices;
+            int currentCount = maxServices.HasValue ? await serviceRepo.CountAsync(ct) : 0;
 
             var categories = (await categoryRepo.GetAllAsync(ct))
                 .ToDictionary(c => c.Name.Trim().ToLowerInvariant());
@@ -239,6 +277,12 @@ public static class ProductEndpoints
                 if (row.Price <= 0)
                 {
                     errors.Add(new(rowNum, "Price must be greater than 0."));
+                    continue;
+                }
+
+                if (maxServices is int svcMax && currentCount + created >= svcMax)
+                {
+                    errors.Add(new(rowNum, $"Service limit of {svcMax} reached for your plan."));
                     continue;
                 }
 
@@ -296,11 +340,16 @@ public static class ProductEndpoints
             List<ImportProductRow> rows,
             IProductRepository productRepo,
             IProductCategoryRepository categoryRepo,
+            ICompanyLimitsService limits,
             CancellationToken ct) =>
         {
             const int MaxRows = 200;
             if (rows.Count > MaxRows)
                 return Results.Problem($"Import limited to {MaxRows} rows.", statusCode: StatusCodes.Status400BadRequest);
+
+            var companyLimits = await limits.GetForCurrentTenantAsync(ct);
+            int? maxProducts = companyLimits?.MaxProducts;
+            int currentCount = maxProducts.HasValue ? await productRepo.CountAsync(ct) : 0;
 
             var categories = (await categoryRepo.GetAllAsync(ct))
                 .ToDictionary(c => c.Name.Trim().ToLowerInvariant());
@@ -321,6 +370,12 @@ public static class ProductEndpoints
                 if (row.Price <= 0)
                 {
                     errors.Add(new(rowNum, "Price must be greater than 0."));
+                    continue;
+                }
+
+                if (maxProducts is int prodMax && currentCount + created >= prodMax)
+                {
+                    errors.Add(new(rowNum, $"Product limit of {prodMax} reached for your plan."));
                     continue;
                 }
 

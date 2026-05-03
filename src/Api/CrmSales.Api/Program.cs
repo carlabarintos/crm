@@ -115,6 +115,7 @@ builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddSingleton<INotificationBroadcaster, NotificationBroadcaster>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<TenantProvisioner>();
+builder.Services.AddScoped<ICompanyLimitsService, CompanyLimitsService>();
 builder.Services.AddHostedService<ExpiryCheckerService>();
 builder.Services.AddDbContext<MasterDbContext>(opts =>
     opts.UseNpgsql(connectionString));
@@ -317,6 +318,29 @@ using (var scope = app.Services.CreateScope())
                 """;
             await createArCmd.ExecuteNonQueryAsync();
         }
+
+        // Ensure CompanyLimits table always exists (idempotent — safe on fresh and existing installs)
+        await using var limitsCmd = masterConn.CreateCommand();
+        limitsCmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS master."CompanyLimits" (
+                "Id"               uuid         NOT NULL,
+                "CompanyId"        uuid         NOT NULL,
+                "MaxProducts"      integer      NULL,
+                "MaxCategories"    integer      NULL,
+                "MaxServices"      integer      NULL,
+                "MaxContacts"      integer      NULL,
+                "MaxOpportunities" integer      NULL,
+                "MaxQuotes"        integer      NULL,
+                "MaxOrders"        integer      NULL,
+                "MaxUsers"         integer      NULL,
+                "UpdatedAt"        timestamp    NOT NULL DEFAULT now(),
+                "UpdatedBy"        varchar(200) NOT NULL DEFAULT '',
+                CONSTRAINT "PK_CompanyLimits" PRIMARY KEY ("Id")
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_CompanyLimits_CompanyId"
+                ON master."CompanyLimits" ("CompanyId");
+            """;
+        await limitsCmd.ExecuteNonQueryAsync();
     }
     finally
     {
@@ -749,6 +773,7 @@ app.MapAccessRequestEndpoints();
 
 var api = app.MapGroup("/").RequireRateLimiting("authenticated");
 api.MapCompanyEndpoints();
+api.MapCompanyLimitsEndpoints();
 api.MapProductEndpoints();
 api.MapCategoryEndpoints();
 api.MapProductImportEndpoint();

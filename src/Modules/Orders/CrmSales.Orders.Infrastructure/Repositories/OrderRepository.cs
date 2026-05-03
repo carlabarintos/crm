@@ -126,4 +126,7 @@ internal sealed class OrderRepository(OrdersDbContext dbContext) : IOrderReposit
         dbContext.Orders.Remove(aggregate);
         await dbContext.SaveChangesAsync(ct);
     }
+
+    public Task<int> CountAsync(CancellationToken ct = default) =>
+        dbContext.Orders.CountAsync(ct);
 }
