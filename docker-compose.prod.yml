@@ -108,6 +108,7 @@ services:
       Keycloak__AdminUsername: ${KEYCLOAK_ADMIN}
       Keycloak__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD}
       AllowedOrigins: "https://${DOMAIN}${EXTRA_ALLOWED_ORIGINS:+,${EXTRA_ALLOWED_ORIGINS}}"
+      Encryption__Key: ${ENCRYPTION_KEY}
     depends_on:
       postgres:
         condition: service_healthy
