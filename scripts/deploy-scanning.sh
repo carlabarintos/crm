@@ -21,7 +21,7 @@ echo ""
 
 # ── 1. Pull latest code ───────────────────────────────────────────────────────
 echo "[1/5] Pulling latest repo..."
-git -C "$APP_DIR" pull --ff-only
+git -C "$APP_DIR" pull
 
 # ── 2. Pull the ClamAV image ─────────────────────────────────────────────────
 echo "[2/5] Pulling clamav/clamav:stable..."
