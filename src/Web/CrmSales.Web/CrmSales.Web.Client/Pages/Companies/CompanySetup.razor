@@ -14,7 +14,109 @@
 </div>
 
 <div class="row justify-content-center">
-    <div class="col-md-6 col-lg-5">
+    <div class="col-md-8 col-lg-7">
+
+        @* ── Existing admins ────────────────────────────────────────────── *@
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0">Company Admins</h5>
+                    <p class="text-muted small mb-0 mt-1">Users with the Admin role for this company.</p>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (adminsLoading)
+                {
+                    <div class="text-center py-3"><div class="spinner-border spinner-border-sm" role="status"></div></div>
+                }
+                else if (admins is null || admins.Count == 0)
+                {
+                    <p class="text-muted text-center py-3 mb-0">No admins yet.</p>
+                }
+                else
+                {
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var admin in admins)
+                            {
+                                @if (editingKeycloakId == admin.KeycloakId)
+                                {
+                                    <tr>
+                                        <td colspan="4">
+                                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                                <input class="form-control form-control-sm" style="max-width:160px"
+                                                       @bind="editFirstName" placeholder="First name" />
+                                                <input class="form-control form-control-sm" style="max-width:160px"
+                                                       @bind="editLastName" placeholder="Last name" />
+                                                <button class="btn btn-sm btn-primary" @onclick="() => SaveEdit(admin.KeycloakId)" disabled="@saving">
+                                                    @if (saving) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Save</span> }
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="CancelEdit">Cancel</button>
+                                                @if (!string.IsNullOrEmpty(editError))
+                                                {
+                                                    <span class="text-danger small">@editError</span>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                                else if (removingKeycloakId == admin.KeycloakId)
+                                {
+                                    <tr class="table-warning">
+                                        <td colspan="4">
+                                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                                <span class="small">Remove <strong>@admin.FirstName @admin.LastName</strong> as admin? Their account will be disabled.</span>
+                                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmRemove(admin.KeycloakId)" disabled="@saving">
+                                                    @if (saving) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Confirm Remove</span> }
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="CancelRemove">Cancel</button>
+                                                @if (!string.IsNullOrEmpty(removeError))
+                                                {
+                                                    <span class="text-danger small">@removeError</span>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td><strong>@admin.FirstName @admin.LastName</strong></td>
+                                        <td class="text-muted small">@admin.Email</td>
+                                        <td>
+                                            @if (admin.Enabled)
+                                            {
+                                                <span class="badge bg-success">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Disabled</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="d-flex gap-2">
+                                                <button class="btn btn-sm btn-outline-primary" @onclick="() => StartEdit(admin)">Edit</button>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => StartRemove(admin.KeycloakId)">Remove</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        @* ── Create new admin ───────────────────────────────────────────── *@
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">Create Company Admin</h5>
@@ -76,12 +178,115 @@
 @code {
     [Parameter] public Guid CompanyId { get; set; }
 
+    // Create admin state
     private string firstName = "";
     private string lastName = "";
     private string email = "";
     private bool saving;
     private string? error;
     private AdminCreatedResult? success;
+
+    // Existing admins state
+    private List<CompanyAdminDto>? admins;
+    private bool adminsLoading = true;
+
+    // Edit state
+    private string? editingKeycloakId;
+    private string editFirstName = "";
+    private string editLastName = "";
+    private string? editError;
+
+    // Remove state
+    private string? removingKeycloakId;
+    private string? removeError;
+
+    protected override async Task OnInitializedAsync() => await LoadAdmins();
+
+    private async Task LoadAdmins()
+    {
+        adminsLoading = true;
+        admins = await Api.GetCompanyAdminsAsync(CompanyId);
+        adminsLoading = false;
+    }
+
+    private void StartEdit(CompanyAdminDto admin)
+    {
+        editingKeycloakId = admin.KeycloakId;
+        editFirstName = admin.FirstName;
+        editLastName = admin.LastName;
+        editError = null;
+        removingKeycloakId = null;
+    }
+
+    private void CancelEdit()
+    {
+        editingKeycloakId = null;
+        editError = null;
+    }
+
+    private async Task SaveEdit(string keycloakId)
+    {
+        editError = null;
+        if (string.IsNullOrWhiteSpace(editFirstName) || string.IsNullOrWhiteSpace(editLastName))
+        {
+            editError = "First name and last name are required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var resp = await Api.UpdateCompanyAdminAsync(CompanyId, keycloakId, new
+            {
+                FirstName = editFirstName.Trim(),
+                LastName = editLastName.Trim()
+            });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                editingKeycloakId = null;
+                await LoadAdmins();
+            }
+            else
+            {
+                editError = await ApiErrors.ParseAsync(resp);
+            }
+        }
+        finally { saving = false; }
+    }
+
+    private void StartRemove(string keycloakId)
+    {
+        removingKeycloakId = keycloakId;
+        removeError = null;
+        editingKeycloakId = null;
+    }
+
+    private void CancelRemove()
+    {
+        removingKeycloakId = null;
+        removeError = null;
+    }
+
+    private async Task ConfirmRemove(string keycloakId)
+    {
+        removeError = null;
+        saving = true;
+        try
+        {
+            var resp = await Api.RemoveCompanyAdminAsync(CompanyId, keycloakId);
+            if (resp.IsSuccessStatusCode)
+            {
+                removingKeycloakId = null;
+                await LoadAdmins();
+            }
+            else
+            {
+                removeError = await ApiErrors.ParseAsync(resp);
+            }
+        }
+        finally { saving = false; }
+    }
 
     private async Task CreateAdmin()
     {
@@ -105,6 +310,7 @@
             if (resp.IsSuccessStatusCode)
             {
                 success = await resp.Content.ReadFromJsonAsync<AdminCreatedResult>();
+                await LoadAdmins();
             }
             else
             {

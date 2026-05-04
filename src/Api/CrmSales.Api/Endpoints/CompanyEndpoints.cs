@@ -51,6 +51,59 @@ public static class CompanyEndpoints
             });
         });
 
+        group.MapGet("/{id:guid}/admins", async (
+            Guid id,
+            MasterDbContext db,
+            KeycloakAdminClient keycloak,
+            CancellationToken ct) =>
+        {
+            var company = await db.Companies.FindAsync([id], ct);
+            if (company is null) return Results.NotFound();
+
+            var admins = await keycloak.GetCompanyAdminsAsync(company.Slug);
+            return Results.Ok(admins);
+        });
+
+        group.MapPut("/{id:guid}/admin/{keycloakId}", async (
+            Guid id,
+            string keycloakId,
+            [FromBody] UpdateCompanyAdminRequest req,
+            MasterDbContext db,
+            KeycloakAdminClient keycloak,
+            CancellationToken ct) =>
+        {
+            var company = await db.Companies.FindAsync([id], ct);
+            if (company is null) return Results.NotFound();
+
+            if (string.IsNullOrWhiteSpace(req.FirstName) || string.IsNullOrWhiteSpace(req.LastName))
+                return Results.BadRequest("First name and last name are required.");
+
+            try { await keycloak.UpdateUserAsync(keycloakId, req.FirstName.Trim(), req.LastName.Trim()); }
+            catch (Exception ex) { return Results.Problem($"Failed to update admin in Keycloak: {ex.Message}", statusCode: 502); }
+
+            return Results.NoContent();
+        });
+
+        group.MapDelete("/{id:guid}/admin/{keycloakId}", async (
+            Guid id,
+            string keycloakId,
+            MasterDbContext db,
+            KeycloakAdminClient keycloak,
+            CancellationToken ct) =>
+        {
+            var company = await db.Companies.FindAsync([id], ct);
+            if (company is null) return Results.NotFound();
+
+            try
+            {
+                await keycloak.RemoveCrmRolesAsync(keycloakId);
+                await keycloak.SetEnabledAsync(keycloakId, false);
+            }
+            catch (Exception ex) { return Results.Problem($"Failed to remove admin in Keycloak: {ex.Message}", statusCode: 502); }
+
+            return Results.NoContent();
+        });
+
         group.MapPost("/{id:guid}/admin", async (
             Guid id,
             [FromBody] CreateCompanyAdminRequest req,
@@ -82,3 +135,4 @@ public static class CompanyEndpoints
 
 record CreateCompanyRequest(string Name, string Slug);
 record CreateCompanyAdminRequest(string FirstName, string LastName, string Email);
+record UpdateCompanyAdminRequest(string FirstName, string LastName);

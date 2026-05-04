@@ -524,6 +524,60 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
         (await httpClient.SendAsync(req)).EnsureSuccessStatusCode();
     }
 
+    /// <summary>Returns all users with the Admin role whose company_id attribute matches the given slug.</summary>
+    public async Task<List<KeycloakUserInfo>> GetCompanyAdminsAsync(string companySlug)
+    {
+        var req = await AuthorizedRequest(HttpMethod.Get, "roles/Admin/users?max=200");
+        var resp = await httpClient.SendAsync(req);
+        if (!resp.IsSuccessStatusCode) return [];
+
+        var users = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        var result = new List<KeycloakUserInfo>();
+
+        foreach (var u in users.EnumerateArray())
+        {
+            if (!u.TryGetProperty("attributes", out var attrs)) continue;
+            if (!attrs.TryGetProperty("company_id", out var companyIds)) continue;
+            if (!companyIds.EnumerateArray().Any(v => v.GetString() == companySlug)) continue;
+
+            result.Add(new KeycloakUserInfo(
+                u.GetProperty("id").GetString() ?? "",
+                u.TryGetProperty("email", out var email) ? email.GetString() ?? "" : "",
+                u.TryGetProperty("firstName", out var fn) ? fn.GetString() ?? "" : "",
+                u.TryGetProperty("lastName", out var ln) ? ln.GetString() ?? "" : "",
+                u.TryGetProperty("enabled", out var en) && en.GetBoolean()
+            ));
+        }
+
+        return result;
+    }
+
+    /// <summary>Removes all CRM realm roles from a user without assigning a new one.</summary>
+    public async Task RemoveCrmRolesAsync(string keycloakId)
+    {
+        var token = await GetAdminTokenAsync();
+
+        var getReq = new HttpRequestMessage(HttpMethod.Get,
+            $"{_adminUrl}/admin/realms/{_realm}/users/{keycloakId}/role-mappings/realm");
+        getReq.Headers.Authorization = Bearer(token);
+        var getResp = await httpClient.SendAsync(getReq);
+        if (!getResp.IsSuccessStatusCode) return;
+
+        var current = await getResp.Content.ReadFromJsonAsync<JsonElement>();
+        var toRemove = current.EnumerateArray()
+            .Where(r => CrmRoles.Contains(r.GetProperty("name").GetString()))
+            .Select(r => new { id = r.GetProperty("id").GetString(), name = r.GetProperty("name").GetString() })
+            .ToList();
+
+        if (toRemove.Count == 0) return;
+
+        var delReq = new HttpRequestMessage(HttpMethod.Delete,
+            $"{_adminUrl}/admin/realms/{_realm}/users/{keycloakId}/role-mappings/realm");
+        delReq.Headers.Authorization = Bearer(token);
+        delReq.Content = JsonContent.Create(toRemove);
+        await httpClient.SendAsync(delReq);
+    }
+
     private HttpRequestMessage BuildRequest(HttpMethod method, string path, object? body = null)
     {
         var req = new HttpRequestMessage(method, $"{_adminUrl}/admin/realms/{_realm}/{path}");
@@ -546,3 +600,5 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
     private static System.Net.Http.Headers.AuthenticationHeaderValue Bearer(string token)
         => new("Bearer", token);
 }
+
+public record KeycloakUserInfo(string KeycloakId, string Email, string FirstName, string LastName, bool Enabled);

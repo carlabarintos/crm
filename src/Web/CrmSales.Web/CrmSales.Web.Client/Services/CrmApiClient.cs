@@ -353,6 +353,15 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> CreateCompanyAdminAsync(Guid companyId, object body)
         => _http.PostAsJsonAsync($"/api/companies/{companyId}/admin", body);
 
+    public Task<List<CompanyAdminDto>?> GetCompanyAdminsAsync(Guid companyId)
+        => _http.GetFromJsonAsync<List<CompanyAdminDto>>($"/api/companies/{companyId}/admins");
+
+    public Task<HttpResponseMessage> UpdateCompanyAdminAsync(Guid companyId, string keycloakId, object body)
+        => _http.PutAsJsonAsync($"/api/companies/{companyId}/admin/{keycloakId}", body);
+
+    public Task<HttpResponseMessage> RemoveCompanyAdminAsync(Guid companyId, string keycloakId)
+        => _http.DeleteAsync($"/api/companies/{companyId}/admin/{keycloakId}");
+
     public Task<CompanyLimitsDto?> GetCompanyLimitsAsync(Guid companyId)
         => _http.GetFromJsonAsync<CompanyLimitsDto>($"/api/companies/{companyId}/limits");
 
@@ -540,6 +549,8 @@ public record UserRoleDto(Guid RoleId, string Name, string? Description, DateTim
 public record AvailablePermissionDto(string Name);
 
 public record CompanyDto(Guid Id, string Name, string Slug, bool IsActive, DateTime CreatedAt);
+
+public record CompanyAdminDto(string KeycloakId, string Email, string FirstName, string LastName, bool Enabled);
 
 public record CompanyLimitsDto(
     Guid CompanyId, string CompanyName,
