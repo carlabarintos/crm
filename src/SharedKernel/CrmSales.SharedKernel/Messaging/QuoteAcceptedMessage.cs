@@ -16,7 +16,7 @@ public record QuoteAcceptedMessage(
     decimal QuoteDiscountPercent = 0);
 
 public record QuoteLineItemMessage(
-    Guid CatalogItemId,
+    Guid? CatalogItemId,
     string ItemName,
     int Quantity,
     decimal UnitPrice,

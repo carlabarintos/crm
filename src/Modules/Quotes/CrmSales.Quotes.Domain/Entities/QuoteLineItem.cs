@@ -6,7 +6,7 @@ namespace CrmSales.Quotes.Domain.Entities;
 public sealed class QuoteLineItem : Entity<Guid>
 {
     public Guid QuoteId { get; private set; }
-    public Guid CatalogItemId { get; private set; }
+    public Guid? CatalogItemId { get; private set; }
     public string ItemName { get; private set; }
     public CatalogItemType ItemType { get; private set; }
     public int Quantity { get; private set; }
@@ -17,7 +17,7 @@ public sealed class QuoteLineItem : Entity<Guid>
 
     private QuoteLineItem() { ItemName = string.Empty; }
 
-    internal static QuoteLineItem Create(Guid quoteId, Guid catalogItemId, string itemName,
+    internal static QuoteLineItem Create(Guid quoteId, Guid? catalogItemId, string itemName,
         int quantity, decimal unitPrice, decimal discountPercent, CatalogItemType itemType = CatalogItemType.Product)
     {
         if (quantity <= 0) throw new ArgumentException("Quantity must be positive.", nameof(quantity));

@@ -6,7 +6,7 @@ namespace CrmSales.Orders.Domain.Entities;
 public sealed class OrderLineItem : Entity<Guid>
 {
     public Guid OrderId { get; private set; }
-    public Guid CatalogItemId { get; private set; }
+    public Guid? CatalogItemId { get; private set; }
     public string ItemName { get; private set; }
     public CatalogItemType ItemType { get; private set; }
     public int Quantity { get; private set; }
@@ -17,7 +17,7 @@ public sealed class OrderLineItem : Entity<Guid>
 
     private OrderLineItem() { ItemName = string.Empty; }
 
-    internal static OrderLineItem Create(Guid orderId, Guid catalogItemId, string itemName,
+    internal static OrderLineItem Create(Guid orderId, Guid? catalogItemId, string itemName,
         int quantity, decimal unitPrice, CatalogItemType itemType = CatalogItemType.Product,
         decimal discountPercent = 0) =>
         new()

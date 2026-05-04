@@ -45,7 +45,7 @@ public sealed class Order : AggregateRoot<Guid>
     public static Order CreateFromQuote(
         Guid quoteId, Guid opportunityId, Guid customerId,
         string currency,
-        IEnumerable<(Guid CatalogItemId, string ItemName, int Qty, decimal UnitPrice, CatalogItemType ItemType, decimal DiscountPercent)> items,
+        IEnumerable<(Guid? CatalogItemId, string ItemName, int Qty, decimal UnitPrice, CatalogItemType ItemType, decimal DiscountPercent)> items,
         string? shippingAddress = null, string? notes = null,
         string? taxRateName = null, decimal taxRatePercent = 0,
         decimal quoteDiscountPercent = 0)
@@ -111,11 +111,13 @@ public sealed class Order : AggregateRoot<Guid>
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void AddLineItem(Guid catalogItemId, string itemName, int quantity, decimal unitPrice,
+    public void AddLineItem(Guid? catalogItemId, string itemName, int quantity, decimal unitPrice,
         CatalogItemType itemType = CatalogItemType.Product)
     {
         if (Status != OrderStatus.Pending)
             throw new InvalidOperationException("Line items can only be added to pending orders.");
+        if (catalogItemId == null && string.IsNullOrWhiteSpace(itemName))
+            throw new ArgumentException("Item name is required for custom line items.", nameof(itemName));
         _lineItems.Add(OrderLineItem.Create(Id, catalogItemId, itemName, quantity, unitPrice, itemType));
         UpdatedAt = DateTime.UtcNow;
     }
@@ -137,6 +139,46 @@ public sealed class Order : AggregateRoot<Guid>
         var item = _lineItems.FirstOrDefault(l => l.Id == lineItemId)
             ?? throw new InvalidOperationException("Line item not found.");
         _lineItems.Remove(item);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ApplyTax(string taxRateName, decimal taxRatePercent)
+    {
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException("Tax can only be changed on pending orders.");
+        if (string.IsNullOrWhiteSpace(taxRateName))
+            throw new ArgumentException("Tax rate name is required.", nameof(taxRateName));
+        if (taxRatePercent < 0 || taxRatePercent > 100)
+            throw new ArgumentException("Tax rate must be between 0 and 100.", nameof(taxRatePercent));
+        TaxRateName = taxRateName.Trim();
+        TaxRatePercent = taxRatePercent;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void RemoveTax()
+    {
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException("Tax can only be changed on pending orders.");
+        TaxRateName = null;
+        TaxRatePercent = 0;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetQuoteDiscount(decimal percent)
+    {
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException("Discount can only be changed on pending orders.");
+        if (percent < 0 || percent > 100)
+            throw new ArgumentException("Discount must be between 0 and 100.", nameof(percent));
+        QuoteDiscountPercent = percent;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void RemoveQuoteDiscount()
+    {
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException("Discount can only be changed on pending orders.");
+        QuoteDiscountPercent = 0;
         UpdatedAt = DateTime.UtcNow;
     }
 

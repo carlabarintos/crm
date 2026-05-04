@@ -55,13 +55,19 @@ public sealed class Quote : AggregateRoot<Guid>
         return quote;
     }
 
-    public void AddLineItem(Guid catalogItemId, string itemName, int quantity, decimal unitPrice,
+    public void AddLineItem(Guid? catalogItemId, string itemName, int quantity, decimal unitPrice,
         decimal discountPercent = 0, CatalogItemType itemType = CatalogItemType.Product)
     {
         if (Status != QuoteStatus.Draft)
             throw new InvalidOperationException("Can only modify draft quotes.");
 
-        var existing = _lineItems.FirstOrDefault(l => l.CatalogItemId == catalogItemId);
+        if (catalogItemId == null && string.IsNullOrWhiteSpace(itemName))
+            throw new ArgumentException("Item name is required for custom line items.", nameof(itemName));
+
+        QuoteLineItem? existing = catalogItemId.HasValue
+            ? _lineItems.FirstOrDefault(l => l.CatalogItemId == catalogItemId)
+            : null;
+
         if (existing != null)
             existing.UpdateQuantity(existing.Quantity + quantity);
         else

@@ -272,6 +272,18 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> DeleteOrderLineItemAsync(Guid id, Guid lineItemId)
         => _http.DeleteAsync($"/api/orders/{id}/line-items/{lineItemId}");
 
+    public Task<HttpResponseMessage> ApplyOrderTaxAsync(Guid id, string taxRateName, decimal taxRatePercent)
+        => _http.PostAsJsonAsync($"/api/orders/{id}/tax", new { TaxRateName = taxRateName, TaxRatePercent = taxRatePercent });
+
+    public Task<HttpResponseMessage> RemoveOrderTaxAsync(Guid id)
+        => _http.DeleteAsync($"/api/orders/{id}/tax");
+
+    public Task<HttpResponseMessage> SetOrderDiscountAsync(Guid id, decimal percent)
+        => _http.PutAsJsonAsync($"/api/orders/{id}/discount", new { Percent = percent });
+
+    public Task<HttpResponseMessage> RemoveOrderDiscountAsync(Guid id)
+        => _http.DeleteAsync($"/api/orders/{id}/discount");
+
     public Task<List<ContactOrderDto>?> GetContactOrdersAsync(Guid contactId)
         => _http.GetFromJsonAsync<List<ContactOrderDto>>($"/api/orders/customer/{contactId}");
 
@@ -489,7 +501,7 @@ public record QuoteDetailDto(Guid Id, string QuoteNumber, Guid OpportunityId, st
     string Currency, DateTime? ExpiryDate, string? Notes, List<QuoteLineItemDto> LineItems,
     DateTime CreatedAt, DateTime UpdatedAt);
 
-public record QuoteLineItemDto(Guid Id, Guid CatalogItemId, string ItemName, string ItemType,
+public record QuoteLineItemDto(Guid Id, Guid? CatalogItemId, string ItemName, string ItemType,
     int Quantity, decimal UnitPrice, decimal DiscountPercent, decimal LineTotal);
 
 public record OrderDto(Guid Id, string OrderNumber, Guid QuoteId, string Status,
@@ -505,7 +517,7 @@ public record OrderDetailDto(Guid Id, string OrderNumber, Guid QuoteId, string S
     List<OrderLineItemDto> LineItems, DateTime CreatedAt,
     DateTime? ShippedAt, DateTime? DeliveredAt);
 
-public record OrderLineItemDto(Guid Id, Guid CatalogItemId, string ItemName, string ItemType,
+public record OrderLineItemDto(Guid Id, Guid? CatalogItemId, string ItemName, string ItemType,
     int Quantity, decimal UnitPrice, decimal DiscountPercent, decimal LineTotal, decimal DiscountAmount);
 
 public record OrderDocumentDto(Guid Id, string FileName, string Type, string ContentType, long FileSizeBytes, string? Notes, DateTime UploadedAt);

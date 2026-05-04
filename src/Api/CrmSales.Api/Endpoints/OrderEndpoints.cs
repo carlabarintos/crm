@@ -287,9 +287,9 @@ public static class OrderEndpoints
             order.Deliver();
             await repo.UpdateAsync(order, ct);
 
-            foreach (var item in order.LineItems)
+            foreach (var item in order.LineItems.Where(l => l.CatalogItemId.HasValue))
             {
-                var product = await productRepo.GetByIdAsync(item.CatalogItemId, ct);
+                var product = await productRepo.GetByIdAsync(item.CatalogItemId!.Value, ct);
                 if (product is not null)
                 {
                     product.AdjustStock(-item.Quantity);
@@ -375,6 +375,8 @@ public static class OrderEndpoints
         {
             var order = await repo.GetByIdAsync(id, ct);
             if (order is null) return Results.NotFound();
+            if (req.CatalogItemId == null && string.IsNullOrWhiteSpace(req.ItemName))
+                return Results.Problem("Item name is required for custom line items.", statusCode: 400);
             var itemType = Enum.TryParse<CatalogItemType>(req.ItemType, true, out var t) ? t : CatalogItemType.Product;
             order.AddLineItem(req.CatalogItemId, req.ItemName, req.Quantity, req.UnitPrice, itemType);
             await repo.UpdateAsync(order, ct);
@@ -404,6 +406,54 @@ public static class OrderEndpoints
             order.RemoveLineItem(lineItemId);
             await repo.UpdateAsync(order, ct);
             return Results.Ok(new { order.Id, order.TotalAmount });
+        });
+
+        // ── Tax ───────────────────────────────────────────────────────────────
+        group.MapPost("/{id:guid}/tax", async (
+            Guid id,
+            [FromBody] ApplyOrderTaxRequest req,
+            IOrderRepository repo, CancellationToken ct) =>
+        {
+            var order = await repo.GetByIdAsync(id, ct);
+            if (order is null) return Results.NotFound();
+            order.ApplyTax(req.TaxRateName, req.TaxRatePercent);
+            await repo.UpdateAsync(order, ct);
+            return Results.Ok(new { order.TaxRateName, order.TaxRatePercent, order.TaxableAmount, order.TaxAmount, order.GrandTotal });
+        });
+
+        group.MapDelete("/{id:guid}/tax", async (
+            Guid id,
+            IOrderRepository repo, CancellationToken ct) =>
+        {
+            var order = await repo.GetByIdAsync(id, ct);
+            if (order is null) return Results.NotFound();
+            order.RemoveTax();
+            await repo.UpdateAsync(order, ct);
+            return Results.Ok(new { order.TaxRateName, order.TaxRatePercent, order.TaxableAmount, order.TaxAmount, order.GrandTotal });
+        });
+
+        // ── Discount ──────────────────────────────────────────────────────────
+        group.MapPut("/{id:guid}/discount", async (
+            Guid id,
+            [FromBody] SetOrderDiscountRequest req,
+            IOrderRepository repo, CancellationToken ct) =>
+        {
+            var order = await repo.GetByIdAsync(id, ct);
+            if (order is null) return Results.NotFound();
+            order.SetQuoteDiscount(req.Percent);
+            await repo.UpdateAsync(order, ct);
+            return Results.Ok(new { order.QuoteDiscountPercent, order.QuoteDiscountAmount, order.TaxableAmount, order.TaxAmount, order.GrandTotal });
+        });
+
+        group.MapDelete("/{id:guid}/discount", async (
+            Guid id,
+            IOrderRepository repo, CancellationToken ct) =>
+        {
+            var order = await repo.GetByIdAsync(id, ct);
+            if (order is null) return Results.NotFound();
+            order.RemoveQuoteDiscount();
+            await repo.UpdateAsync(order, ct);
+            return Results.Ok(new { order.QuoteDiscountPercent, order.QuoteDiscountAmount, order.TaxableAmount, order.TaxAmount, order.GrandTotal });
         });
 
         // ── Order Documents ────────────────────────────────────────────────────
@@ -506,5 +556,7 @@ public static class OrderEndpoints
 
 record ShipOrderRequest(string? TrackingInfo);
 record CancelOrderRequest(string Reason);
-record AddOrderLineItemRequest(Guid CatalogItemId, string ItemName, int Quantity, decimal UnitPrice, string ItemType = "Product");
+record AddOrderLineItemRequest(Guid? CatalogItemId, string ItemName, int Quantity, decimal UnitPrice, string ItemType = "Product");
 record UpdateOrderLineItemRequest(int Quantity, decimal UnitPrice);
+record ApplyOrderTaxRequest(string TaxRateName, decimal TaxRatePercent);
+record SetOrderDiscountRequest(decimal Percent);

@@ -96,11 +96,32 @@ else if (order is not null)
                 @if (showAddLineItem && order.Status == "Pending")
                 {
                     <div class="card-body border-bottom">
+                        <div class="btn-group btn-group-sm mb-2" role="group">
+                            <button type="button" class="btn @(!_newIsCustom ? "btn-primary" : "btn-outline-secondary")" @onclick="() => SetNewCustomMode(false)">From Catalog</button>
+                            <button type="button" class="btn @(_newIsCustom ? "btn-primary" : "btn-outline-secondary")" @onclick="() => SetNewCustomMode(true)">Custom Item</button>
+                        </div>
                         <div class="row g-2 align-items-end">
-                            <div class="col">
-                                <label class="form-label form-label-sm">Product / Service</label>
-                                <CatalogCombobox Value="_newCatalogItem" ValueChanged="OnAddCatalogItemSelected" />
-                            </div>
+                            @if (_newIsCustom)
+                            {
+                                <div class="col">
+                                    <label class="form-label form-label-sm">Item Name</label>
+                                    <input class="form-control form-control-sm" type="text" @bind="newCustomName" placeholder="e.g. Custom Delivery Fee" />
+                                </div>
+                                <div class="col-auto" style="width:110px">
+                                    <label class="form-label form-label-sm">Type</label>
+                                    <select class="form-select form-select-sm" @bind="newCustomType">
+                                        <option value="Product">Product</option>
+                                        <option value="Service">Service</option>
+                                    </select>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="col">
+                                    <label class="form-label form-label-sm">Product / Service</label>
+                                    <CatalogCombobox Value="_newCatalogItem" ValueChanged="OnAddCatalogItemSelected" />
+                                </div>
+                            }
                             <div class="col-auto" style="width:90px">
                                 <label class="form-label form-label-sm">Qty</label>
                                 <input class="form-control form-control-sm text-end" type="number" min="1" @bind="newQty" />
@@ -110,7 +131,8 @@ else if (order is not null)
                                 <input class="form-control form-control-sm text-end" type="number" step="0.01" @bind="newUnitPrice" />
                             </div>
                             <div class="col-auto d-flex align-items-end gap-1">
-                                <button class="btn btn-success btn-sm" @onclick="AddLineItem" disabled="@(lineItemSaving || _newCatalogItem is null)">
+                                <button class="btn btn-success btn-sm" @onclick="AddLineItem"
+                                    disabled="@(lineItemSaving || (!_newIsCustom && _newCatalogItem is null) || (_newIsCustom && string.IsNullOrWhiteSpace(newCustomName)))">
                                     @if (lineItemSaving) { <span class="spinner-border spinner-border-sm me-1"></span> }
                                     Add
                                 </button>
@@ -167,7 +189,8 @@ else if (order is not null)
                                     <tr>
                                         <td>
                                             @l.ItemName
-                                            @if (l.ItemType == "Service") { <span class="badge bg-info text-dark ms-1" style="font-size:9px">Service</span> }
+                                            @if (l.CatalogItemId == null) { <span class="badge bg-secondary ms-1" style="font-size:9px">Custom</span> }
+                                            else if (l.ItemType == "Service") { <span class="badge bg-info text-dark ms-1" style="font-size:9px">Service</span> }
                                             else if (l.ItemType == "Product") { <span class="badge bg-success ms-1" style="font-size:9px">Product</span> }
                                         </td>
                                         <td class="text-end">@l.Quantity</td>
@@ -206,29 +229,97 @@ else if (order is not null)
                                     <td class="text-end text-danger">-@order.DiscountTotal.ToString("F2")</td>
                                 </tr>
                             }
-                            @if (order.DiscountTotal > 0 || order.QuoteDiscountPercent > 0 || order.TaxRatePercent > 0)
+                            @if (order.DiscountTotal > 0 || order.QuoteDiscountPercent > 0 || order.TaxRatePercent > 0 || order.Status == "Pending")
                             {
                                 <tr>
                                     <td colspan="@cols" class="text-end text-muted">Net Total</td>
                                     <td class="text-end">@order.TotalAmount.ToString("F2")</td>
                                 </tr>
                             }
-                            @if (order.QuoteDiscountPercent > 0)
+                            @if (order.QuoteDiscountPercent > 0 || order.Status == "Pending")
                             {
                                 <tr>
-                                    <td colspan="@cols" class="text-end text-muted">Quote Discount (@order.QuoteDiscountPercent.ToString("0.##")%)</td>
-                                    <td class="text-end text-danger">-@order.QuoteDiscountAmount.ToString("F2")</td>
+                                    <td colspan="@cols" class="text-end text-muted">
+                                        Order Discount
+                                        @if (order.Status == "Pending")
+                                        {
+                                            @if (_editingOrderDiscount)
+                                            {
+                                                <span class="ms-2">
+                                                    <input class="form-control form-control-sm d-inline-block text-end" type="number" step="0.01" min="0" max="100"
+                                                           @bind="_orderDiscountInput" style="width:80px;vertical-align:middle" />
+                                                    <span class="text-muted small">%</span>
+                                                    <button class="btn btn-success btn-sm py-0 px-1 ms-1" @onclick="SaveOrderDiscount" disabled="@_orderDiscountSaving">✓</button>
+                                                    <button class="btn btn-outline-secondary btn-sm py-0 px-1 ms-1" @onclick="() => _editingOrderDiscount = false">✕</button>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-link btn-sm p-0 ms-2" style="font-size:11px;vertical-align:baseline" @onclick="StartOrderDiscountEdit">
+                                                    @(order.QuoteDiscountPercent > 0 ? $"{order.QuoteDiscountPercent:0.##}% – Edit" : "Add")
+                                                </button>
+                                                @if (order.QuoteDiscountPercent > 0)
+                                                {
+                                                    <button class="btn btn-link btn-sm text-danger p-0 ms-1" style="font-size:11px;vertical-align:baseline"
+                                                            @onclick="ClearOrderDiscount" disabled="@_orderDiscountSaving">Remove</button>
+                                                }
+                                            }
+                                        }
+                                        else if (order.QuoteDiscountPercent > 0)
+                                        {
+                                            <span class="text-muted small ms-1">(@order.QuoteDiscountPercent.ToString("0.##")%)</span>
+                                        }
+                                    </td>
+                                    <td class="text-end text-danger">
+                                        @(order.QuoteDiscountPercent > 0 ? $"-{order.QuoteDiscountAmount.ToString("F2")}" : "-")
+                                    </td>
                                 </tr>
-                                <tr>
-                                    <td colspan="@cols" class="text-end text-muted">Taxable Amount</td>
-                                    <td class="text-end">@order.TaxableAmount.ToString("F2")</td>
-                                </tr>
+                                @if (order.QuoteDiscountPercent > 0)
+                                {
+                                    <tr>
+                                        <td colspan="@cols" class="text-end text-muted">Taxable Amount</td>
+                                        <td class="text-end">@order.TaxableAmount.ToString("F2")</td>
+                                    </tr>
+                                }
                             }
-                            @if (order.TaxRatePercent > 0)
+                            @if (order.TaxRatePercent > 0 || order.Status == "Pending")
                             {
                                 <tr>
-                                    <td colspan="@cols" class="text-end text-muted">@order.TaxRateName (@order.TaxRatePercent.ToString("0.##")%)</td>
-                                    <td class="text-end text-muted">+@order.TaxAmount.ToString("F2")</td>
+                                    <td colspan="@cols" class="text-end text-muted">
+                                        Tax
+                                        @if (order.Status == "Pending")
+                                        {
+                                            @if (_editingOrderTax)
+                                            {
+                                                <span class="ms-2 d-inline-flex align-items-center gap-1">
+                                                    <input class="form-control form-control-sm" type="text" @bind="_taxNameInput" placeholder="Tax name" style="width:120px" />
+                                                    <input class="form-control form-control-sm text-end" type="number" step="0.01" min="0" max="100"
+                                                           @bind="_taxRateInput" placeholder="%" style="width:70px" />
+                                                    <span class="text-muted small">%</span>
+                                                    <button class="btn btn-success btn-sm py-0 px-1" @onclick="SaveOrderTax" disabled="@_orderTaxSaving">✓</button>
+                                                    <button class="btn btn-outline-secondary btn-sm py-0 px-1" @onclick="() => _editingOrderTax = false">✕</button>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-link btn-sm p-0 ms-2" style="font-size:11px;vertical-align:baseline" @onclick="StartOrderTaxEdit">
+                                                    @(order.TaxRatePercent > 0 ? $"{order.TaxRateName} {order.TaxRatePercent:0.##}% – Edit" : "Add")
+                                                </button>
+                                                @if (order.TaxRatePercent > 0)
+                                                {
+                                                    <button class="btn btn-link btn-sm text-danger p-0 ms-1" style="font-size:11px;vertical-align:baseline"
+                                                            @onclick="RemoveOrderTax" disabled="@_orderTaxSaving">Remove</button>
+                                                }
+                                            }
+                                        }
+                                        else if (order.TaxRatePercent > 0)
+                                        {
+                                            <span class="text-muted small ms-1">@order.TaxRateName (@order.TaxRatePercent.ToString("0.##")%)</span>
+                                        }
+                                    </td>
+                                    <td class="text-end text-muted">
+                                        @(order.TaxRatePercent > 0 ? $"+{order.TaxAmount.ToString("F2")}" : "-")
+                                    </td>
                                 </tr>
                             }
                             <tr class="fw-bold">
@@ -504,13 +595,27 @@ else if (order is not null)
     private string? lineItemError;
 
     private bool showAddLineItem;
+    private bool _newIsCustom;
     private CatalogItemDto? _newCatalogItem;
+    private string newCustomName = string.Empty;
+    private string newCustomType = "Product";
     private int newQty = 1;
     private decimal newUnitPrice;
 
     private Guid? editingLineItemId;
     private int editQty;
     private decimal editUnitPrice;
+
+    // Order-level discount editing
+    private bool _editingOrderDiscount;
+    private decimal _orderDiscountInput;
+    private bool _orderDiscountSaving;
+
+    // Order-level tax editing
+    private bool _editingOrderTax;
+    private string _taxNameInput = string.Empty;
+    private decimal _taxRateInput;
+    private bool _orderTaxSaving;
 
     // Documents
     private List<OrderDocumentDto> _documents = new();
@@ -620,31 +725,36 @@ else if (order is not null)
         newUnitPrice = item?.Price ?? 0;
     }
 
+    private void SetNewCustomMode(bool custom)
+    {
+        _newIsCustom = custom;
+        _newCatalogItem = null;
+        newCustomName = string.Empty;
+        newUnitPrice = 0;
+    }
+
     private void CancelAdd()
     {
         showAddLineItem = false;
-        _newCatalogItem = null; newQty = 1; newUnitPrice = 0;
+        _newIsCustom = false; _newCatalogItem = null; newCustomName = string.Empty; newCustomType = "Product"; newQty = 1; newUnitPrice = 0;
     }
 
     private async Task AddLineItem()
     {
         lineItemError = null;
-        if (_newCatalogItem is null) { lineItemError = "Please select an item."; return; }
+        if (_newIsCustom && string.IsNullOrWhiteSpace(newCustomName)) { lineItemError = "Item name is required."; return; }
+        if (!_newIsCustom && _newCatalogItem is null) { lineItemError = "Please select an item."; return; }
         if (newQty <= 0) { lineItemError = "Quantity must be positive."; return; }
         lineItemSaving = true;
         try
         {
-            var resp = await Api.AddOrderLineItemAsync(Id, new
-            {
-                CatalogItemId = _newCatalogItem.Id,
-                ItemName = _newCatalogItem.Name,
-                ItemType = _newCatalogItem.Type,
-                Quantity = newQty,
-                UnitPrice = newUnitPrice
-            });
+            object body = _newIsCustom
+                ? new { CatalogItemId = (Guid?)null, ItemName = newCustomName.Trim(), ItemType = newCustomType, Quantity = newQty, UnitPrice = newUnitPrice }
+                : new { CatalogItemId = (Guid?)_newCatalogItem!.Id, ItemName = _newCatalogItem.Name, ItemType = _newCatalogItem.Type, Quantity = newQty, UnitPrice = newUnitPrice };
+            var resp = await Api.AddOrderLineItemAsync(Id, body);
             if (resp.IsSuccessStatusCode)
             {
-                _newCatalogItem = null; newQty = 1; newUnitPrice = 0;
+                _newIsCustom = false; _newCatalogItem = null; newCustomName = string.Empty; newCustomType = "Product"; newQty = 1; newUnitPrice = 0;
                 await Load();
             }
             else lineItemError = await ApiErrors.ParseAsync(resp);
@@ -662,6 +772,64 @@ else if (order is not null)
             else lineItemError = await ApiErrors.ParseAsync(resp);
         }
         finally { lineItemSaving = false; }
+    }
+
+    private void StartOrderDiscountEdit()
+    {
+        _orderDiscountInput = order!.QuoteDiscountPercent;
+        _editingOrderDiscount = true;
+    }
+
+    private async Task SaveOrderDiscount()
+    {
+        _orderDiscountSaving = true;
+        try
+        {
+            var resp = await Api.SetOrderDiscountAsync(Id, _orderDiscountInput);
+            if (resp.IsSuccessStatusCode) { _editingOrderDiscount = false; await Load(); }
+        }
+        finally { _orderDiscountSaving = false; }
+    }
+
+    private async Task ClearOrderDiscount()
+    {
+        _orderDiscountSaving = true;
+        try
+        {
+            var resp = await Api.RemoveOrderDiscountAsync(Id);
+            if (resp.IsSuccessStatusCode) await Load();
+        }
+        finally { _orderDiscountSaving = false; }
+    }
+
+    private void StartOrderTaxEdit()
+    {
+        _taxNameInput = order!.TaxRateName ?? string.Empty;
+        _taxRateInput = order.TaxRatePercent;
+        _editingOrderTax = true;
+    }
+
+    private async Task SaveOrderTax()
+    {
+        if (string.IsNullOrWhiteSpace(_taxNameInput)) return;
+        _orderTaxSaving = true;
+        try
+        {
+            var resp = await Api.ApplyOrderTaxAsync(Id, _taxNameInput.Trim(), _taxRateInput);
+            if (resp.IsSuccessStatusCode) { _editingOrderTax = false; await Load(); }
+        }
+        finally { _orderTaxSaving = false; }
+    }
+
+    private async Task RemoveOrderTax()
+    {
+        _orderTaxSaving = true;
+        try
+        {
+            var resp = await Api.RemoveOrderTaxAsync(Id);
+            if (resp.IsSuccessStatusCode) await Load();
+        }
+        finally { _orderTaxSaving = false; }
     }
 
     private async Task LoadDocuments()

@@ -186,6 +186,8 @@ public static class QuoteEndpoints
         {
             var quote = await repo.GetByIdAsync(id, ct);
             if (quote is null) return Results.NotFound();
+            if (req.CatalogItemId == null && string.IsNullOrWhiteSpace(req.ItemName))
+                return Results.Problem("Item name is required for custom line items.", statusCode: 400);
             var itemType = Enum.TryParse<CatalogItemType>(req.ItemType, true, out var t) ? t : CatalogItemType.Product;
             quote.AddLineItem(req.CatalogItemId, req.ItemName, req.Quantity, req.UnitPrice, req.DiscountPercent, itemType);
             await repo.UpdateAsync(quote, ct);
@@ -482,7 +484,7 @@ public static class QuoteEndpoints
 }
 
 record CreateQuoteRequest(Guid OpportunityId, Guid OwnerId, string Currency, DateTime? ExpiryDate, string? Notes);
-record AddLineItemRequest(Guid CatalogItemId, string ItemName, int Quantity, decimal UnitPrice, decimal DiscountPercent = 0, string ItemType = "Product");
+record AddLineItemRequest(Guid? CatalogItemId, string ItemName, int Quantity, decimal UnitPrice, decimal DiscountPercent = 0, string ItemType = "Product");
 record UpdateLineItemRequest(int Quantity, decimal UnitPrice, decimal DiscountPercent);
 record SetQuoteDiscountRequest(decimal Percent);
 record RejectQuoteRequest(string? Reason);

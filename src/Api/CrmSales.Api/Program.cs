@@ -444,6 +444,38 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// ── Make CatalogItemId nullable to support custom line items ─────────────────
+{
+    using var scope = app.Services.CreateScope();
+    var masterCtx = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    var companySlugs = await masterCtx.Companies.Select(c => c.Slug).ToListAsync();
+
+    if (companySlugs.Count > 0)
+    {
+        var conn = scope.ServiceProvider.GetRequiredService<ProductsDbContext>().Database.GetDbConnection();
+        await conn.OpenAsync();
+        try
+        {
+            foreach (var slug in companySlugs)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    ALTER TABLE IF EXISTS "{slug}"."QuoteLineItems"
+                        ALTER COLUMN "CatalogItemId" DROP NOT NULL;
+                    ALTER TABLE IF EXISTS "{slug}"."OrderLineItems"
+                        ALTER COLUMN "CatalogItemId" DROP NOT NULL;
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+        finally
+        {
+            if (conn.State == System.Data.ConnectionState.Open)
+                await conn.CloseAsync();
+        }
+    }
+}
+
 // ── Ensure EmailTemplates and EmailSettings tables exist per tenant schema ────
 {
     using var scope = app.Services.CreateScope();
