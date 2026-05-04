@@ -1,0 +1,34 @@
+# Compose override — ClamAV antivirus + persistent document storage
+# Merge with:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.scanning.yml \
+#     --env-file .env.production up -d
+
+services:
+
+  # ── ClamAV antivirus daemon ─────────────────────────────────────────────────
+  clamav:
+    image: clamav/clamav:stable
+    container_name: crm-clamav
+    restart: unless-stopped
+    environment:
+      CLAMAV_NO_MILTERD: "true"   # disable milter — only clamd + freshclam needed
+    volumes:
+      - crm-clamav-db:/var/lib/clamav   # persists virus definitions across restarts
+    networks:
+      - crm-net
+
+  # ── API — enable scanning env vars and mount the document volume ────────────
+  crm-api:
+    volumes:
+      - crm-documents:/app/documents
+    environment:
+      ClamAv__Host: clamav
+      ClamAv__Port: "3310"
+      LocalStorage__BasePath: /app/documents
+
+volumes:
+  crm-clamav-db:    # virus definition cache (freshclam updates in background)
+  crm-documents:    # uploaded order documents
+
+networks:
+  crm-net:
