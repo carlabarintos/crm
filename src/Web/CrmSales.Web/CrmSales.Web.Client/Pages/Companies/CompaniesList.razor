@@ -85,6 +85,10 @@ else
                                         @onclick="@(() => Navigation.NavigateTo($"/companies/{c.Id}/limits"))">
                                     Set Limits
                                 </button>
+                                <button class="btn btn-sm btn-outline-success"
+                                        @onclick="@(() => Navigation.NavigateTo($"/companies/{c.Id}/subscription"))">
+                                    Billing
+                                </button>
                             </div>
                         </td>
                     </tr>

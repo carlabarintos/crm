@@ -1,0 +1,497 @@
+@page "/companies/{CompanyId:guid}/subscription"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize(Roles = "SuperAdmin")]
+@using CrmSales.Web.Client.Services
+@using Microsoft.AspNetCore.Authorization
+@inject CrmApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Subscription — @_companyName</PageTitle>
+
+@if (_loading)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+}
+else
+{
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/companies">Companies</a></li>
+            <li class="breadcrumb-item active">@_companyName — Subscription</li>
+        </ol>
+    </nav>
+
+    <div class="page-header stagger-1">
+        <div>
+            <p class="page-header-meta">Billing Management</p>
+            <h1>@_companyName</h1>
+        </div>
+        <button class="btn btn-primary" @onclick="() => _showCreateInvoice = true">+ New Invoice</button>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+    @if (_success is not null)
+    {
+        <div class="alert alert-success">@_success</div>
+    }
+
+    <!-- Subscription Status Card -->
+    <div class="row g-3 mb-4 stagger-2">
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-card-label">Subscription Status</div>
+                <div class="stat-card-value">
+                    <span class="badge @GetStatusBadge(_subscription?.Status)">@(_subscription?.Status ?? "None")</span>
+                </div>
+                <div class="stat-card-sub">
+                    @if (_subscription is not null)
+                    { <span>Expires @_subscription.PeriodEnd.ToString("MMM dd, yyyy")</span> }
+                    else
+                    { <span>No subscription assigned</span> }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-card-label">Current Plan</div>
+                <div class="stat-card-value" style="font-size:16px">@(_subscription?.Plan?.Name ?? "—")</div>
+                <div class="stat-card-sub">
+                    @if (_subscription?.Plan is not null)
+                    { <span>₱@_subscription.Plan.PricePhp.ToString("N2") / @(_subscription.Plan.BillingCycleMonths == 1 ? "month" : $"{_subscription.Plan.BillingCycleMonths} months")</span> }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-card-label">Period</div>
+                <div class="stat-card-value" style="font-size:14px">
+                    @if (_subscription is not null)
+                    { <span>@_subscription.PeriodStart.ToString("MMM dd") — @_subscription.PeriodEnd.ToString("MMM dd, yyyy")</span> }
+                    else
+                    { <span>—</span> }
+                </div>
+                <div class="stat-card-sub">&nbsp;</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subscription Actions -->
+    <div class="card mb-4 stagger-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Subscription Management</h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label form-label-sm">Assign Plan</label>
+                    <select class="form-select form-select-sm" @bind="_selectedPlanId">
+                        <option value="">— select plan —</option>
+                        @foreach (var p in _plans)
+                        {
+                            <option value="@p.Id">@p.Name — ₱@p.PricePhp.ToString("N2")</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label form-label-sm">Notes</label>
+                    <input class="form-control form-control-sm" @bind="_assignNotes" placeholder="Optional notes" />
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button class="btn btn-sm btn-success me-2" disabled="@(_assigningPlan || _selectedPlanId == "")"
+                            @onclick="AssignPlanAsync">
+                        @if (_assigningPlan) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Activate Plan</span> }
+                    </button>
+                </div>
+            </div>
+            @if (_subscription is not null)
+            {
+                <hr />
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-sm btn-outline-success" @onclick='() => SetStatusAsync("Active")'>Set Active</button>
+                    <button class="btn btn-sm btn-outline-warning" @onclick='() => SetStatusAsync("Suspended")'>Suspend</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick='() => SetStatusAsync("Trialing")'>Set Trial</button>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Invoices List -->
+    <div class="card stagger-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Invoices</h6>
+        </div>
+        @if (_invoices is null || _invoices.Count == 0)
+        {
+            <div class="card-body text-muted">No invoices yet. Create one to get started.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Description</th>
+                            <th>Amount</th>
+                            <th>Issued</th>
+                            <th>Due</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var inv in _invoices)
+                        {
+                            <tr>
+                                <td><strong>@inv.InvoiceNumber</strong></td>
+                                <td>@inv.Description</td>
+                                <td>₱@inv.AmountPhp.ToString("N2")</td>
+                                <td>@inv.IssuedAt.ToString("MMM dd, yyyy")</td>
+                                <td>@inv.DueDate.ToString("MMM dd, yyyy")</td>
+                                <td><span class="badge @GetInvoiceBadge(inv.Status)">@inv.Status</span></td>
+                                <td>
+                                    <div class="d-flex gap-1">
+                                        @if (inv.Status is not "Paid" and not "Cancelled")
+                                        {
+                                            <button class="btn btn-xs btn-outline-primary"
+                                                    @onclick="() => OpenSendModal(inv)">Preview</button>
+                                        }
+                                        @if (inv.Status is not "Paid" and not "Cancelled")
+                                        {
+                                            <button class="btn btn-xs btn-outline-success"
+                                                    @onclick="() => MarkPaidAsync(inv.Id)">Mark Paid</button>
+                                            <button class="btn btn-xs btn-outline-danger"
+                                                    @onclick="() => CancelInvoiceAsync(inv.Id)">Cancel</button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
+<!-- Create Invoice Modal -->
+@if (_showCreateInvoice)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">New Invoice</h5>
+                    <button class="btn-close" @onclick="() => _showCreateInvoice = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Plan (optional)</label>
+                        <select class="form-select" @bind="_invPlanId">
+                            <option value="">— none —</option>
+                            @foreach (var p in _plans)
+                            {
+                                <option value="@p.Id">@p.Name — ₱@p.PricePhp.ToString("N2")</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <input class="form-control" @bind="_invDescription" placeholder="e.g. CRM Subscription – June 2026" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Amount (PHP)</label>
+                        <input class="form-control" type="number" step="0.01" @bind="_invAmount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Due Date</label>
+                        <input class="form-control" type="date" @bind="_invDueDate" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes (optional)</label>
+                        <textarea class="form-control" rows="2" @bind="_invNotes"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showCreateInvoice = false">Cancel</button>
+                    <button class="btn btn-primary" disabled="@_savingInvoice" @onclick="CreateInvoiceAsync">
+                        @if (_savingInvoice) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Create Invoice</span> }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Invoice Preview Modal -->
+@if (_sendInvoice is not null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Invoice Preview — @_sendInvoice.InvoiceNumber</h5>
+                    <button class="btn-close" @onclick="() => _sendInvoice = null"></button>
+                </div>
+                <div class="modal-body">
+                    <pre class="bg-light border rounded p-3 mb-3" style="font-size:13px;white-space:pre-wrap;font-family:monospace">@BuildPreviewText()</pre>
+                    <div>
+                        <label class="form-label">Payment Instructions</label>
+                        <textarea class="form-control" rows="3" @bind="_sendPaymentInstructions" @bind:event="oninput"></textarea>
+                        <div class="form-text">Edit above to update the preview and copy text.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => { _sendInvoice = null; _copied = false; }">Close</button>
+                    <button class="btn btn-outline-primary" @onclick="CopyPreviewAsync">
+                        @(_copied ? "Copied!" : "Copy to Clipboard")
+                    </button>
+                    <button class="btn btn-success" disabled="@(_markingSent || _sendInvoice.Status == "Sent")"
+                            @onclick="MarkSentAsync">
+                        @if (_markingSent) { <span class="spinner-border spinner-border-sm"></span> }
+                        else if (_sendInvoice.Status == "Sent") { <span>Already Sent</span> }
+                        else { <span>Mark as Sent</span> }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid CompanyId { get; set; }
+
+    private bool _loading = true;
+    private string? _error;
+    private string? _success;
+    private string _companyName = "";
+
+    private List<SubscriptionPlanDto> _plans = [];
+    private CompanySubscriptionDto? _subscription;
+    private List<InvoiceDto> _invoices = [];
+
+    private string _selectedPlanId = "";
+    private string _assignNotes = "";
+    private bool _assigningPlan;
+
+    private bool _showCreateInvoice;
+    private string _invPlanId = "";
+    private string _invDescription = "";
+    private decimal _invAmount;
+    private DateTime _invDueDate = DateTime.Today.AddDays(30);
+    private string _invNotes = "";
+    private bool _savingInvoice;
+
+    private InvoiceDto? _sendInvoice;
+    private string _sendPaymentInstructions = "GCash / Maya / Bank Transfer\nPlease use the invoice number as your payment reference.";
+    private bool _copied;
+    private bool _markingSent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var plansTask = Api.GetSubscriptionPlansAsync();
+            var subTask = Api.GetCompanySubscriptionAsync(CompanyId);
+            var invTask = Api.GetInvoicesAsync(companyId: CompanyId);
+
+            _plans = await plansTask ?? [];
+            try { _subscription = await subTask; } catch { }
+            _invoices = await invTask ?? [];
+
+            if (_subscription is not null)
+            {
+                _selectedPlanId = _subscription.PlanId.ToString();
+                _invPlanId = _subscription.PlanId.ToString();
+                if (_subscription.Plan is not null)
+                    _invAmount = _subscription.Plan.PricePhp;
+            }
+
+            // Extract company name from invoices or breadcrumb — try subscription first
+            if (_invoices.Count > 0) _companyName = _invoices[0].CompanyName;
+            if (string.IsNullOrEmpty(_companyName))
+            {
+                var companies = await Api.GetCompaniesAsync();
+                _companyName = companies?.FirstOrDefault(c => c.Id == CompanyId)?.Name ?? CompanyId.ToString();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task AssignPlanAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedPlanId)) return;
+        _assigningPlan = true;
+        _error = null; _success = null;
+        try
+        {
+            var res = await Api.AssignSubscriptionAsync(CompanyId, new { planId = Guid.Parse(_selectedPlanId), notes = _assignNotes });
+            if (res.IsSuccessStatusCode)
+            {
+                _success = "Subscription activated.";
+                _subscription = await Api.GetCompanySubscriptionAsync(CompanyId);
+            }
+            else _error = await res.Content.ReadAsStringAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _assigningPlan = false; }
+    }
+
+    private async Task SetStatusAsync(string status)
+    {
+        _error = null; _success = null;
+        try
+        {
+            var res = await Api.UpdateSubscriptionStatusAsync(CompanyId, new { status });
+            if (res.IsSuccessStatusCode)
+            {
+                _success = $"Status set to {status}.";
+                _subscription = await Api.GetCompanySubscriptionAsync(CompanyId);
+            }
+            else _error = await res.Content.ReadAsStringAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task CreateInvoiceAsync()
+    {
+        _savingInvoice = true;
+        _error = null;
+        try
+        {
+            var planId = string.IsNullOrEmpty(_invPlanId) ? (Guid?)null : Guid.Parse(_invPlanId);
+            var res = await Api.CreateInvoiceAsync(new
+            {
+                companyId = CompanyId,
+                planId,
+                amountPhp = _invAmount,
+                description = _invDescription,
+                dueDate = _invDueDate,
+                notes = string.IsNullOrWhiteSpace(_invNotes) ? null : _invNotes
+            });
+            if (res.IsSuccessStatusCode)
+            {
+                _showCreateInvoice = false;
+                _invDescription = ""; _invAmount = 0; _invNotes = ""; _invPlanId = "";
+                _invoices = await Api.GetInvoicesAsync(companyId: CompanyId) ?? [];
+                _success = "Invoice created.";
+            }
+            else _error = await res.Content.ReadAsStringAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _savingInvoice = false; }
+    }
+
+    private void OpenSendModal(InvoiceDto inv)
+    {
+        _sendInvoice = inv;
+        _copied = false;
+    }
+
+    private string BuildPreviewText()
+    {
+        if (_sendInvoice is null) return "";
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"INVOICE: {_sendInvoice.InvoiceNumber}");
+        sb.AppendLine(new string('─', 44));
+        sb.AppendLine();
+        sb.AppendLine($"Company:     {_sendInvoice.CompanyName}");
+        sb.AppendLine($"Date Issued: {_sendInvoice.IssuedAt:MMMM d, yyyy}");
+        sb.AppendLine($"Due Date:    {_sendInvoice.DueDate:MMMM d, yyyy}");
+        sb.AppendLine();
+        sb.AppendLine("Description:");
+        sb.AppendLine($"  {_sendInvoice.Description}");
+        sb.AppendLine();
+        sb.AppendLine($"TOTAL DUE:   ₱{_sendInvoice.AmountPhp:N2}");
+        if (!string.IsNullOrWhiteSpace(_sendPaymentInstructions))
+        {
+            sb.AppendLine();
+            sb.AppendLine(new string('─', 44));
+            sb.AppendLine("Payment Instructions:");
+            sb.AppendLine(_sendPaymentInstructions.Trim());
+            sb.AppendLine($"Reference: {_sendInvoice.InvoiceNumber}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    private async Task CopyPreviewAsync()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", BuildPreviewText());
+        _copied = true;
+        StateHasChanged();
+        await Task.Delay(2000);
+        _copied = false;
+        StateHasChanged();
+    }
+
+    private async Task MarkSentAsync()
+    {
+        if (_sendInvoice is null) return;
+        _markingSent = true;
+        _error = null;
+        try
+        {
+            var res = await Api.MarkInvoiceSentAsync(_sendInvoice.Id);
+            if (res.IsSuccessStatusCode)
+            {
+                _sendInvoice = null;
+                _invoices = await Api.GetInvoicesAsync(companyId: CompanyId) ?? [];
+                _success = "Invoice marked as sent.";
+            }
+            else _error = await res.Content.ReadAsStringAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _markingSent = false; }
+    }
+
+    private async Task MarkPaidAsync(Guid id)
+    {
+        _error = null;
+        var res = await Api.MarkInvoicePaidAsync(id);
+        if (res.IsSuccessStatusCode)
+        {
+            _invoices = await Api.GetInvoicesAsync(companyId: CompanyId) ?? [];
+            _subscription = await Api.GetCompanySubscriptionAsync(CompanyId);
+            _success = "Invoice marked as paid. Subscription activated.";
+        }
+        else _error = await res.Content.ReadAsStringAsync();
+    }
+
+    private async Task CancelInvoiceAsync(Guid id)
+    {
+        _error = null;
+        var res = await Api.CancelInvoiceAsync(id);
+        if (res.IsSuccessStatusCode)
+        {
+            _invoices = await Api.GetInvoicesAsync(companyId: CompanyId) ?? [];
+            _success = "Invoice cancelled.";
+        }
+        else _error = await res.Content.ReadAsStringAsync();
+    }
+
+    private static string GetStatusBadge(string? status) => status switch
+    {
+        "Active" => "bg-success",
+        "Expired" => "bg-danger",
+        "Suspended" => "bg-warning text-dark",
+        "Trialing" => "bg-info",
+        _ => "bg-secondary"
+    };
+
+    private static string GetInvoiceBadge(string status) => status switch
+    {
+        "Paid" => "bg-success",
+        "Sent" => "bg-primary",
+        "Overdue" => "bg-danger",
+        "Cancelled" => "bg-secondary",
+        _ => "bg-warning text-dark"
+    };
+}

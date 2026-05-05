@@ -1,0 +1,423 @@
+@page "/admin/plans"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize(Roles = "SuperAdmin")]
+@using CrmSales.Web.Client.Services
+@using Microsoft.AspNetCore.Authorization
+@inject CrmApiClient Api
+
+<PageTitle>Subscription Plans</PageTitle>
+
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Billing</p>
+        <h1>Subscription Plans</h1>
+    </div>
+    <button class="btn btn-primary" @onclick="OpenCreate">+ New Plan</button>
+</div>
+
+@if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+@if (_success is not null) { <div class="alert alert-success">@_success</div> }
+
+@if (_loading)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+}
+else if (_plans.Count == 0)
+{
+    <div class="card stagger-2">
+        <div class="card-body text-muted text-center py-5">
+            No plans yet. Create one to start billing companies.
+        </div>
+    </div>
+}
+else
+{
+    <div class="row g-3 stagger-2">
+        @foreach (var p in _plans)
+        {
+            <div class="col-md-4">
+                <div class="card h-100 @(p.IsFree ? "border-success" : "")">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>@p.Name</strong>
+                            @if (p.IsFree) { <span class="badge bg-success ms-1">Free</span> }
+                            @if (!p.IsActive) { <span class="badge bg-secondary ms-1">Inactive</span> }
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-xs btn-outline-primary" @onclick="() => OpenEdit(p)">Edit</button>
+                            <button class="btn btn-xs btn-outline-danger" @onclick="() => DeleteAsync(p.Id)">Delete</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            @if (p.IsFree)
+                            {
+                                <span class="fs-4 fw-bold text-success">Free</span>
+                            }
+                            else
+                            {
+                                <span class="fs-4 fw-bold">₱@p.PricePhp.ToString("N2")</span>
+                                <span class="text-muted small"> / @CycleLabel(p.BillingCycleMonths)</span>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(p.Description))
+                        {
+                            <p class="text-muted small mb-2">@p.Description</p>
+                        }
+                        @if (p.FeatureList.Length > 0)
+                        {
+                            <ul class="list-unstyled mb-0">
+                                @foreach (var f in p.FeatureList)
+                                {
+                                    <li class="small mb-1">
+                                        <span style="color:#22c55e;margin-right:5px">✓</span>@f
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- Create / Edit Modal -->
+@if (_showForm)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,.45)">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editId.HasValue ? "Edit Plan" : "New Plan")</h5>
+                    <button class="btn-close" @onclick="CloseForm"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-4">
+
+                        <!-- Left column: basic info + limits -->
+                        <div class="col-md-7">
+                            <h6 class="text-muted mb-3 text-uppercase" style="font-size:11px;letter-spacing:.06em">Plan Details</h6>
+                            <div class="row g-3 mb-3">
+                                <div class="col-8">
+                                    <label class="form-label">Plan Name <span class="text-danger">*</span></label>
+                                    <input class="form-control" @bind="_fName" @bind:event="oninput" placeholder="e.g. Starter Monthly" />
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label">Billing Cycle</label>
+                                    <div class="input-group">
+                                        <input class="form-control" type="number" min="1" @bind="_fCycle" />
+                                        <span class="input-group-text">mo</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-6">
+                                    <div class="form-check form-switch mt-1">
+                                        <input class="form-check-input" type="checkbox" id="isFreeSwitch"
+                                               @bind="_fIsFree" @bind:event="onchange" />
+                                        <label class="form-check-label fw-semibold" for="isFreeSwitch">Free Plan</label>
+                                    </div>
+                                    <div class="form-text">Price = ₱0, never expires.</div>
+                                </div>
+                                @if (!_fIsFree)
+                                {
+                                    <div class="col-6">
+                                        <label class="form-label">Price (PHP) <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">₱</span>
+                                            <input class="form-control" type="number" step="0.01" min="0" @bind="_fPrice" />
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Description <span class="text-muted small">(tagline shown on pricing page)</span></label>
+                                <input class="form-control" @bind="_fDescription" placeholder="e.g. Perfect for small teams just getting started." />
+                            </div>
+
+                            <hr class="my-3" />
+                            <h6 class="text-muted mb-3 text-uppercase" style="font-size:11px;letter-spacing:.06em">
+                                Usage Limits
+                                <span class="text-muted fw-normal text-lowercase" style="font-size:11px"> — blank = unlimited (not shown in feature list)</span>
+                            </h6>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label form-label-sm">Max Users</label>
+                                    <input class="form-control form-control-sm" type="number" min="0"
+                                           value="@(_fMaxUsers?.ToString() ?? "")"
+                                           @oninput="e => { _fMaxUsers = ParseNullableInt(e.Value?.ToString()); }" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label form-label-sm">Max Contacts</label>
+                                    <input class="form-control form-control-sm" type="number" min="0"
+                                           value="@(_fMaxContacts?.ToString() ?? "")"
+                                           @oninput="e => { _fMaxContacts = ParseNullableInt(e.Value?.ToString()); }" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label form-label-sm">Max Products</label>
+                                    <input class="form-control form-control-sm" type="number" min="0"
+                                           value="@(_fMaxProducts?.ToString() ?? "")"
+                                           @oninput="e => { _fMaxProducts = ParseNullableInt(e.Value?.ToString()); }" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label form-label-sm">Max Services</label>
+                                    <input class="form-control form-control-sm" type="number" min="0"
+                                           value="@(_fMaxServices?.ToString() ?? "")"
+                                           @oninput="e => { _fMaxServices = ParseNullableInt(e.Value?.ToString()); }" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label form-label-sm">Max Categories</label>
+                                    <input class="form-control form-control-sm" type="number" min="0"
+                                           value="@(_fMaxCategories?.ToString() ?? "")"
+                                           @oninput="e => { _fMaxCategories = ParseNullableInt(e.Value?.ToString()); }" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label form-label-sm">Max Opportunities</label>
+                                    <input class="form-control form-control-sm" type="number" min="0"
+                                           value="@(_fMaxOpportunities?.ToString() ?? "")"
+                                           @oninput="e => { _fMaxOpportunities = ParseNullableInt(e.Value?.ToString()); }" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label form-label-sm">Max Quotes</label>
+                                    <input class="form-control form-control-sm" type="number" min="0"
+                                           value="@(_fMaxQuotes?.ToString() ?? "")"
+                                           @oninput="e => { _fMaxQuotes = ParseNullableInt(e.Value?.ToString()); }" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label form-label-sm">Max Orders</label>
+                                    <input class="form-control form-control-sm" type="number" min="0"
+                                           value="@(_fMaxOrders?.ToString() ?? "")"
+                                           @oninput="e => { _fMaxOrders = ParseNullableInt(e.Value?.ToString()); }" />
+                                </div>
+                            </div>
+
+                            <div class="mt-3">
+                                <label class="form-label form-label-sm">
+                                    Additional Features
+                                    <span class="text-muted small">(one per line — appended after limits)</span>
+                                </label>
+                                <textarea class="form-control form-control-sm" rows="4"
+                                          @bind="_fAdditionalFeatures" @bind:event="oninput"
+                                          placeholder="Email notifications&#10;Audit log&#10;Priority support"></textarea>
+                            </div>
+
+                            @if (_editId.HasValue)
+                            {
+                                <div class="mt-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="activeSwitch" @bind="_fIsActive" />
+                                        <label class="form-check-label" for="activeSwitch">Active (visible on pricing page)</label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Right column: live preview -->
+                        <div class="col-md-5">
+                            <h6 class="text-muted mb-3 text-uppercase" style="font-size:11px;letter-spacing:.06em">Live Preview</h6>
+                            <div class="plan-preview-card @(_fIsFree ? "plan-preview-free" : "")">
+                                <div class="plan-preview-name">@(string.IsNullOrWhiteSpace(_fName) ? "Plan Name" : _fName)</div>
+                                <div class="plan-preview-price">
+                                    @if (_fIsFree)
+                                    {
+                                        <span class="plan-preview-amount" style="color:#16a34a">Free</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="plan-preview-currency">₱</span>
+                                        <span class="plan-preview-amount">@_fPrice.ToString("N0")</span>
+                                        <span class="plan-preview-cycle">/ @CycleLabel(_fCycle)</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(_fDescription))
+                                {
+                                    <p class="plan-preview-desc">@_fDescription</p>
+                                }
+                                @{ var preview = BuildPreviewFeatures(); }
+                                @if (preview.Length > 0)
+                                {
+                                    <ul class="plan-preview-features">
+                                        @foreach (var f in preview)
+                                        {
+                                            <li>
+                                                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#22c55e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 7 5.5 10.5 12 3.5"/></svg>
+                                                @f
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <p class="text-muted small fst-italic mt-2">Set limits or add features to see the preview.</p>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseForm">Cancel</button>
+                    <button class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">
+                        @if (_saving) { <span class="spinner-border spinner-border-sm"></span> }
+                        else { <span>@(_editId.HasValue ? "Save Changes" : "Create Plan")</span> }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .plan-preview-card {
+        background: #f8fafc;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 1.5rem;
+        min-height: 260px;
+    }
+    .plan-preview-free { border-color: #86efac; background: linear-gradient(135deg,#f0fdf4,#fff); }
+    .plan-preview-name { font-size: 14px; font-weight: 700; color: #374151; margin-bottom: .5rem; }
+    .plan-preview-price { display: flex; align-items: baseline; gap: 2px; margin-bottom: .5rem; }
+    .plan-preview-currency { font-size: 15px; font-weight: 700; color: #111827; align-self: flex-start; margin-top: 3px; }
+    .plan-preview-amount { font-size: 2rem; font-weight: 900; color: #111827; line-height: 1; }
+    .plan-preview-cycle { font-size: 12px; color: #9ca3af; margin-left: 2px; }
+    .plan-preview-desc { font-size: 12px; color: #6b7280; margin-bottom: 1rem; }
+    .plan-preview-features { list-style: none; padding: 0; margin: .5rem 0 0; display: flex; flex-direction: column; gap: .4rem; }
+    .plan-preview-features li { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; color: #374151; }
+    .plan-preview-features li svg { flex-shrink: 0; margin-top: 1px; }
+</style>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private string? _success;
+    private List<SubscriptionPlanDto> _plans = [];
+
+    private bool _showForm;
+    private Guid? _editId;
+    private string _fName = "";
+    private decimal _fPrice;
+    private int _fCycle = 1;
+    private string _fDescription = "";
+    private bool _fIsFree;
+    private bool _fIsActive = true;
+    private bool _saving;
+
+    // Limit fields
+    private int? _fMaxUsers;
+    private int? _fMaxContacts;
+    private int? _fMaxProducts;
+    private int? _fMaxServices;
+    private int? _fMaxCategories;
+    private int? _fMaxOpportunities;
+    private int? _fMaxQuotes;
+    private int? _fMaxOrders;
+    private string _fAdditionalFeatures = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _plans = await Api.GetSubscriptionPlansAsync() ?? []; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    // Builds the live preview feature list using the same logic as the server
+    private string[] BuildPreviewFeatures()
+    {
+        var items = new List<string>();
+        AddLimitItem(items, _fMaxUsers, "user", "users");
+        AddLimitItem(items, _fMaxContacts, "contact", "contacts");
+        AddLimitItem(items, _fMaxProducts, "product", "products");
+        AddLimitItem(items, _fMaxServices, "service", "services");
+        AddLimitItem(items, _fMaxCategories, "category", "categories");
+        AddLimitItem(items, _fMaxOpportunities, "opportunity", "opportunities");
+        AddLimitItem(items, _fMaxQuotes, "quote", "quotes");
+        AddLimitItem(items, _fMaxOrders, "order", "orders");
+        if (!string.IsNullOrWhiteSpace(_fAdditionalFeatures))
+            items.AddRange(_fAdditionalFeatures
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        return [.. items];
+    }
+
+    private static void AddLimitItem(List<string> items, int? limit, string singular, string plural)
+    {
+        if (!limit.HasValue) return;
+        items.Add(limit == 0
+            ? $"No {plural}"
+            : $"Up to {limit:N0} {(limit == 1 ? singular : plural)}");
+    }
+
+    private static int? ParseNullableInt(string? s) =>
+        string.IsNullOrWhiteSpace(s) ? null : int.TryParse(s, out var v) ? v : null;
+
+    private void OpenCreate()
+    {
+        _editId = null;
+        _fName = ""; _fPrice = 0; _fCycle = 1; _fDescription = ""; _fIsFree = false; _fIsActive = true;
+        _fMaxUsers = _fMaxContacts = _fMaxProducts = _fMaxServices =
+        _fMaxCategories = _fMaxOpportunities = _fMaxQuotes = _fMaxOrders = null;
+        _fAdditionalFeatures = "";
+        _error = null; _success = null;
+        _showForm = true;
+    }
+
+    private void OpenEdit(SubscriptionPlanDto p)
+    {
+        _editId = p.Id;
+        _fName = p.Name; _fPrice = p.PricePhp; _fCycle = p.BillingCycleMonths;
+        _fDescription = p.Description; _fIsFree = p.IsFree; _fIsActive = p.IsActive;
+        _fMaxUsers = p.MaxUsers; _fMaxContacts = p.MaxContacts;
+        _fMaxProducts = p.MaxProducts; _fMaxServices = p.MaxServices;
+        _fMaxCategories = p.MaxCategories; _fMaxOpportunities = p.MaxOpportunities;
+        _fMaxQuotes = p.MaxQuotes; _fMaxOrders = p.MaxOrders;
+        _fAdditionalFeatures = p.AdditionalFeatures ?? "";
+        _error = null; _success = null;
+        _showForm = true;
+    }
+
+    private void CloseForm() => _showForm = false;
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_fName)) { _error = "Plan name is required."; return; }
+        _saving = true; _error = null;
+        try
+        {
+            var body = new
+            {
+                name = _fName, pricePhp = _fIsFree ? 0 : _fPrice,
+                billingCycleMonths = _fCycle, description = _fDescription, isFree = _fIsFree,
+                maxUsers = _fMaxUsers, maxContacts = _fMaxContacts,
+                maxProducts = _fMaxProducts, maxServices = _fMaxServices,
+                maxCategories = _fMaxCategories, maxOpportunities = _fMaxOpportunities,
+                maxQuotes = _fMaxQuotes, maxOrders = _fMaxOrders,
+                additionalFeatures = string.IsNullOrWhiteSpace(_fAdditionalFeatures) ? null : _fAdditionalFeatures,
+                isActive = _fIsActive
+            };
+
+            var res = _editId.HasValue
+                ? await Api.UpdateSubscriptionPlanAsync(_editId.Value, body)
+                : await Api.CreateSubscriptionPlanAsync(body);
+
+            if (res.IsSuccessStatusCode)
+            {
+                _success = _editId.HasValue ? "Plan updated." : "Plan created.";
+                _plans = await Api.GetSubscriptionPlansAsync() ?? [];
+                _showForm = false;
+            }
+            else _error = await res.Content.ReadAsStringAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        _error = null;
+        var res = await Api.DeleteSubscriptionPlanAsync(id);
+        if (res.IsSuccessStatusCode) { _success = "Plan deleted."; _plans = await Api.GetSubscriptionPlansAsync() ?? []; }
+        else _error = await res.Content.ReadAsStringAsync();
+    }
+
+    private static string CycleLabel(int months) => months == 1 ? "month" : $"{months} months";
+}

@@ -507,7 +507,8 @@ public static class OrderEndpoints
             {
                 doc.Id, doc.FileName, Type = doc.Type.ToString(), doc.FileSizeBytes, doc.UploadedAt
             });
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .WithMetadata(new RequestSizeLimitAttribute(30_000_000)); // 30 MB — overrides the 512 KB global Kestrel limit for file uploads
 
         docs.MapGet("/", async (Guid id, IOrderRepository repo, CancellationToken ct) =>
         {

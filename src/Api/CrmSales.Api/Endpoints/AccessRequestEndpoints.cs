@@ -3,6 +3,7 @@ using CrmSales.Api.MultiTenancy;
 using CrmSales.Api.Notifications;
 using CrmSales.Api.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 
@@ -17,6 +18,7 @@ public static class AccessRequestEndpoints
             [FromBody] SubmitAccessRequest req,
             MasterDbContext db,
             INotificationBroadcaster broadcaster,
+            IConfiguration config,
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Name)
@@ -24,9 +26,36 @@ public static class AccessRequestEndpoints
                 || string.IsNullOrWhiteSpace(req.Email))
                 return Results.BadRequest("Name, company and email are required.");
 
+            if (req.Name.Length > 100)
+                return Results.BadRequest("Name must be 100 characters or fewer.");
+            if (req.Company.Length > 150)
+                return Results.BadRequest("Company name must be 150 characters or fewer.");
+            if (req.Email.Length > 150)
+                return Results.BadRequest("Email must be 150 characters or fewer.");
+            if (req.Phone?.Length > 50)
+                return Results.BadRequest("Phone must be 50 characters or fewer.");
+            if (req.Message?.Length > 2000)
+                return Results.BadRequest("Message must be 2000 characters or fewer.");
+            if (req.SelectedPlanName?.Length > 100)
+                return Results.BadRequest("Plan name must be 100 characters or fewer.");
+
+            var normalizedEmail = req.Email.Trim().ToLowerInvariant();
+            var duplicateExists = await db.AccessRequests
+                .AnyAsync(r => r.Email.ToLower() == normalizedEmail && r.Status == "Pending", ct);
+            if (duplicateExists)
+                return Results.Conflict("An access request from this email is already pending review.");
+
+            var maxPending = config.GetValue<int>("AccessRequests:MaxPendingCount", 100);
+            var pendingCount = await db.AccessRequests.CountAsync(r => r.Status == "Pending", ct);
+            if (pendingCount >= maxPending)
+                return Results.Problem(
+                    "We are not accepting new access requests at this time. Please try again later.",
+                    statusCode: 503);
+
             var request = AccessRequest.Create(
                 req.Name.Trim(), req.Company.Trim(), req.Email.Trim(),
-                req.Phone?.Trim(), req.Message?.Trim());
+                req.Phone?.Trim(), req.Message?.Trim(),
+                req.SelectedPlanId, req.SelectedPlanName?.Trim());
             db.AccessRequests.Add(request);
             await db.SaveChangesAsync(ct);
 
@@ -40,7 +69,7 @@ public static class AccessRequestEndpoints
                 OccurredAt: request.RequestedAt), ct);
 
             return Results.Created($"/api/access-requests/{request.Id}", new { request.Id });
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting("public-form");
 
         // ── SuperAdmin: list requests ─────────────────────────────────────────
         var admin = app.MapGroup("/api/access-requests")
@@ -58,7 +87,8 @@ public static class AccessRequestEndpoints
                 .OrderByDescending(r => r.RequestedAt)
                 .Select(r => new AccessRequestDto(
                     r.Id, r.Name, r.Company, r.Email, r.Phone,
-                    r.Message, r.Status, r.RequestedAt, r.ReviewedAt))
+                    r.Message, r.Status, r.RequestedAt, r.ReviewedAt,
+                    r.SelectedPlanId, r.SelectedPlanName))
                 .ToListAsync(ct);
             return Results.Ok(results);
         });
@@ -105,6 +135,28 @@ public static class AccessRequestEndpoints
 
             request.Status = "Approved";
             request.ReviewedAt = DateTime.UtcNow;
+
+            if (request.SelectedPlanId.HasValue)
+            {
+                var plan = await db.SubscriptionPlans.FindAsync([request.SelectedPlanId.Value], ct);
+                if (plan is not null)
+                {
+                    var now = DateTime.UtcNow;
+                    db.CompanySubscriptions.Add(new CompanySubscription
+                    {
+                        Id = Guid.NewGuid(),
+                        CompanyId = company.Id,
+                        PlanId = plan.Id,
+                        Status = plan.IsFree ? SubscriptionStatus.Active : SubscriptionStatus.Trialing,
+                        PeriodStart = now,
+                        PeriodEnd = now.AddMonths(plan.BillingCycleMonths > 0 ? plan.BillingCycleMonths : 1),
+                        Notes = $"Auto-assigned from access request (plan: {plan.Name})",
+                        UpdatedAt = now,
+                        UpdatedBy = "system"
+                    });
+                }
+            }
+
             await db.SaveChangesAsync(ct);
 
             return Results.Ok(new ApproveResult(
@@ -144,8 +196,9 @@ public static class AccessRequestEndpoints
     }
 }
 
-record SubmitAccessRequest(string Name, string Company, string Email, string? Phone, string? Message);
+record SubmitAccessRequest(string Name, string Company, string Email, string? Phone, string? Message, Guid? SelectedPlanId, string? SelectedPlanName);
 record AccessRequestDto(Guid Id, string Name, string Company, string Email, string? Phone,
-    string? Message, string Status, DateTime RequestedAt, DateTime? ReviewedAt);
+    string? Message, string Status, DateTime RequestedAt, DateTime? ReviewedAt,
+    Guid? SelectedPlanId, string? SelectedPlanName);
 record ApproveResult(Guid CompanyId, string CompanyName, string Slug,
     string KeycloakId, string Email, string TempPassword);

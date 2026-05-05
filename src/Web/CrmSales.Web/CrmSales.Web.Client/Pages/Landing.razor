@@ -301,6 +301,61 @@
     </div>
 </section>
 
+<!-- ── Pricing ──────────────────────────────────────────────────── -->
+@if (_plans is not null && _plans.Count > 0)
+{
+    <section class="pricing-section" id="pricing">
+        <div class="section-header">
+            <h2>Simple, transparent pricing</h2>
+            <p>Choose the plan that fits your team. No hidden fees.</p>
+        </div>
+        <div class="pricing-grid">
+            @foreach (var plan in _plans)
+            {
+                <div class="pricing-card @(plan.IsFree ? "pricing-card-free" : "") @(_plans.Count == 1 ? "pricing-card-solo" : "")">
+                    @if (!plan.IsFree && _plans.Count > 1 && _plans.IndexOf(plan) == _plans.Count / 2)
+                    {
+                        <div class="pricing-popular-badge">Most Popular</div>
+                    }
+                    <div class="pricing-plan-name">@plan.Name</div>
+                    <div class="pricing-price">
+                        @if (plan.IsFree)
+                        {
+                            <span class="pricing-amount">Free</span>
+                        }
+                        else
+                        {
+                            <span class="pricing-currency">₱</span>
+                            <span class="pricing-amount">@plan.PricePhp.ToString("N0")</span>
+                            <span class="pricing-cycle">/ @(plan.BillingCycleMonths == 1 ? "mo" : $"{plan.BillingCycleMonths}mo")</span>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(plan.Description))
+                    {
+                        <p class="pricing-desc">@plan.Description</p>
+                    }
+                    @if (plan.FeatureList.Length > 0)
+                    {
+                        <ul class="pricing-features">
+                            @foreach (var f in plan.FeatureList)
+                            {
+                                <li>
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#22c55e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 7 5.5 10.5 12 3.5"/></svg>
+                                    @f
+                                </li>
+                            }
+                        </ul>
+                    }
+                    <button class="btn @(plan.IsFree ? "btn-outline-success" : "btn-primary") pricing-cta"
+                            @onclick="() => SelectPlan(plan.Id, plan.Name)">
+                        @(plan.IsFree ? "Get Started Free" : "Request Access")
+                    </button>
+                </div>
+            }
+        </div>
+    </section>
+}
+
 <!-- ── Request access form ────────────────────────────────────────── -->
 <section class="request-section" id="request">
     <div class="request-card">
@@ -329,31 +384,49 @@
                 <div class="req-row">
                     <div class="req-field">
                         <label>Full Name <span class="req-star">*</span></label>
-                        <input class="form-control @(_nameError ? "is-invalid" : "")"
-                               @bind="_name" placeholder="Jane Smith" />
+                        <input class="form-control @(_nameError != null ? "is-invalid" : "")"
+                               @bind="_name" placeholder="Jane Smith" maxlength="100" />
+                        @if (_nameError != null) { <div class="req-field-error">@_nameError</div> }
                     </div>
                     <div class="req-field">
                         <label>Company Name <span class="req-star">*</span></label>
-                        <input class="form-control @(_companyError ? "is-invalid" : "")"
-                               @bind="_company" placeholder="Acme Corp" />
+                        <input class="form-control @(_companyError != null ? "is-invalid" : "")"
+                               @bind="_company" placeholder="Acme Corp" maxlength="150" />
+                        @if (_companyError != null) { <div class="req-field-error">@_companyError</div> }
                     </div>
                 </div>
                 <div class="req-row">
                     <div class="req-field">
                         <label>Work Email <span class="req-star">*</span></label>
-                        <input type="email" class="form-control @(_emailError ? "is-invalid" : "")"
-                               @bind="_email" placeholder="jane@acme.com" />
+                        <input type="email" class="form-control @(_emailError != null ? "is-invalid" : "")"
+                               @bind="_email" placeholder="jane@acme.com" maxlength="150" />
+                        @if (_emailError != null) { <div class="req-field-error">@_emailError</div> }
                     </div>
                     <div class="req-field">
                         <label>Phone <span class="req-optional">(optional)</span></label>
-                        <input type="tel" class="form-control" @bind="_phone" placeholder="+1 555 000 0000" />
+                        <input type="tel" class="form-control @(_phoneError != null ? "is-invalid" : "")"
+                               @bind="_phone" placeholder="+1 555 000 0000" maxlength="50" />
+                        @if (_phoneError != null) { <div class="req-field-error">@_phoneError</div> }
                     </div>
                 </div>
                 <div class="req-field">
                     <label>Tell us about your use case <span class="req-optional">(optional)</span></label>
-                    <textarea class="form-control" rows="3" @bind="_message"
+                    <textarea class="form-control @(_messageError != null ? "is-invalid" : "")" rows="3"
+                              @bind="_message" @bind:event="oninput" maxlength="2000"
                               placeholder="We have a 5-person sales team and want to track opportunities, generate quotes…"></textarea>
+                    <div class="req-char-count @(_message?.Length > 1800 ? "req-char-warn" : "")">
+                        @(_message?.Length ?? 0) / 2000
+                    </div>
+                    @if (_messageError != null) { <div class="req-field-error">@_messageError</div> }
                 </div>
+                @if (_selectedPlanName is not null)
+                {
+                    <div class="req-plan-badge">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#4f46e5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 7 5.5 10.5 12 3.5"/></svg>
+                        Plan selected: <strong>@_selectedPlanName</strong>
+                        <button type="button" class="req-plan-clear" @onclick="ClearPlan" aria-label="Clear plan selection">×</button>
+                    </div>
+                }
                 @if (!string.IsNullOrEmpty(_errorMsg))
                 {
                     <div class="alert alert-danger py-2 mb-0">@_errorMsg</div>
@@ -717,6 +790,112 @@
         flex-shrink: 0;
     }
     .oops-close:hover { color: #f9fafb; }
+
+    /* ── Pricing ─────────────────────────────────────────────────────── */
+    .pricing-section {
+        padding: 5rem 1.5rem;
+        background: #f8fafc;
+    }
+    .pricing-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        justify-content: center;
+        max-width: 1100px;
+        margin: 0 auto;
+    }
+    .pricing-card {
+        background: #fff;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 2rem 1.75rem;
+        flex: 1 1 260px;
+        max-width: 320px;
+        position: relative;
+        transition: box-shadow .2s, transform .2s;
+    }
+    .pricing-card:hover {
+        box-shadow: 0 8px 32px rgba(0,0,0,.1);
+        transform: translateY(-3px);
+    }
+    .pricing-card-free {
+        border-color: #86efac;
+        background: linear-gradient(135deg, #f0fdf4 0%, #fff 60%);
+    }
+    .pricing-card-solo {
+        max-width: 380px;
+    }
+    .pricing-popular-badge {
+        position: absolute;
+        top: -12px; left: 50%;
+        transform: translateX(-50%);
+        background: #4f46e5; color: #fff;
+        font-size: 11px; font-weight: 700;
+        padding: 3px 14px;
+        border-radius: 99px;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+    }
+    .pricing-plan-name {
+        font-size: 15px; font-weight: 700;
+        color: #374151; margin-bottom: .75rem;
+    }
+    .pricing-price {
+        display: flex; align-items: baseline; gap: 2px;
+        margin-bottom: .75rem;
+    }
+    .pricing-currency {
+        font-size: 18px; font-weight: 700; color: #111827;
+        align-self: flex-start; margin-top: 4px;
+    }
+    .pricing-amount {
+        font-size: 2.4rem; font-weight: 900; color: #111827; line-height: 1;
+    }
+    .pricing-cycle {
+        font-size: 13px; color: #9ca3af; margin-left: 2px;
+    }
+    .pricing-desc {
+        font-size: 13px; color: #6b7280; margin-bottom: 1.25rem;
+    }
+    .pricing-features {
+        list-style: none; padding: 0; margin: 0 0 1.5rem;
+        display: flex; flex-direction: column; gap: .55rem;
+    }
+    .pricing-features li {
+        display: flex; align-items: flex-start; gap: 7px;
+        font-size: 13px; color: #374151;
+    }
+    .pricing-features li svg { flex-shrink: 0; margin-top: 1px; }
+    .pricing-cta {
+        display: block; width: 100%; text-align: center;
+        font-size: 14px; font-weight: 600;
+        border: none; cursor: pointer;
+    }
+
+    /* ── Selected plan badge in form ─────────────────────────────────── */
+    .req-plan-badge {
+        display: flex; align-items: center; gap: 6px;
+        background: #eef2ff; border: 1px solid #c7d2fe;
+        border-radius: 8px; padding: .5rem .75rem;
+        font-size: 13px; color: #3730a3;
+        margin-bottom: 1rem;
+    }
+    .req-plan-badge strong { color: #312e81; }
+    .req-plan-clear {
+        background: none; border: none; padding: 0;
+        margin-left: auto; font-size: 16px; line-height: 1;
+        color: #6366f1; cursor: pointer;
+    }
+    .req-plan-clear:hover { color: #312e81; }
+
+    .req-field-error {
+        font-size: 12px; color: #dc2626; margin-top: 3px;
+    }
+    .req-char-count {
+        font-size: 11.5px; color: #9ca3af;
+        text-align: right; margin-top: 3px;
+    }
+    .req-char-warn { color: #dc2626; }
 </style>
 
 @code {
@@ -724,19 +903,26 @@
     private bool _showOopsToast;
     private bool _oopsVisible;
 
+    // ── Plans (pricing section) ───────────────────────────────────────
+    private List<LandingPlanDto>? _plans;
+
     // ── Form state ────────────────────────────────────────────────────
     private string _name = "";
     private string _company = "";
     private string _email = "";
     private string? _phone;
     private string? _message;
+    private Guid? _selectedPlanId;
+    private string? _selectedPlanName;
     private bool _submitting;
     private bool _submitted;
     private string? _errorMsg;
     private string? _submittedEmail;
-    private bool _nameError;
-    private bool _companyError;
-    private bool _emailError;
+    private string? _nameError;
+    private string? _companyError;
+    private string? _emailError;
+    private string? _phoneError;
+    private string? _messageError;
 
     // ── Pipeline animation state ──────────────────────────────────────
     private int _activeStage = 0;
@@ -800,6 +986,13 @@
         var uri = new Uri(Navigation.Uri);
         if (System.Web.HttpUtility.ParseQueryString(uri.Query)["oops"] == "1")
             _showOopsToast = true;
+
+        try
+        {
+            var http = HttpClientFactory.CreateClient("anon");
+            _plans = await http.GetFromJsonAsync<List<LandingPlanDto>>("/api/subscriptions/plans/public");
+        }
+        catch { /* pricing section silently hidden if API unavailable */ }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -821,19 +1014,51 @@
         _showOopsToast = false;
     }
 
+    private void SelectPlan(Guid id, string name)
+    {
+        _selectedPlanId = id;
+        _selectedPlanName = name;
+        Navigation.NavigateTo("#request", forceLoad: false);
+    }
+
+    private void ClearPlan()
+    {
+        _selectedPlanId = null;
+        _selectedPlanName = null;
+    }
+
+    private static bool IsValidEmail(string email)
+    {
+        var at = email.IndexOf('@');
+        if (at <= 0 || at == email.Length - 1) return false;
+        var dot = email.IndexOf('.', at);
+        return dot > at + 1 && dot < email.Length - 1;
+    }
+
     private async Task SubmitAsync()
     {
-        _nameError = string.IsNullOrWhiteSpace(_name);
-        _companyError = string.IsNullOrWhiteSpace(_company);
-        _emailError = string.IsNullOrWhiteSpace(_email);
+        _nameError = string.IsNullOrWhiteSpace(_name) ? "Name is required."
+            : _name.Length > 100 ? "Name must be 100 characters or fewer."
+            : null;
+        _companyError = string.IsNullOrWhiteSpace(_company) ? "Company is required."
+            : _company.Length > 150 ? "Company name must be 150 characters or fewer."
+            : null;
+        _emailError = string.IsNullOrWhiteSpace(_email) ? "Email is required."
+            : _email.Length > 150 ? "Email must be 150 characters or fewer."
+            : !IsValidEmail(_email) ? "Please enter a valid email address."
+            : null;
+        _phoneError = _phone?.Length > 50 ? "Phone must be 50 characters or fewer." : null;
+        _messageError = _message?.Length > 2000 ? "Message must be 2000 characters or fewer." : null;
 
-        if (_nameError || _companyError || _emailError)
+        if (_nameError != null || _companyError != null || _emailError != null
+            || _phoneError != null || _messageError != null)
         {
-            _errorMsg = "Please fill in all required fields.";
+            _errorMsg = "Please correct the errors above.";
             return;
         }
 
         _errorMsg = null;
+        _nameError = _companyError = _emailError = _phoneError = _messageError = null;
         _submitting = true;
         try
         {
@@ -844,7 +1069,9 @@
                 Company = _company.Trim(),
                 Email = _email.Trim(),
                 Phone = _phone?.Trim(),
-                Message = _message?.Trim()
+                Message = _message?.Trim(),
+                SelectedPlanId = _selectedPlanId,
+                SelectedPlanName = _selectedPlanName
             });
 
             if (resp.IsSuccessStatusCode)
@@ -868,4 +1095,9 @@
     }
 
     public void Dispose() => _cts.Cancel();
+
+    private record LandingPlanDto(
+        Guid Id, string Name, decimal PricePhp, int BillingCycleMonths,
+        string Description, string? Features, bool IsFree, bool IsActive,
+        DateTime CreatedAt, string[] FeatureList);
 }

@@ -40,6 +40,9 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.WebHost.ConfigureKestrel(opts =>
+    opts.Limits.MaxRequestBodySize = 524_288); // 512 KB — blocks payload bombs; file-upload endpoint overrides this
+
 builder.Host.UseSerilog((ctx, config) =>
 {
     config
@@ -116,7 +119,9 @@ builder.Services.AddSingleton<INotificationBroadcaster, NotificationBroadcaster>
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<TenantProvisioner>();
 builder.Services.AddScoped<ICompanyLimitsService, CompanyLimitsService>();
+builder.Services.AddScoped<InvoiceEmailService>();
 builder.Services.AddHostedService<ExpiryCheckerService>();
+builder.Services.AddHostedService<SubscriptionExpiryService>();
 builder.Services.AddDbContext<MasterDbContext>(opts =>
     opts.UseNpgsql(connectionString));
 
@@ -207,6 +212,17 @@ builder.Services.AddRateLimiter(options =>
             PermitLimit = 300,
             Window = TimeSpan.FromMinutes(1),
             SegmentsPerWindow = 6
+        });
+    });
+
+    // Public form submission: 10 requests per 10 minutes per IP (anonymous endpoint)
+    options.AddPolicy("public-form", ctx =>
+    {
+        var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(10)
         });
     });
 
@@ -341,6 +357,80 @@ using (var scope = app.Services.CreateScope())
                 ON master."CompanyLimits" ("CompanyId");
             """;
         await limitsCmd.ExecuteNonQueryAsync();
+
+        // Subscription plans, company subscriptions, invoices, and subscription_status column
+        await using var billingCmd = masterConn.CreateCommand();
+        billingCmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS master."SubscriptionPlans" (
+                "Id"                  uuid          NOT NULL,
+                "Name"                varchar(100)  NOT NULL,
+                "PricePhp"            numeric(10,2) NOT NULL,
+                "BillingCycleMonths"  integer       NOT NULL,
+                "Description"         varchar(500)  NOT NULL DEFAULT '',
+                "IsActive"            boolean       NOT NULL DEFAULT true,
+                "CreatedAt"           timestamp     NOT NULL,
+                CONSTRAINT "PK_SubscriptionPlans" PRIMARY KEY ("Id")
+            );
+            CREATE TABLE IF NOT EXISTS master."CompanySubscriptions" (
+                "Id"          uuid         NOT NULL,
+                "CompanyId"   uuid         NOT NULL,
+                "PlanId"      uuid         NOT NULL,
+                "Status"      varchar(20)  NOT NULL DEFAULT 'Active',
+                "PeriodStart" timestamp    NOT NULL,
+                "PeriodEnd"   timestamp    NOT NULL,
+                "Notes"       text         NULL,
+                "UpdatedAt"   timestamp    NOT NULL,
+                "UpdatedBy"   varchar(200) NOT NULL DEFAULT '',
+                CONSTRAINT "PK_CompanySubscriptions" PRIMARY KEY ("Id")
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_CompanySubscriptions_CompanyId"
+                ON master."CompanySubscriptions" ("CompanyId");
+            CREATE TABLE IF NOT EXISTS master."Invoices" (
+                "Id"                   uuid          NOT NULL,
+                "InvoiceNumber"        varchar(30)   NOT NULL,
+                "CompanyId"            uuid          NOT NULL,
+                "SubscriptionPlanId"   uuid          NULL,
+                "Status"               varchar(20)   NOT NULL DEFAULT 'Draft',
+                "AmountPhp"            numeric(10,2) NOT NULL,
+                "Description"          varchar(500)  NOT NULL DEFAULT '',
+                "IssuedAt"             timestamp     NOT NULL,
+                "DueDate"              timestamp     NOT NULL,
+                "PaidAt"               timestamp     NULL,
+                "SentAt"               timestamp     NULL,
+                "Notes"                text          NULL,
+                "CreatedBy"            varchar(200)  NOT NULL DEFAULT '',
+                CONSTRAINT "PK_Invoices" PRIMARY KEY ("Id")
+            );
+            CREATE INDEX IF NOT EXISTS "IX_Invoices_CompanyId" ON master."Invoices" ("CompanyId");
+            CREATE INDEX IF NOT EXISTS "IX_Invoices_Status"    ON master."Invoices" ("Status");
+            ALTER TABLE master."Companies"
+                ADD COLUMN IF NOT EXISTS "SubscriptionStatus" varchar(20) NULL;
+            ALTER TABLE master."SubscriptionPlans"
+                ADD COLUMN IF NOT EXISTS "IsFree" boolean NOT NULL DEFAULT false;
+            ALTER TABLE master."SubscriptionPlans"
+                ADD COLUMN IF NOT EXISTS "AdditionalFeatures" text NULL;
+            ALTER TABLE master."SubscriptionPlans"
+                ADD COLUMN IF NOT EXISTS "MaxUsers" integer NULL;
+            ALTER TABLE master."SubscriptionPlans"
+                ADD COLUMN IF NOT EXISTS "MaxContacts" integer NULL;
+            ALTER TABLE master."SubscriptionPlans"
+                ADD COLUMN IF NOT EXISTS "MaxProducts" integer NULL;
+            ALTER TABLE master."SubscriptionPlans"
+                ADD COLUMN IF NOT EXISTS "MaxServices" integer NULL;
+            ALTER TABLE master."SubscriptionPlans"
+                ADD COLUMN IF NOT EXISTS "MaxCategories" integer NULL;
+            ALTER TABLE master."SubscriptionPlans"
+                ADD COLUMN IF NOT EXISTS "MaxOpportunities" integer NULL;
+            ALTER TABLE master."SubscriptionPlans"
+                ADD COLUMN IF NOT EXISTS "MaxQuotes" integer NULL;
+            ALTER TABLE master."SubscriptionPlans"
+                ADD COLUMN IF NOT EXISTS "MaxOrders" integer NULL;
+            ALTER TABLE master."AccessRequests"
+                ADD COLUMN IF NOT EXISTS "SelectedPlanId"   uuid         NULL;
+            ALTER TABLE master."AccessRequests"
+                ADD COLUMN IF NOT EXISTS "SelectedPlanName" varchar(100) NULL;
+            """;
+        await billingCmd.ExecuteNonQueryAsync();
     }
     finally
     {
@@ -850,6 +940,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<TenantMiddleware>();
 app.UseAuthorization();
+app.UseMiddleware<SubscriptionEnforcementMiddleware>();
 
 // ── Map endpoint groups ────────────────────────────────────────────────────
 // Access requests: public submit + SuperAdmin management — registered on app directly
@@ -876,5 +967,6 @@ api.MapNotificationEndpoints();
 api.MapAuditEndpoints();
 api.MapDashboardEndpoints();
 api.MapSettingsEndpoints();
+api.MapSubscriptionEndpoints();
 
 app.Run();

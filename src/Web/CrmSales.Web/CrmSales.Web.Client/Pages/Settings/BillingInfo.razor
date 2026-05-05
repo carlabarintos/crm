@@ -1,0 +1,163 @@
+@page "/billing"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CrmSales.Web.Client.Services
+@using Microsoft.AspNetCore.Authorization
+@inject CrmApiClient Api
+
+<PageTitle>Billing — Subscription</PageTitle>
+
+<div class="page-header stagger-1">
+    <div>
+        <p class="page-header-meta">Account</p>
+        <h1>Billing &amp; Subscription</h1>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+}
+else
+{
+    @if (_subscription is null)
+    {
+        <div class="alert alert-warning stagger-2">
+            <strong>No active subscription.</strong> Please contact your administrator to activate your account.
+        </div>
+    }
+    else if (_subscription.Status is "Expired" or "Suspended")
+    {
+        <div class="alert alert-danger stagger-2">
+            <strong>Your subscription has @(_subscription.Status.ToLower()).</strong>
+            You can view your data but cannot create or edit records. Please contact your administrator to renew.
+        </div>
+    }
+
+    <!-- Subscription summary cards -->
+    <div class="row g-3 mb-4 stagger-2">
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Status</div>
+                <div class="stat-card-value">
+                    <span class="badge @GetStatusBadge(_subscription?.Status)">@(_subscription?.Status ?? "None")</span>
+                </div>
+                <div class="stat-card-sub">&nbsp;</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Plan</div>
+                <div class="stat-card-value" style="font-size:15px">@(_subscription?.Plan?.Name ?? "—")</div>
+                <div class="stat-card-sub">
+                    @if (_subscription?.Plan is not null)
+                    { <span>₱@_subscription.Plan.PricePhp.ToString("N2") / @CycleLabel(_subscription.Plan.BillingCycleMonths)</span> }
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Period Start</div>
+                <div class="stat-card-value" style="font-size:14px">@(_subscription?.PeriodStart.ToString("MMM dd, yyyy") ?? "—")</div>
+                <div class="stat-card-sub">&nbsp;</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-card-label">Expires</div>
+                <div class="stat-card-value" style="font-size:14px">@(_subscription?.PeriodEnd.ToString("MMM dd, yyyy") ?? "—")</div>
+                <div class="stat-card-sub">@DaysLeft()</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoices -->
+    <div class="card stagger-3">
+        <div class="card-header">
+            <h6 class="mb-0">Invoice History</h6>
+        </div>
+        @if (_invoices is null || _invoices.Count == 0)
+        {
+            <div class="card-body text-muted">No invoices on record.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Description</th>
+                            <th>Amount</th>
+                            <th>Issued</th>
+                            <th>Due</th>
+                            <th>Paid</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var inv in _invoices)
+                        {
+                            <tr>
+                                <td><strong>@inv.InvoiceNumber</strong></td>
+                                <td>@inv.Description</td>
+                                <td>₱@inv.AmountPhp.ToString("N2")</td>
+                                <td>@inv.IssuedAt.ToString("MMM dd, yyyy")</td>
+                                <td>@inv.DueDate.ToString("MMM dd, yyyy")</td>
+                                <td>@(inv.PaidAt?.ToString("MMM dd, yyyy") ?? "—")</td>
+                                <td><span class="badge @GetInvoiceBadge(inv.Status)">@inv.Status</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private CompanySubscriptionDto? _subscription;
+    private List<InvoiceDto>? _invoices;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var subTask = Api.GetMySubscriptionAsync();
+            var invTask = Api.GetMyInvoicesAsync();
+            try { _subscription = await subTask; } catch { }
+            _invoices = await invTask;
+        }
+        finally { _loading = false; }
+    }
+
+    private string DaysLeft()
+    {
+        if (_subscription is null) return "";
+        var days = (int)(_subscription.PeriodEnd - DateTime.UtcNow).TotalDays;
+        if (days < 0) return "expired";
+        if (days == 0) return "expires today";
+        return $"{days} day{(days == 1 ? "" : "s")} left";
+    }
+
+    private static string CycleLabel(int months) => months == 1 ? "month" : $"{months} months";
+
+    private static string GetStatusBadge(string? status) => status switch
+    {
+        "Active" => "bg-success",
+        "Expired" => "bg-danger",
+        "Suspended" => "bg-warning text-dark",
+        "Trialing" => "bg-info",
+        _ => "bg-secondary"
+    };
+
+    private static string GetInvoiceBadge(string status) => status switch
+    {
+        "Paid" => "bg-success",
+        "Sent" => "bg-primary",
+        "Overdue" => "bg-danger",
+        "Cancelled" => "bg-secondary",
+        _ => "bg-warning text-dark"
+    };
+}

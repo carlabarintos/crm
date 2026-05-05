@@ -11,6 +11,9 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
     public DbSet<CompanyLimits> CompanyLimits => Set<CompanyLimits>();
+    public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
+    public DbSet<CompanySubscription> CompanySubscriptions => Set<CompanySubscription>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -50,6 +53,32 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
             e.Property(a => a.Status).IsRequired().HasMaxLength(20);
             e.HasIndex(a => a.Status);
             e.HasIndex(a => a.RequestedAt);
+        });
+        modelBuilder.Entity<SubscriptionPlan>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.Property(p => p.Name).IsRequired().HasMaxLength(100);
+            e.Property(p => p.Description).HasMaxLength(500);
+            e.Property(p => p.PricePhp).HasColumnType("numeric(10,2)");
+            e.Property(p => p.AdditionalFeatures).HasColumnType("text");
+        });
+        modelBuilder.Entity<CompanySubscription>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Status).IsRequired().HasMaxLength(20);
+            e.Property(s => s.UpdatedBy).IsRequired().HasMaxLength(200);
+            e.HasIndex(s => s.CompanyId).IsUnique();
+        });
+        modelBuilder.Entity<Invoice>(e =>
+        {
+            e.HasKey(i => i.Id);
+            e.Property(i => i.InvoiceNumber).IsRequired().HasMaxLength(30);
+            e.Property(i => i.Status).IsRequired().HasMaxLength(20);
+            e.Property(i => i.Description).HasMaxLength(500);
+            e.Property(i => i.AmountPhp).HasColumnType("numeric(10,2)");
+            e.Property(i => i.CreatedBy).IsRequired().HasMaxLength(200);
+            e.HasIndex(i => i.CompanyId);
+            e.HasIndex(i => i.Status);
         });
     }
 }

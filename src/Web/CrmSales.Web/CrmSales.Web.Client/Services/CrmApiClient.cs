@@ -462,6 +462,65 @@ public class CrmApiClient(HttpClient httpClient)
 
     public Task<HttpResponseMessage> RemoveRoleFromUserAsync(Guid userId, Guid roleId)
         => _http.DeleteAsync($"/api/users/{userId}/roles/{roleId}");
+
+    // ── Subscription Plans ─────────────────────────────────────────────────
+    public Task<List<SubscriptionPlanDto>?> GetSubscriptionPlansAsync()
+        => _http.GetFromJsonAsync<List<SubscriptionPlanDto>>("/api/subscriptions/plans");
+
+    public Task<HttpResponseMessage> DeleteSubscriptionPlanAsync(Guid id)
+        => _http.DeleteAsync($"/api/subscriptions/plans/{id}");
+
+    public Task<HttpResponseMessage> CreateSubscriptionPlanAsync(object body)
+        => _http.PostAsJsonAsync("/api/subscriptions/plans", body);
+
+    public Task<HttpResponseMessage> UpdateSubscriptionPlanAsync(Guid id, object body)
+        => _http.PutAsJsonAsync($"/api/subscriptions/plans/{id}", body);
+
+    // ── Company Subscriptions ──────────────────────────────────────────────
+    public Task<CompanySubscriptionDto?> GetCompanySubscriptionAsync(Guid companyId)
+        => _http.GetFromJsonAsync<CompanySubscriptionDto>($"/api/companies/{companyId}/subscription");
+
+    public Task<HttpResponseMessage> AssignSubscriptionAsync(Guid companyId, object body)
+        => _http.PostAsJsonAsync($"/api/companies/{companyId}/subscription", body);
+
+    public Task<HttpResponseMessage> UpdateSubscriptionStatusAsync(Guid companyId, object body)
+        => _http.PutAsJsonAsync($"/api/companies/{companyId}/subscription/status", body);
+
+    // ── Invoices (SuperAdmin) ──────────────────────────────────────────────
+    public Task<List<InvoiceDto>?> GetInvoicesAsync(Guid? companyId = null, string? status = null)
+    {
+        var url = "/api/invoices";
+        var q = new List<string>();
+        if (companyId.HasValue) q.Add($"companyId={companyId}");
+        if (!string.IsNullOrEmpty(status)) q.Add($"status={Uri.EscapeDataString(status)}");
+        if (q.Count > 0) url += "?" + string.Join("&", q);
+        return _http.GetFromJsonAsync<List<InvoiceDto>>(url);
+    }
+
+    public Task<InvoiceDto?> GetInvoiceAsync(Guid id)
+        => _http.GetFromJsonAsync<InvoiceDto>($"/api/invoices/{id}");
+
+    public Task<HttpResponseMessage> CreateInvoiceAsync(object body)
+        => _http.PostAsJsonAsync("/api/invoices", body);
+
+    public Task<HttpResponseMessage> SendInvoiceAsync(Guid id, object body)
+        => _http.PostAsJsonAsync($"/api/invoices/{id}/send", body);
+
+    public Task<HttpResponseMessage> MarkInvoicePaidAsync(Guid id)
+        => _http.PostAsJsonAsync($"/api/invoices/{id}/mark-paid", new { });
+
+    public Task<HttpResponseMessage> MarkInvoiceSentAsync(Guid id)
+        => _http.PostAsJsonAsync($"/api/invoices/{id}/mark-sent", new { });
+
+    public Task<HttpResponseMessage> CancelInvoiceAsync(Guid id)
+        => _http.PostAsJsonAsync($"/api/invoices/{id}/cancel", new { });
+
+    // ── Billing (Company Admin) ────────────────────────────────────────────
+    public Task<CompanySubscriptionDto?> GetMySubscriptionAsync()
+        => _http.GetFromJsonAsync<CompanySubscriptionDto>("/api/billing/my-subscription");
+
+    public Task<List<InvoiceDto>?> GetMyInvoicesAsync()
+        => _http.GetFromJsonAsync<List<InvoiceDto>>("/api/billing/my-invoices");
 }
 
 // ── DTOs ──────────────────────────────────────────────────────────────────
@@ -561,7 +620,8 @@ public record CompanyLimitsDto(
 public record AccessRequestDto(
     Guid Id, string Name, string Company, string Email,
     string? Phone, string? Message, string Status,
-    DateTime RequestedAt, DateTime? ReviewedAt);
+    DateTime RequestedAt, DateTime? ReviewedAt,
+    Guid? SelectedPlanId, string? SelectedPlanName);
 
 public record TaxRateDto(
     Guid Id, string Name, decimal Rate, string? Description, string? Region,
@@ -634,3 +694,24 @@ public record ExpiringOpportunityDto(
 public record ExpiringQuoteDto(
     Guid Id, string QuoteNumber, Guid OpportunityId, string Status,
     decimal TotalAmount, string Currency, DateTime? ExpiryDate, int? DaysLeft);
+
+public record SubscriptionPlanDto(
+    Guid Id, string Name, decimal PricePhp, int BillingCycleMonths,
+    string Description,
+    int? MaxUsers, int? MaxContacts, int? MaxProducts, int? MaxServices,
+    int? MaxCategories, int? MaxOpportunities, int? MaxQuotes, int? MaxOrders,
+    string? AdditionalFeatures,
+    bool IsFree, bool IsActive, DateTime CreatedAt,
+    string[] FeatureList);
+
+public record CompanySubscriptionDto(
+    Guid Id, Guid CompanyId, Guid PlanId, string Status,
+    DateTime PeriodStart, DateTime PeriodEnd, string? Notes,
+    DateTime UpdatedAt, string UpdatedBy, SubscriptionPlanDto? Plan);
+
+public record InvoiceDto(
+    Guid Id, string InvoiceNumber, Guid CompanyId, string CompanyName,
+    Guid? SubscriptionPlanId, string Status,
+    decimal AmountPhp, string Description,
+    DateTime IssuedAt, DateTime DueDate,
+    DateTime? PaidAt, DateTime? SentAt, string? Notes, string CreatedBy);

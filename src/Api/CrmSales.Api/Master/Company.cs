@@ -7,6 +7,7 @@ public class Company
     public string Slug { get; set; } = "";
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
+    public string? SubscriptionStatus { get; set; }
 
     public static Company Create(string name, string slug) => new()
     {
@@ -16,4 +17,6 @@ public class Company
         IsActive = true,
         CreatedAt = DateTime.UtcNow
     };
+
+    public void UpdateSubscriptionStatus(string? status) => SubscriptionStatus = status;
 }
