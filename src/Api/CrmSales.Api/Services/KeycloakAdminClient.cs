@@ -248,6 +248,7 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
         await httpClient.SendAsync(req); // 204 on success, 409 if already assigned — both are fine
     }
 
+    // Ordered highest → lowest privilege; index is used for priority comparisons.
     private static readonly string[] CrmRoles = ["SuperAdmin", "Admin"];
 
     private async Task EnsureRolesExistAsync(string token)
@@ -423,12 +424,14 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
         await AssignRoleAsync(keycloakId, "SuperAdmin");
     }
 
-    /// <summary>Assigns a CRM realm role to a user, replacing any existing CRM role.</summary>
+    /// <summary>Assigns a CRM realm role to a user, replacing any existing lower-priority CRM role.
+    /// If the user already holds the same role or a higher-priority one, the call is a no-op.</summary>
     public async Task AssignRoleAsync(string keycloakId, string roleName)
     {
         var token = await GetAdminTokenAsync();
+        var targetPriority = Array.IndexOf(CrmRoles, roleName);
 
-        // Remove any existing CRM roles from the user
+        // Fetch current CRM roles
         var getReq = new HttpRequestMessage(HttpMethod.Get,
             $"{_adminUrl}/admin/realms/{_realm}/users/{keycloakId}/role-mappings/realm");
         getReq.Headers.Authorization = Bearer(token);
@@ -436,17 +439,21 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
         if (getResp.IsSuccessStatusCode)
         {
             var current = await getResp.Content.ReadFromJsonAsync<JsonElement>();
-            var toRemove = current.EnumerateArray()
+            var existingCrmRoles = current.EnumerateArray()
                 .Where(r => CrmRoles.Contains(r.GetProperty("name").GetString()))
                 .Select(r => new { id = r.GetProperty("id").GetString(), name = r.GetProperty("name").GetString() })
                 .ToList();
 
-            if (toRemove.Count > 0)
+            // Skip if user already has an equal or higher-priority role (lower index = higher priority).
+            if (existingCrmRoles.Any(r => Array.IndexOf(CrmRoles, r.name) <= targetPriority))
+                return;
+
+            if (existingCrmRoles.Count > 0)
             {
                 var delReq = new HttpRequestMessage(HttpMethod.Delete,
                     $"{_adminUrl}/admin/realms/{_realm}/users/{keycloakId}/role-mappings/realm");
                 delReq.Headers.Authorization = Bearer(token);
-                delReq.Content = JsonContent.Create(toRemove);
+                delReq.Content = JsonContent.Create(existingCrmRoles);
                 await httpClient.SendAsync(delReq);
             }
         }
@@ -467,7 +474,8 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
         (await httpClient.SendAsync(assignReq)).EnsureSuccessStatusCode();
     }
 
-    /// <summary>Creates a user in Keycloak and returns the Keycloak user ID.</summary>
+    /// <summary>Creates a user in Keycloak and returns the Keycloak user ID.
+    /// If a user with the same email already exists, returns that user's ID.</summary>
     public async Task<string> CreateUserAsync(string email, string firstName, string lastName,
         Dictionary<string, string[]>? attributes = null)
     {
@@ -484,6 +492,23 @@ public class KeycloakAdminClient(HttpClient httpClient, IConfiguration config)
         });
 
         var response = await httpClient.SendAsync(req);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            // User already exists — look them up by email and return their ID.
+            var token = await GetAdminTokenAsync();
+            var searchReq = new HttpRequestMessage(HttpMethod.Get,
+                $"{_adminUrl}/admin/realms/{_realm}/users?email={Uri.EscapeDataString(email)}&exact=true");
+            searchReq.Headers.Authorization = Bearer(token);
+            var searchResp = await httpClient.SendAsync(searchReq);
+            searchResp.EnsureSuccessStatusCode();
+            var found = await searchResp.Content.ReadFromJsonAsync<JsonElement>();
+            if (found.GetArrayLength() == 0)
+                throw new InvalidOperationException($"Keycloak reported conflict for '{email}' but user was not found.");
+            return found[0].GetProperty("id").GetString()
+                ?? throw new InvalidOperationException("Keycloak user missing id field.");
+        }
+
         response.EnsureSuccessStatusCode();
 
         var location = response.Headers.Location?.ToString()

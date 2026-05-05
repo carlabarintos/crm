@@ -2,6 +2,7 @@ using CrmSales.Api.Master;
 using CrmSales.Api.MultiTenancy;
 using CrmSales.Api.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 
 namespace CrmSales.Api.Endpoints;
@@ -82,6 +83,75 @@ public static class CompanyEndpoints
             catch (Exception ex) { return Results.Problem($"Failed to update admin in Keycloak: {ex.Message}", statusCode: 502); }
 
             return Results.NoContent();
+        });
+
+        group.MapPost("/{id:guid}/admin/{keycloakId}/reset-password", async (
+            Guid id,
+            string keycloakId,
+            MasterDbContext db,
+            KeycloakAdminClient keycloak,
+            CancellationToken ct) =>
+        {
+            var company = await db.Companies.FindAsync([id], ct);
+            if (company is null) return Results.NotFound();
+
+            var tempPassword = Guid.NewGuid().ToString("N")[..12];
+            try { await keycloak.SetTemporaryPasswordAsync(keycloakId, tempPassword); }
+            catch (Exception ex) { return Results.Problem($"Failed to reset password in Keycloak: {ex.Message}", statusCode: 502); }
+
+            return Results.Ok(new { TempPassword = tempPassword });
+        });
+
+        group.MapGet("/analytics", async (MasterDbContext db, CancellationToken ct) =>
+        {
+            var companies = await db.Companies
+                .OrderBy(c => c.Name)
+                .Select(c => new { c.Id, c.Name, c.Slug, c.IsActive, c.CreatedAt })
+                .ToListAsync(ct);
+
+            var stats = new List<object>(companies.Count);
+            var conn = db.Database.GetDbConnection();
+            if (conn.State == System.Data.ConnectionState.Closed)
+                await conn.OpenAsync(ct);
+
+            foreach (var c in companies)
+            {
+                long contacts = 0, opportunities = 0, quotes = 0, orders = 0, products = 0, services = 0, users = 0;
+                try
+                {
+                    await using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $"""
+                        SELECT
+                            COALESCE((SELECT COUNT(*)::bigint FROM "{c.Slug}"."Contacts"), 0),
+                            COALESCE((SELECT COUNT(*)::bigint FROM "{c.Slug}"."Opportunities"), 0),
+                            COALESCE((SELECT COUNT(*)::bigint FROM "{c.Slug}"."Quotes"), 0),
+                            COALESCE((SELECT COUNT(*)::bigint FROM "{c.Slug}"."Orders"), 0),
+                            COALESCE((SELECT COUNT(*)::bigint FROM "{c.Slug}"."CatalogItems" WHERE "Discriminator" = 'Product'), 0),
+                            COALESCE((SELECT COUNT(*)::bigint FROM "{c.Slug}"."CatalogItems" WHERE "Discriminator" = 'Service'), 0),
+                            COALESCE((SELECT COUNT(*)::bigint FROM "{c.Slug}"."Users"), 0)
+                        """;
+                    await using var reader = await cmd.ExecuteReaderAsync(ct);
+                    if (await reader.ReadAsync(ct))
+                    {
+                        contacts      = reader.GetInt64(0);
+                        opportunities = reader.GetInt64(1);
+                        quotes        = reader.GetInt64(2);
+                        orders        = reader.GetInt64(3);
+                        products      = reader.GetInt64(4);
+                        services      = reader.GetInt64(5);
+                        users         = reader.GetInt64(6);
+                    }
+                }
+                catch { /* schema not yet provisioned */ }
+
+                stats.Add(new
+                {
+                    c.Id, c.Name, c.Slug, c.IsActive, c.CreatedAt,
+                    contacts, opportunities, quotes, orders, products, services, users
+                });
+            }
+
+            return Results.Ok(stats);
         });
 
         group.MapDelete("/{id:guid}/admin/{keycloakId}", async (

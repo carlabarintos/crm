@@ -362,11 +362,17 @@ public class CrmApiClient(HttpClient httpClient)
     public Task<HttpResponseMessage> RemoveCompanyAdminAsync(Guid companyId, string keycloakId)
         => _http.DeleteAsync($"/api/companies/{companyId}/admin/{keycloakId}");
 
+    public Task<HttpResponseMessage> ResetCompanyAdminPasswordAsync(Guid companyId, string keycloakId)
+        => _http.PostAsync($"/api/companies/{companyId}/admin/{keycloakId}/reset-password", null);
+
     public Task<CompanyLimitsDto?> GetCompanyLimitsAsync(Guid companyId)
         => _http.GetFromJsonAsync<CompanyLimitsDto>($"/api/companies/{companyId}/limits");
 
     public Task<HttpResponseMessage> SetCompanyLimitsAsync(Guid companyId, object body)
         => _http.PutAsJsonAsync($"/api/companies/{companyId}/limits", body);
+
+    public Task<List<CompanyAnalyticsDto>?> GetCompanyAnalyticsAsync()
+        => _http.GetFromJsonAsync<List<CompanyAnalyticsDto>>("/api/companies/analytics");
 
     // ── Access Requests ────────────────────────────────────────────────
     public Task<List<AccessRequestDto>?> GetAccessRequestsAsync(string? status = null)
@@ -608,6 +614,10 @@ public record UserRoleDto(Guid RoleId, string Name, string? Description, DateTim
 public record AvailablePermissionDto(string Name);
 
 public record CompanyDto(Guid Id, string Name, string Slug, bool IsActive, DateTime CreatedAt);
+
+public record CompanyAnalyticsDto(
+    Guid Id, string Name, string Slug, bool IsActive, DateTime CreatedAt,
+    long Contacts, long Opportunities, long Quotes, long Orders, long Products, long Services, long Users);
 
 public record CompanyAdminDto(string KeycloakId, string Email, string FirstName, string LastName, bool Enabled);
 

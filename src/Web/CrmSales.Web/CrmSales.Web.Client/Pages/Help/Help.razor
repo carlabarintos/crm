@@ -1,5 +1,6 @@
 @page "/help"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@implements IDisposable
 
 <PageTitle>Help — ZoeIly</PageTitle>
 
@@ -79,6 +80,106 @@
                 </div>
             </div>
         </div>
+        <!-- ── Animated pipeline walkthrough ── -->
+        <div class="hw-demo">
+            <div class="hw-tabs">
+                <button class="hw-tab @(_hwStep == 0 ? "hw-tab-on" : "")" @onclick='() => SelectHwStep(0)'>
+                    <div class="hw-dot @(_hwStep == 0 ? "hw-dot-on" : _hwStep > 0 ? "hw-dot-done" : "")">
+                        @if (_hwStep > 0) { <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 3 6 7 2"/></svg> }
+                        else { <text>1</text> }
+                    </div>
+                    <span>Opportunity</span>
+                </button>
+                <div class="hw-conn @(_hwStep > 0 ? "hw-conn-done" : "")"></div>
+                <button class="hw-tab @(_hwStep == 1 ? "hw-tab-on" : "")" @onclick='() => SelectHwStep(1)'>
+                    <div class="hw-dot @(_hwStep == 1 ? "hw-dot-on" : _hwStep > 1 ? "hw-dot-done" : "")">
+                        @if (_hwStep > 1) { <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 3 6 7 2"/></svg> }
+                        else { <text>2</text> }
+                    </div>
+                    <span>Quote</span>
+                </button>
+                <div class="hw-conn @(_hwStep > 1 ? "hw-conn-done" : "")"></div>
+                <button class="hw-tab @(_hwStep == 2 ? "hw-tab-on" : "")" @onclick='() => SelectHwStep(2)'>
+                    <div class="hw-dot @(_hwStep == 2 ? "hw-dot-on" : "")"><text>3</text></div>
+                    <span>Order</span>
+                </button>
+            </div>
+            <div class="hw-prog-bar"><div class="hw-prog-fill" style="width:@(_hwProgressPct)%"></div></div>
+
+            @if (_hwStep == 0)
+            {
+                <div @key="_hwStep" class="hw-screen hw-enter">
+                    <div class="hw-bar">
+                        <span class="hw-crumb">Opportunities / Nova Tech — Enterprise License</span>
+                        <span class="hw-cta hw-cta-pulse">Create Quote →</span>
+                    </div>
+                    <div class="hw-content">
+                        <div class="hw-rec-row">
+                            <div><div class="hw-rec-title">Nova Tech — Enterprise License</div><div class="hw-chip-row"><span class="hw-chip hw-ch-amber">Qualification</span><span class="hw-chip hw-ch-gray">65% · Close Jun 15</span></div></div>
+                            <div class="hw-val">$28,000</div>
+                        </div>
+                        <div class="hw-kpis">
+                            <div class="hw-kpi"><div class="hw-kl">Contact</div><div class="hw-kv">Sarah Chen</div></div>
+                            <div class="hw-kpi"><div class="hw-kl">Owner</div><div class="hw-kv">J. Smith</div></div>
+                            <div class="hw-kpi"><div class="hw-kl">Stage</div><div class="hw-kv">Qualification</div></div>
+                        </div>
+                        <div class="hw-acts">
+                            <div class="hw-act"><div class="hw-act-dot" style="background:#3b82f6"></div><div><div class="hw-act-t">Discovery call — confirmed $30k budget, Q2 timeline</div><div class="hw-act-m">2 days ago · Call</div></div></div>
+                            <div class="hw-act"><div class="hw-act-dot" style="background:#8b5cf6"></div><div><div class="hw-act-t">Sent product overview deck to Sarah Chen (CTO)</div><div class="hw-act-m">5 days ago · Email</div></div></div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (_hwStep == 1)
+            {
+                <div @key="_hwStep" class="hw-screen hw-enter">
+                    <div class="hw-bar">
+                        <span class="hw-crumb">Quotes / QUO-202505-00042</span>
+                        <span class="hw-cta hw-cta-green hw-cta-pulse">Mark Accepted ✓</span>
+                    </div>
+                    <div class="hw-content">
+                        <div class="hw-rec-row">
+                            <div><div class="hw-rec-title">QUO-202505-00042</div><div class="hw-chip-row"><span class="hw-chip hw-ch-blue">Sent</span><span class="hw-chip hw-ch-gray">Nova Tech · Expires May 30</span></div></div>
+                            <div class="hw-val hw-val-green">$28,000</div>
+                        </div>
+                        <div class="hw-li-table">
+                            <div class="hw-li-hd"><span>Product</span><span>Qty</span><span>Total</span></div>
+                            <div class="hw-li-row"><span>Enterprise License</span><span>1</span><span>$20,000</span></div>
+                            <div class="hw-li-row"><span>Onboarding Package</span><span>2</span><span>$5,000</span></div>
+                            <div class="hw-li-row"><span>Annual Support Plan</span><span>1</span><span>$3,000</span></div>
+                            <div class="hw-li-foot"><span>Total</span><span></span><span class="hw-li-total">$28,000</span></div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div @key="_hwStep" class="hw-screen hw-enter">
+                    <div class="hw-bar">
+                        <span class="hw-crumb">Orders / ORD-202505-00042</span>
+                        <span class="hw-cta hw-cta-pulse">Mark Shipped →</span>
+                    </div>
+                    <div class="hw-content">
+                        <div class="hw-rec-row">
+                            <div><div class="hw-rec-title">ORD-202505-00042</div><div class="hw-chip-row"><span class="hw-chip hw-ch-indigo">Processing</span><span class="hw-chip hw-ch-gray">from QUO-202505-00042 · Nova Tech</span></div></div>
+                            <div class="hw-val hw-val-green">$28,000</div>
+                        </div>
+                        <div class="hw-track">
+                            <div class="hw-tn"><div class="hw-td hw-td-done"><svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 3 6 7 2"/></svg></div><span>Pending</span></div>
+                            <div class="hw-tl hw-tl-done"></div>
+                            <div class="hw-tn"><div class="hw-td hw-td-done"><svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 3 6 7 2"/></svg></div><span>Confirmed</span></div>
+                            <div class="hw-tl hw-tl-done"></div>
+                            <div class="hw-tn hw-tn-cur"><div class="hw-td hw-td-active"></div><span>Processing</span></div>
+                            <div class="hw-tl"></div>
+                            <div class="hw-tn"><div class="hw-td"></div><span>Shipped</span></div>
+                            <div class="hw-tl"></div>
+                            <div class="hw-tn"><div class="hw-td"></div><span>Delivered</span></div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
         <div class="help-tip">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" stroke-width="1.5"><circle cx="7" cy="7" r="6"/><path d="M7 5v3M7 10v.5" stroke-linecap="round"/></svg>
             <span>Every action you take is recorded in the <strong>Event Log</strong>, so your team always has a full audit trail.</span>
@@ -772,9 +873,152 @@
         .help-field-row { flex-direction: column; gap: .15rem; }
         .help-field-row span:first-child { min-width: unset; }
     }
+
+    /* ── Help demo player ───────────────────────────────────────────── */
+    .hw-demo { margin: 1rem 0 .75rem; }
+
+    .hw-tabs { display: flex; align-items: center; gap: 0; margin-bottom: .375rem; }
+    .hw-tab {
+        display: flex; align-items: center; gap: .5rem;
+        background: none; border: none; cursor: pointer;
+        padding: .4rem .75rem; border-radius: 8px;
+        transition: background .15s; font-size: 12.5px; font-weight: 600; color: #374151;
+        flex: 1;
+    }
+    .hw-tab:hover { background: #F3F4F6; }
+    .hw-tab-on { background: #EEF2FF !important; color: #4f46e5; }
+    .hw-dot {
+        width: 20px; height: 20px; border-radius: 50%;
+        background: #E5E7EB; color: #9CA3AF;
+        font-size: 10px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .hw-dot-on   { background: #6366f1 !important; color: #fff !important; }
+    .hw-dot-done { background: #10b981 !important; color: #fff !important; }
+    .hw-conn { flex: 1; height: 2px; background: #E5E7EB; border-radius: 99px; max-width: 60px; transition: background .3s; }
+    .hw-conn-done { background: #10b981; }
+
+    .hw-prog-bar { height: 2px; background: #E5E7EB; border-radius: 99px; overflow: hidden; margin-bottom: .75rem; }
+    .hw-prog-fill { height: 100%; background: linear-gradient(90deg,#6366f1,#8b5cf6); transition: width .06s linear; }
+
+    .hw-screen { background: #fff; border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,.05); }
+    @@keyframes hwEnter {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .hw-enter { animation: hwEnter .28s ease both; }
+
+    .hw-bar { display: flex; align-items: center; justify-content: space-between; padding: .5rem 1rem; background: #F9FAFB; border-bottom: 1px solid #E5E7EB; }
+    .hw-crumb { font-size: 11px; color: #9CA3AF; font-weight: 500; }
+    .hw-cta { font-size: 11px; font-weight: 700; color: #fff; background: #6366f1; border-radius: 6px; padding: 3px 10px; cursor: pointer; user-select: none; }
+    .hw-cta-green { background: #10b981; }
+    @@keyframes hwCtaPulse {
+        0%,100% { box-shadow: 0 0 0 2px rgba(99,102,241,.25); }
+        50%      { box-shadow: 0 0 0 5px rgba(99,102,241,.1); }
+    }
+    @@keyframes hwCtaPulseGreen {
+        0%,100% { box-shadow: 0 0 0 2px rgba(16,185,129,.25); }
+        50%      { box-shadow: 0 0 0 5px rgba(16,185,129,.1); }
+    }
+    .hw-cta.hw-cta-pulse       { animation: hwCtaPulse      1.8s ease-in-out infinite; }
+    .hw-cta.hw-cta-green.hw-cta-pulse { animation: hwCtaPulseGreen 1.8s ease-in-out infinite; }
+
+    .hw-content  { padding: .875rem 1rem; }
+    .hw-rec-row  { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: .625rem; }
+    .hw-rec-title { font-size: 13.5px; font-weight: 800; color: #111827; margin-bottom: .25rem; }
+    .hw-chip-row { display: flex; gap: .3rem; flex-wrap: wrap; }
+    .hw-chip     { font-size: 10.5px; font-weight: 600; padding: 1px 8px; border-radius: 99px; }
+    .hw-ch-amber { background: #FEF3C7; color: #92400E; }
+    .hw-ch-gray  { background: #F3F4F6; color: #6B7280; }
+    .hw-ch-blue  { background: #DBEAFE; color: #1E40AF; }
+    .hw-ch-indigo { background: #EEF2FF; color: #3730A3; }
+    .hw-val      { font-size: 1.1rem; font-weight: 900; color: #6366f1; flex-shrink: 0; margin-left: .75rem; }
+    .hw-val-green { color: #059669; }
+
+    .hw-kpis { display: grid; grid-template-columns: repeat(3,1fr); gap: .375rem; margin-bottom: .625rem; }
+    .hw-kpi  { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 7px; padding: .375rem .5rem; }
+    .hw-kl   { font-size: 9.5px; color: #9CA3AF; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .hw-kv   { font-size: 12px; font-weight: 700; color: #111827; margin-top: 1px; }
+
+    .hw-acts { display: flex; flex-direction: column; gap: 0; }
+    .hw-act  { display: flex; align-items: flex-start; gap: .5rem; padding: .3rem 0; border-bottom: 1px solid #F3F4F6; }
+    .hw-act:last-child { border-bottom: none; }
+    .hw-act-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+    .hw-act-t   { font-size: 11.5px; color: #374151; }
+    .hw-act-m   { font-size: 10.5px; color: #9CA3AF; }
+
+    .hw-li-table { border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }
+    .hw-li-hd, .hw-li-row, .hw-li-foot { display: grid; grid-template-columns: 1fr 36px 72px; padding: .3rem .75rem; gap: .5rem; font-size: 11.5px; }
+    .hw-li-hd   { background: #F9FAFB; border-bottom: 1px solid #E5E7EB; font-size: 10px; font-weight: 700; color: #9CA3AF; text-transform: uppercase; letter-spacing: .04em; }
+    .hw-li-row  { color: #374151; border-bottom: 1px solid #F3F4F6; }
+    .hw-li-row:last-of-type { border-bottom: none; }
+    .hw-li-foot { border-top: 1.5px solid #E5E7EB; background: #F9FAFB; font-weight: 700; color: #111827; }
+    .hw-li-total { color: #059669; font-weight: 800; }
+
+    .hw-track   { display: flex; align-items: center; padding: .75rem 1rem; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; overflow-x: auto; }
+    .hw-tn      { display: flex; flex-direction: column; align-items: center; gap: .3rem; flex-shrink: 0; }
+    .hw-tn span { font-size: 9.5px; font-weight: 600; color: #9CA3AF; white-space: nowrap; }
+    .hw-tn-cur span { color: #4f46e5; }
+    .hw-td      { width: 20px; height: 20px; border-radius: 50%; background: #E5E7EB; border: 2px solid #D1D5DB; display: flex; align-items: center; justify-content: center; }
+    .hw-td-done { background: #10b981 !important; border-color: #10b981 !important; }
+    .hw-td-active {
+        background: #6366f1 !important; border-color: #6366f1 !important;
+        box-shadow: 0 0 0 3px rgba(99,102,241,.2);
+        animation: hwDotPulse 1.2s ease-in-out infinite;
+    }
+    @@keyframes hwDotPulse {
+        0%,100% { box-shadow: 0 0 0 3px rgba(99,102,241,.2); }
+        50%      { box-shadow: 0 0 0 5px rgba(99,102,241,.1); }
+    }
+    .hw-tl      { flex: 1; height: 2px; background: #E5E7EB; min-width: 16px; }
+    .hw-tl-done { background: #10b981; }
+
+    @@media (max-width: 480px) {
+        .hw-tab { padding: .35rem .5rem; font-size: 11.5px; }
+        .hw-kpis { grid-template-columns: 1fr 1fr; }
+    }
 </style>
 
 @code {
+    private int _hwStep = 0;
+    private int _hwProgressPct = 0;
+    private DateTime _hwStepStart = DateTime.UtcNow;
+    private readonly CancellationTokenSource _hwCts = new();
+
+    private void SelectHwStep(int step)
+    {
+        _hwStep = step;
+        _hwStepStart = DateTime.UtcNow;
+        _hwProgressPct = 0;
+    }
+
+    private async Task RunHwDemoAsync(CancellationToken ct)
+    {
+        _hwStepStart = DateTime.UtcNow;
+        const int durationMs = 4500;
+        while (!ct.IsCancellationRequested)
+        {
+            var elapsed = (int)(DateTime.UtcNow - _hwStepStart).TotalMilliseconds;
+            _hwProgressPct = Math.Min(100, elapsed * 100 / durationMs);
+            if (elapsed >= durationMs)
+            {
+                _hwStep = (_hwStep + 1) % 3;
+                _hwStepStart = DateTime.UtcNow;
+                _hwProgressPct = 0;
+            }
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(50, ct);
+        }
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) _ = RunHwDemoAsync(_hwCts.Token);
+        return Task.CompletedTask;
+    }
+
+    public void Dispose() => _hwCts.Cancel();
+
     private static readonly (string Label, string Anchor)[] Sections =
     [
         ("Overview",         "overview"),

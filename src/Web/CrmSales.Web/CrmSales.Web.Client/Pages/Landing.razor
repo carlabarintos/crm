@@ -266,6 +266,163 @@
     </div>
 </section>
 
+<!-- ── Deal Walkthrough ──────────────────────────────────────────── -->
+<section class="walkthrough-section">
+    <div class="section-header">
+        <h2>From prospect to delivered order</h2>
+        <p>A real deal, moving through ZoeIly in three steps — opportunity tracked, quote accepted, order fulfilled.</p>
+    </div>
+
+    <div class="wt-inner">
+        <div class="wt-tabs">
+            <button class="wt-tab @(_demoStep == 0 ? "wt-tab-active" : "")" @onclick='() => SelectDemoStep(0)'>
+                <div class="wt-tab-icon @(_demoStep == 0 ? "wt-ti-active" : _demoStep > 0 ? "wt-ti-done" : "")">
+                    @if (_demoStep > 0) { <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 5 4 7 8 3" /></svg> }
+                    else { <text>1</text> }
+                </div>
+                <div class="wt-tab-text"><div class="wt-tab-name">Opportunity</div><div class="wt-tab-hint">Qualify the deal</div></div>
+            </button>
+            <div class="wt-connector @(_demoStep > 0 ? "wt-connector-done" : "")"></div>
+            <button class="wt-tab @(_demoStep == 1 ? "wt-tab-active" : "")" @onclick='() => SelectDemoStep(1)'>
+                <div class="wt-tab-icon @(_demoStep == 1 ? "wt-ti-active" : _demoStep > 1 ? "wt-ti-done" : "")">
+                    @if (_demoStep > 1) { <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 5 4 7 8 3" /></svg> }
+                    else { <text>2</text> }
+                </div>
+                <div class="wt-tab-text"><div class="wt-tab-name">Quote</div><div class="wt-tab-hint">Send &amp; accept</div></div>
+            </button>
+            <div class="wt-connector @(_demoStep > 1 ? "wt-connector-done" : "")"></div>
+            <button class="wt-tab @(_demoStep == 2 ? "wt-tab-active" : "")" @onclick='() => SelectDemoStep(2)'>
+                <div class="wt-tab-icon @(_demoStep == 2 ? "wt-ti-active" : "")"><text>3</text></div>
+                <div class="wt-tab-text"><div class="wt-tab-name">Order</div><div class="wt-tab-hint">Fulfil &amp; deliver</div></div>
+            </button>
+        </div>
+
+        <div class="wt-progress-bar">
+            <div class="wt-progress-fill" style="width:@(_demoProgressPct)%"></div>
+        </div>
+
+        @if (_demoStep == 0)
+        {
+            <div @key="_demoStep" class="wt-screen wt-screen-in">
+                <div class="wt-topbar">
+                    <span class="wt-crumb"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 2L4 6l4 4"/></svg> Opportunities</span>
+                    <div class="wt-topbar-actions"><span class="wt-ghost-btn">Edit</span><span class="wt-primary-btn wt-btn-glow">Convert to Quote</span></div>
+                </div>
+                <!-- Stage stepper (Prospecting ✓ → Qualification ✓ → Proposal ●) -->
+                <div class="wt-stepper">
+                    <div class="wt-step wt-step-done"><div class="wt-step-circ"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 5 4 7 8 3"/></svg></div><div class="wt-step-lbl">Prospecting</div></div>
+                    <div class="wt-step-conn wt-step-conn-done"></div>
+                    <div class="wt-step wt-step-done"><div class="wt-step-circ"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 5 4 7 8 3"/></svg></div><div class="wt-step-lbl">Qualification</div></div>
+                    <div class="wt-step-conn wt-step-conn-done"></div>
+                    <div class="wt-step wt-step-current"><div class="wt-step-circ wt-step-circ-cur">3</div><div class="wt-step-lbl wt-step-lbl-cur">Proposal</div></div>
+                </div>
+                <div class="wt-body">
+                    <div class="wt-opp-layout">
+                        <div class="wt-opp-main">
+                            <div class="wt-card-hd">
+                                <span>Apex Corp — Cloud Upgrade</span>
+                                <span class="wt-badge wt-blue">Proposal</span>
+                            </div>
+                            <div class="wt-dl">
+                                <div class="wt-dl-row"><dt>Account</dt><dd>Apex Corporation</dd></div>
+                                <div class="wt-dl-row"><dt>Contact</dt><dd>Maria Santos<br /><span class="wt-muted">maria@apexcorp.ph</span></dd></div>
+                                <div class="wt-dl-row"><dt>Value</dt><dd><span class="wt-gradient-val">PHP 45,000.00</span></dd></div>
+                                <div class="wt-dl-row"><dt>Probability</dt><dd><div class="wt-prob-wrap"><div class="wt-prob-bar" style="width:75%"></div></div><span class="wt-muted">75%</span></dd></div>
+                                <div class="wt-dl-row"><dt>Close Date</dt><dd>May 30, 2025</dd></div>
+                            </div>
+                            <div class="wt-sub-hd">Activities</div>
+                            <div class="wt-activity"><span class="wt-act-type">Call</span><div><div class="wt-act-txt">Confirmed PHP 50k budget and Q2 go-live date</div><div class="wt-act-meta">May 3, 14:22</div></div></div>
+                            <div class="wt-activity"><span class="wt-act-type">Email</span><div><div class="wt-act-txt">Sent technical specs and case study to Maria Santos</div><div class="wt-act-meta">Apr 28, 10:05</div></div></div>
+                        </div>
+                        <div class="wt-opp-side">
+                            <div class="wt-convert-card">
+                                <div class="wt-convert-icon">
+                                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="white" stroke-width="1.8"><rect x="2" y="2" width="14" height="16" rx="2"/><path d="M6 7h6M6 10h6M6 13h4" stroke-linecap="round"/></svg>
+                                </div>
+                                <div class="wt-convert-title">Ready to quote?</div>
+                                <div class="wt-convert-sub">Create a quote from this opportunity</div>
+                                <div class="wt-convert-btn wt-btn-glow">Convert to Quote</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_demoStep == 1)
+        {
+            <div @key="_demoStep" class="wt-screen wt-screen-in">
+                <div class="wt-topbar">
+                    <span class="wt-crumb"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 2L4 6l4 4"/></svg> Quotes</span>
+                    <div class="wt-topbar-actions"><span class="wt-ghost-btn">Print Quote</span><span class="wt-success-btn wt-btn-glow-green">✓ Accept Quote &amp; Create Order</span></div>
+                </div>
+                <div class="wt-body">
+                    <div class="wt-card-hd">
+                        <span>QUO-202505-00018</span>
+                        <span class="wt-badge wt-cyan">Sent</span>
+                    </div>
+                    <div class="wt-dl wt-dl-inline">
+                        <div class="wt-dl-row"><dt>Currency</dt><dd>PHP</dd></div>
+                        <div class="wt-dl-row"><dt>Expiry Date</dt><dd>May 31, 2025</dd></div>
+                    </div>
+                    <div class="wt-table">
+                        <div class="wt-table-hd"><span>Item</span><span>Qty</span><span>Unit Price</span><span>Discount&nbsp;%</span><span>Line Total</span></div>
+                        <div class="wt-table-row"><span>Cloud Storage Pro</span><span>10</span><span>2,500.00</span><span>—</span><span class="wt-row-val">25,000.00</span></div>
+                        <div class="wt-table-row"><span>Setup &amp; Migration Service</span><span>1</span><span>15,000.00</span><span>—</span><span class="wt-row-val">15,000.00</span></div>
+                        <div class="wt-table-row"><span>Annual Support Plan</span><span>1</span><span>5,000.00</span><span>—</span><span class="wt-row-val">5,000.00</span></div>
+                        <div class="wt-table-foot"><span>Grand Total (PHP)</span><span></span><span></span><span></span><span class="wt-total-val">45,000.00</span></div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div @key="_demoStep" class="wt-screen wt-screen-in">
+                <div class="wt-topbar">
+                    <span class="wt-crumb"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 2L4 6l4 4"/></svg> Orders</span>
+                    <div class="wt-topbar-actions"><span class="wt-ghost-btn">Document Preview</span><span class="wt-warn-btn wt-btn-glow-warn">Start Processing</span></div>
+                </div>
+                <div class="wt-body">
+                    <div class="wt-card-hd">
+                        <span>ORD-202505-00018</span>
+                        <span class="wt-badge wt-primary-b">Confirmed</span>
+                    </div>
+                    <div class="wt-dl wt-dl-inline">
+                        <div class="wt-dl-row"><dt>Quote</dt><dd><span class="wt-link">QUO-202505-00018</span></dd></div>
+                        <div class="wt-dl-row"><dt>Net Total</dt><dd>45,000.00 PHP</dd></div>
+                        <div class="wt-dl-row"><dt>Grand Total</dt><dd><strong class="wt-primary-text" style="font-size:1.05rem">45,000.00 PHP</strong></dd></div>
+                        <div class="wt-dl-row"><dt>Created</dt><dd>May 5, 2025 14:23</dd></div>
+                    </div>
+                    <div class="wt-table">
+                        <div class="wt-table-hd"><span>Item</span><span>Qty</span><span>Unit Price</span><span>Discount&nbsp;%</span><span>Line Total</span></div>
+                        <div class="wt-table-row"><span>Cloud Storage Pro</span><span>10</span><span>2,500.00</span><span>—</span><span class="wt-row-val">25,000.00</span></div>
+                        <div class="wt-table-row"><span>Setup &amp; Migration Service</span><span>1</span><span>15,000.00</span><span>—</span><span class="wt-row-val">15,000.00</span></div>
+                        <div class="wt-table-row"><span>Annual Support Plan</span><span>1</span><span>5,000.00</span><span>—</span><span class="wt-row-val">5,000.00</span></div>
+                        <div class="wt-table-foot"><span>Grand Total (PHP)</span><span></span><span></span><span></span><span class="wt-total-val">45,000.00</span></div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="wt-caption">
+            @if (_demoStep == 0)
+            {
+                <strong>Track the opportunity.</strong>
+                <span> Log every call and email, move the stage as the deal progresses. When ready, create a quote in one click — the deal data carries over automatically.</span>
+            }
+            else if (_demoStep == 1)
+            {
+                <strong>Send a professional quote.</strong>
+                <span> Add products from your catalogue, apply discounts, set an expiry. Mark it Sent and the contact receives it by email. When they accept, ZoeIly creates the order instantly.</span>
+            }
+            else
+            {
+                <strong>Fulfil and deliver.</strong>
+                <span> The order inherits all line items and pricing from the accepted quote. Progress through Confirmed → Processing → Shipped → Delivered. Your team and customer are notified at every step.</span>
+            }
+        </div>
+    </div>
+</section>
+
 <!-- ── How it works ───────────────────────────────────────────────── -->
 <section class="how-it-works">
     <div class="section-header">
@@ -896,6 +1053,131 @@
         text-align: right; margin-top: 3px;
     }
     .req-char-warn { color: #dc2626; }
+
+    /* ── Deal Walkthrough ──────────────────────────────────────────── */
+    .walkthrough-section { padding: 5.5rem 1.5rem; background: linear-gradient(180deg, #F9FAFB 0%, #fff 100%); }
+    .wt-inner { max-width: 900px; margin: 0 auto; }
+
+    .wt-tabs { display: flex; align-items: center; gap: 0; margin-bottom: .625rem; }
+    .wt-tab {
+        display: flex; align-items: center; gap: .75rem;
+        background: none; border: none; cursor: pointer;
+        padding: .625rem 1rem; border-radius: 12px;
+        transition: background .2s; text-align: left; flex: 1;
+    }
+    .wt-tab:hover { background: #F3F4F6; }
+    .wt-tab-active { background: #EEF2FF !important; }
+    .wt-tab-icon {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: #E5E7EB; color: #9CA3AF;
+        font-size: 12px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; transition: background .3s, color .3s;
+    }
+    .wt-ti-active { background: #6366f1 !important; color: #fff !important; }
+    .wt-ti-done   { background: #10b981 !important; color: #fff !important; }
+    .wt-tab-name  { font-size: 13.5px; font-weight: 700; color: #374151; }
+    .wt-tab-active .wt-tab-name { color: #4f46e5; }
+    .wt-tab-hint  { font-size: 11px; color: #9CA3AF; margin-top: 1px; }
+    .wt-tab-active .wt-tab-hint { color: #818cf8; }
+    .wt-connector { flex: 1; height: 2px; background: #E5E7EB; border-radius: 99px; max-width: 80px; transition: background .4s; }
+    .wt-connector-done { background: #10b981; }
+
+    .wt-progress-bar { height: 3px; background: #E5E7EB; border-radius: 99px; overflow: hidden; margin-bottom: 1.25rem; }
+    .wt-progress-fill { height: 100%; background: linear-gradient(90deg,#6366f1,#8b5cf6); border-radius: 99px; transition: width .06s linear; }
+
+    .wt-screen {
+        background: #fff; border: 1px solid #E5E7EB;
+        border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,.07); overflow: hidden;
+    }
+    @@keyframes wtEnter {
+        from { opacity: 0; transform: translateY(10px) scale(.99); }
+        to   { opacity: 1; transform: translateY(0)   scale(1);    }
+    }
+    .wt-screen-in { animation: wtEnter .3s ease both; }
+
+    .wt-topbar {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: .625rem 1.25rem; background: #F9FAFB; border-bottom: 1px solid #E5E7EB;
+    }
+    .wt-crumb { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #6B7280; font-weight: 500; }
+    .wt-topbar-actions { display: flex; gap: .5rem; align-items: center; }
+    .wt-ghost-btn   { font-size: 11.5px; font-weight: 600; color: #374151; background: #fff; border: 1px solid #D1D5DB; border-radius: 7px; padding: 4px 11px; cursor: pointer; user-select: none; }
+    .wt-primary-btn { font-size: 11.5px; font-weight: 600; color: #fff; background: #6366f1; border-radius: 7px; padding: 4px 12px; cursor: pointer; user-select: none; }
+    .wt-success-btn { font-size: 11.5px; font-weight: 600; color: #fff; background: #10b981; border-radius: 7px; padding: 4px 12px; cursor: pointer; user-select: none; }
+    @@keyframes wtGlowIndigo {
+        0%,100% { box-shadow: 0 0 0 3px rgba(99,102,241,.22); }
+        50%      { box-shadow: 0 0 0 6px rgba(99,102,241,.1); }
+    }
+    @@keyframes wtGlowGreen {
+        0%,100% { box-shadow: 0 0 0 3px rgba(16,185,129,.22); }
+        50%      { box-shadow: 0 0 0 6px rgba(16,185,129,.1); }
+    }
+    .wt-btn-glow       { animation: wtGlowIndigo 1.8s ease-in-out infinite; }
+    .wt-btn-glow-green { animation: wtGlowGreen  1.8s ease-in-out infinite; }
+
+    .wt-body { padding: 1.25rem; }
+    .wt-title-row { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: .875rem; }
+    .wt-record-name { font-size: 17px; font-weight: 800; color: #111827; margin-bottom: .375rem; }
+    .wt-badges { display: flex; gap: .375rem; flex-wrap: wrap; }
+    .wt-badge  { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 99px; }
+    .wt-amber  { background: #FEF3C7; color: #92400E; }
+    .wt-gray   { background: #F3F4F6; color: #6B7280; }
+    .wt-blue   { background: #DBEAFE; color: #1E40AF; }
+    .wt-indigo { background: #EEF2FF; color: #3730A3; }
+    .wt-big-val { font-size: 1.4rem; font-weight: 900; color: #6366f1; flex-shrink: 0; margin-left: 1rem; }
+
+    .wt-kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: .5rem; margin-bottom: .875rem; }
+    .wt-kpi  { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: .5rem .625rem; }
+    .wt-kpi-lbl { font-size: 10px; color: #9CA3AF; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+    .wt-kpi-val { font-size: 12.5px; font-weight: 700; color: #111827; margin-top: 2px; }
+
+    .wt-sub-hd  { font-size: 10.5px; font-weight: 700; color: #9CA3AF; text-transform: uppercase; letter-spacing: .06em; margin: .75rem 0 .5rem; }
+    .wt-activity { display: flex; align-items: flex-start; gap: .625rem; padding: .4rem 0; border-bottom: 1px solid #F3F4F6; }
+    .wt-activity:last-child { border-bottom: none; }
+    .wt-act-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+    .wt-act-txt  { font-size: 12.5px; color: #374151; }
+    .wt-act-meta { font-size: 11px; color: #9CA3AF; margin-top: 1px; }
+
+    .wt-table { border: 1px solid #E5E7EB; border-radius: 10px; overflow: hidden; margin-bottom: .75rem; }
+    .wt-table-hd, .wt-table-row, .wt-table-foot { display: grid; grid-template-columns: 1fr 50px 90px 90px; padding: .4rem .875rem; gap: .5rem; font-size: 12.5px; }
+    .wt-table-hd   { background: #F9FAFB; border-bottom: 1px solid #E5E7EB; font-size: 10.5px; font-weight: 700; color: #9CA3AF; text-transform: uppercase; letter-spacing: .04em; }
+    .wt-table-row  { color: #374151; border-bottom: 1px solid #F3F4F6; }
+    .wt-table-row:last-of-type { border-bottom: none; }
+    .wt-table-foot { border-top: 1.5px solid #E5E7EB; background: #F9FAFB; font-weight: 700; color: #111827; }
+    .wt-row-val    { font-weight: 600; text-align: right; }
+    .wt-total-val  { color: #059669; font-size: 13px; text-align: right; }
+    .wt-meta-row   { font-size: 12px; color: #6B7280; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .wt-meta-lbl   { font-weight: 600; color: #9CA3AF; text-transform: uppercase; font-size: 10.5px; letter-spacing: .04em; }
+    .wt-meta-val   { font-weight: 600; color: #111827; }
+
+    .wt-order-track { display: flex; align-items: center; padding: 1rem 1.25rem; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; margin-bottom: .875rem; overflow-x: auto; }
+    .wt-ot-node    { display: flex; flex-direction: column; align-items: center; gap: .375rem; flex-shrink: 0; }
+    .wt-ot-node span { font-size: 10px; font-weight: 600; color: #9CA3AF; white-space: nowrap; }
+    .wt-ot-current span { color: #4f46e5; }
+    .wt-ot-dot     { width: 24px; height: 24px; border-radius: 50%; background: #E5E7EB; border: 2px solid #D1D5DB; display: flex; align-items: center; justify-content: center; }
+    .wt-ot-done    { background: #10b981 !important; border-color: #10b981 !important; }
+    .wt-ot-active  { background: #6366f1 !important; border-color: #6366f1 !important; box-shadow: 0 0 0 4px rgba(99,102,241,.2); animation: trackDotPulse 1.2s ease-in-out infinite; }
+    .wt-ot-line    { flex: 1; height: 2px; background: #E5E7EB; min-width: 24px; }
+    .wt-ot-ldone   { background: #10b981; }
+
+    .wt-caption {
+        margin-top: 1.25rem; padding: 1rem 1.25rem;
+        background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 12px;
+        font-size: 13.5px; color: #374151; line-height: 1.65;
+    }
+    .wt-caption strong { color: #3730a3; display: inline; margin-right: .25rem; }
+
+    @@media (max-width: 720px) {
+        .wt-kpis { grid-template-columns: 1fr 1fr; }
+        .wt-tab-hint { display: none; }
+        .wt-table-hd, .wt-table-row, .wt-table-foot { grid-template-columns: 1fr 35px 70px 70px; font-size: 11.5px; }
+    }
+    @@media (max-width: 480px) {
+        .wt-tab { padding: .5rem .5rem; }
+        .wt-connector { max-width: 32px; }
+        .wt-kpis { grid-template-columns: 1fr 1fr; }
+    }
 </style>
 
 @code {
@@ -930,6 +1212,37 @@
     private string _notification = "";
     private bool _showNotification;
     private readonly CancellationTokenSource _cts = new();
+
+    // ── Walkthrough demo state ────────────────────────────────────────
+    private int _demoStep = 0;
+    private int _demoProgressPct = 0;
+    private DateTime _demoStepStart = DateTime.UtcNow;
+
+    private void SelectDemoStep(int step)
+    {
+        _demoStep = step;
+        _demoStepStart = DateTime.UtcNow;
+        _demoProgressPct = 0;
+    }
+
+    private async Task RunDemoAsync(CancellationToken ct)
+    {
+        _demoStepStart = DateTime.UtcNow;
+        const int durationMs = 4500;
+        while (!ct.IsCancellationRequested)
+        {
+            var elapsed = (int)(DateTime.UtcNow - _demoStepStart).TotalMilliseconds;
+            _demoProgressPct = Math.Min(100, elapsed * 100 / durationMs);
+            if (elapsed >= durationMs)
+            {
+                _demoStep = (_demoStep + 1) % 3;
+                _demoStepStart = DateTime.UtcNow;
+                _demoProgressPct = 0;
+            }
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(50, ct);
+        }
+    }
 
     private static readonly string[] _notifications =
     [
@@ -999,6 +1312,7 @@
     {
         if (!firstRender) return;
         _ = RunPipelineAnimationAsync(_cts.Token);
+        _ = RunDemoAsync(_cts.Token);
 
         if (_showOopsToast)
         {

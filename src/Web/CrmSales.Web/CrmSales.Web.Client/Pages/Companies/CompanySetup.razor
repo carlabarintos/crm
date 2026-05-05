@@ -86,6 +86,35 @@
                                         </td>
                                     </tr>
                                 }
+                                else if (resettingKeycloakId == admin.KeycloakId)
+                                {
+                                    <tr class="table-info">
+                                        <td colspan="4">
+                                            @if (resetTempPassword is not null)
+                                            {
+                                                <div class="d-flex gap-2 align-items-center flex-wrap">
+                                                    <span class="small">New temporary password for <strong>@admin.FirstName @admin.LastName</strong>:</span>
+                                                    <code class="fs-6">@resetTempPassword</code>
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="CancelReset">Done</button>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="d-flex gap-2 align-items-center flex-wrap">
+                                                    <span class="small">Reset password for <strong>@admin.FirstName @admin.LastName</strong>? A new temporary password will be generated.</span>
+                                                    <button class="btn btn-sm btn-warning" @onclick="() => ConfirmReset(admin.KeycloakId)" disabled="@saving">
+                                                        @if (saving) { <span class="spinner-border spinner-border-sm"></span> } else { <span>Confirm Reset</span> }
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="CancelReset">Cancel</button>
+                                                    @if (!string.IsNullOrEmpty(resetError))
+                                                    {
+                                                        <span class="text-danger small">@resetError</span>
+                                                    }
+                                                </div>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
                                 else
                                 {
                                     <tr>
@@ -104,6 +133,7 @@
                                         <td>
                                             <div class="d-flex gap-2">
                                                 <button class="btn btn-sm btn-outline-primary" @onclick="() => StartEdit(admin)">Edit</button>
+                                                <button class="btn btn-sm btn-outline-warning" @onclick="() => StartReset(admin.KeycloakId)">Reset Password</button>
                                                 <button class="btn btn-sm btn-outline-danger" @onclick="() => StartRemove(admin.KeycloakId)">Remove</button>
                                             </div>
                                         </td>
@@ -200,6 +230,11 @@
     private string? removingKeycloakId;
     private string? removeError;
 
+    // Reset password state
+    private string? resettingKeycloakId;
+    private string? resetTempPassword;
+    private string? resetError;
+
     protected override async Task OnInitializedAsync() => await LoadAdmins();
 
     private async Task LoadAdmins()
@@ -216,6 +251,7 @@
         editLastName = admin.LastName;
         editError = null;
         removingKeycloakId = null;
+        resettingKeycloakId = null;
     }
 
     private void CancelEdit()
@@ -255,11 +291,48 @@
         finally { saving = false; }
     }
 
+    private void StartReset(string keycloakId)
+    {
+        resettingKeycloakId = keycloakId;
+        resetTempPassword = null;
+        resetError = null;
+        editingKeycloakId = null;
+        removingKeycloakId = null;
+    }
+
+    private void CancelReset()
+    {
+        resettingKeycloakId = null;
+        resetTempPassword = null;
+        resetError = null;
+    }
+
+    private async Task ConfirmReset(string keycloakId)
+    {
+        resetError = null;
+        saving = true;
+        try
+        {
+            var resp = await Api.ResetCompanyAdminPasswordAsync(CompanyId, keycloakId);
+            if (resp.IsSuccessStatusCode)
+            {
+                var result = await resp.Content.ReadFromJsonAsync<ResetPasswordResult>();
+                resetTempPassword = result?.TempPassword;
+            }
+            else
+            {
+                resetError = await ApiErrors.ParseAsync(resp);
+            }
+        }
+        finally { saving = false; }
+    }
+
     private void StartRemove(string keycloakId)
     {
         removingKeycloakId = keycloakId;
         removeError = null;
         editingKeycloakId = null;
+        resettingKeycloakId = null;
     }
 
     private void CancelRemove()
@@ -328,4 +401,5 @@
     }
 
     private record AdminCreatedResult(string KeycloakId, string Email, string TempPassword);
+    private record ResetPasswordResult(string TempPassword);
 }

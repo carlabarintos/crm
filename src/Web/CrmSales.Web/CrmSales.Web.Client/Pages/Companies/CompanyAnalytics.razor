@@ -1,0 +1,177 @@
+@page "/admin/company-analytics"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize(Roles = "SuperAdmin")]
+@using CrmSales.Web.Client.Services
+@inject CrmApiClient Api
+
+<PageTitle>Company Analytics</PageTitle>
+
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0">Company Analytics</h1>
+        <p class="text-muted small mb-0">Record counts per tenant across the pipeline</p>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" @onclick="Load" disabled="@_loading">
+        @if (_loading) { <span class="spinner-border spinner-border-sm me-1"></span> } Refresh
+    </button>
+</div>
+
+@if (_loading && _rows is null)
+{
+    <div class="text-center py-5"><div class="spinner-border" role="status"></div></div>
+}
+else if (_rows is not null)
+{
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="stat-card p-3 rounded border">
+                <div class="text-muted small">Companies</div>
+                <div class="fs-4 fw-bold">@_rows.Count</div>
+                <div class="text-muted small">@_rows.Count(r => r.IsActive) active</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card p-3 rounded border">
+                <div class="text-muted small">Total Contacts</div>
+                <div class="fs-4 fw-bold">@_rows.Sum(r => r.Contacts).ToString("N0")</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card p-3 rounded border">
+                <div class="text-muted small">Total Orders</div>
+                <div class="fs-4 fw-bold">@_rows.Sum(r => r.Orders).ToString("N0")</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card p-3 rounded border">
+                <div class="text-muted small">Total Opportunities</div>
+                <div class="fs-4 fw-bold">@_rows.Sum(r => r.Opportunities).ToString("N0")</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle small">
+            <thead class="table-light">
+                <tr>
+                    <th class="sortable" @onclick='() => Sort("name")'>
+                        Company @SortIcon("name")
+                    </th>
+                    <th class="text-center sortable" @onclick='() => Sort("contacts")'>
+                        Contacts @SortIcon("contacts")
+                    </th>
+                    <th class="text-center sortable" @onclick='() => Sort("opportunities")'>
+                        Opps @SortIcon("opportunities")
+                    </th>
+                    <th class="text-center sortable" @onclick='() => Sort("quotes")'>
+                        Quotes @SortIcon("quotes")
+                    </th>
+                    <th class="text-center sortable" @onclick='() => Sort("orders")'>
+                        Orders @SortIcon("orders")
+                    </th>
+                    <th class="text-center sortable" @onclick='() => Sort("products")'>
+                        Products @SortIcon("products")
+                    </th>
+                    <th class="text-center sortable" @onclick='() => Sort("services")'>
+                        Services @SortIcon("services")
+                    </th>
+                    <th class="text-center sortable" @onclick='() => Sort("users")'>
+                        Users @SortIcon("users")
+                    </th>
+                    <th class="text-center sortable" @onclick='() => Sort("total")'>
+                        Total @SortIcon("total")
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Sorted())
+                {
+                    var total = row.Contacts + row.Opportunities + row.Quotes + row.Orders + row.Products + row.Services + row.Users;
+                    <tr class="@(row.IsActive ? "" : "text-muted")">
+                        <td>
+                            <strong>@row.Name</strong>
+                            <code class="ms-2 text-muted">@row.Slug</code>
+                            @if (!row.IsActive)
+                            {
+                                <span class="badge bg-secondary ms-1">Inactive</span>
+                            }
+                        </td>
+                        <td class="text-center">@row.Contacts.ToString("N0")</td>
+                        <td class="text-center">@row.Opportunities.ToString("N0")</td>
+                        <td class="text-center">@row.Quotes.ToString("N0")</td>
+                        <td class="text-center">@row.Orders.ToString("N0")</td>
+                        <td class="text-center">@row.Products.ToString("N0")</td>
+                        <td class="text-center">@row.Services.ToString("N0")</td>
+                        <td class="text-center">@row.Users.ToString("N0")</td>
+                        <td class="text-center fw-bold">@total.ToString("N0")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot class="table-light fw-bold">
+                <tr>
+                    <td>Totals</td>
+                    <td class="text-center">@_rows.Sum(r => r.Contacts).ToString("N0")</td>
+                    <td class="text-center">@_rows.Sum(r => r.Opportunities).ToString("N0")</td>
+                    <td class="text-center">@_rows.Sum(r => r.Quotes).ToString("N0")</td>
+                    <td class="text-center">@_rows.Sum(r => r.Orders).ToString("N0")</td>
+                    <td class="text-center">@_rows.Sum(r => r.Products).ToString("N0")</td>
+                    <td class="text-center">@_rows.Sum(r => r.Services).ToString("N0")</td>
+                    <td class="text-center">@_rows.Sum(r => r.Users).ToString("N0")</td>
+                    <td class="text-center">@_rows.Sum(r => r.Contacts + r.Opportunities + r.Quotes + r.Orders + r.Products + r.Services + r.Users).ToString("N0")</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@code {
+    private List<CompanyAnalyticsDto>? _rows;
+    private bool _loading;
+    private string _sortCol = "name";
+    private bool _sortAsc = true;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        try { _rows = await Api.GetCompanyAnalyticsAsync(); }
+        finally { _loading = false; }
+    }
+
+    private void Sort(string col)
+    {
+        if (_sortCol == col) _sortAsc = !_sortAsc;
+        else { _sortCol = col; _sortAsc = col == "name"; }
+    }
+
+    private IEnumerable<CompanyAnalyticsDto> Sorted()
+    {
+        if (_rows is null) return [];
+        IEnumerable<CompanyAnalyticsDto> q = _rows;
+        q = _sortCol switch
+        {
+            "contacts"      => _sortAsc ? q.OrderBy(r => r.Contacts)      : q.OrderByDescending(r => r.Contacts),
+            "opportunities" => _sortAsc ? q.OrderBy(r => r.Opportunities) : q.OrderByDescending(r => r.Opportunities),
+            "quotes"        => _sortAsc ? q.OrderBy(r => r.Quotes)        : q.OrderByDescending(r => r.Quotes),
+            "orders"        => _sortAsc ? q.OrderBy(r => r.Orders)        : q.OrderByDescending(r => r.Orders),
+            "products"      => _sortAsc ? q.OrderBy(r => r.Products)      : q.OrderByDescending(r => r.Products),
+            "services"      => _sortAsc ? q.OrderBy(r => r.Services)      : q.OrderByDescending(r => r.Services),
+            "users"         => _sortAsc ? q.OrderBy(r => r.Users)         : q.OrderByDescending(r => r.Users),
+            "total"         => _sortAsc
+                ? q.OrderBy(r => r.Contacts + r.Opportunities + r.Quotes + r.Orders + r.Products + r.Services + r.Users)
+                : q.OrderByDescending(r => r.Contacts + r.Opportunities + r.Quotes + r.Orders + r.Products + r.Services + r.Users),
+            _               => _sortAsc ? q.OrderBy(r => r.Name)          : q.OrderByDescending(r => r.Name),
+        };
+        return q;
+    }
+
+    private string SortIcon(string col) =>
+        _sortCol != col ? "↕" : _sortAsc ? "↑" : "↓";
+}
+
+<style>
+    .sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    .sortable:hover { background-color: rgba(0,0,0,.04); }
+    .stat-card { background: #fff; }
+</style>
